@@ -1,3 +1,8 @@
+//
+// NOTE(mateusz): Original tokenizer code inspired by video series 
+//                "Handmade Hero" by Casey Muratori - episode 206
+//
+
 #include "tt_token.h"
 
 internal char *read_entire_file_and_null_terminate(char *filename)

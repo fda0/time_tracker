@@ -10,7 +10,7 @@ internal void get_time_string(char *output, u32 output_size, time_t time)
 {
     Assert(output_size >= MAX_TIME_STRING_SIZE);
     time = abs(time);
-    
+
     s32 hours_in_day = 24;
     s32 hours = (s32)((time / Hours(1)) % hours_in_day);
 
@@ -25,17 +25,14 @@ internal void get_date_string(char *output, u32 output_size, tm *s)
              s->tm_year + 1900, s->tm_mon, s->tm_mday);
 }
 
-#define TIME_T_SPECIAL ((time_t)-1)
-internal void print_work_time_row(time_t start, time_t end, s32 offset_sum)
+internal void print_work_time_row(time_t start, time_t end, 
+                                  s32 offset_sum, char *replace_end = NULL)
 {
     char start_time_str[MAX_TIME_STRING_SIZE];
     get_time_string(start_time_str, sizeof(start_time_str), start);
 
     char end_time_str[MAX_TIME_STRING_SIZE];
-
-    if (end == TIME_T_SPECIAL) sprintf(end_time_str, "...");
-    else                       get_time_string(end_time_str, sizeof(end_time_str), end);
-    
+    get_time_string(end_time_str, sizeof(end_time_str), end);
 
     char offset_time_str[MAX_TIME_STRING_SIZE + 1];
     if (offset_sum > Minutes(1))
@@ -53,7 +50,10 @@ internal void print_work_time_row(time_t start, time_t end, s32 offset_sum)
         offset_time_str[0] = 0;
     }
 
-    printf("%s - %s %s\n", start_time_str, end_time_str, offset_time_str);
+    printf("%s - %s %s\n", 
+           start_time_str, 
+           (replace_end ? replace_end : end_time_str), 
+           offset_time_str);
 }
 
 
