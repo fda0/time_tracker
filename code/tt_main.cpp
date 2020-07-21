@@ -108,6 +108,7 @@ inline time_t truncate_to_date_timestamp(time_t timestamp)
 internal void calculate_work_time(Day *day, b32 print = false)
 {
     time_t start = 0;
+    char *start_desc = NULL;
     time_t end = 0;
 
     day->sum = 0;
@@ -117,22 +118,29 @@ internal void calculate_work_time(Day *day, b32 print = false)
          entry;
          entry = entry->next_in_day)
     {
-        if (entry->type == Entry_Add)
+        if (entry->type == Entry_Add ||
+            entry->type == Entry_Subtract)
         {
             s32 value = (s32)entry->time;
+            if (entry->type == Entry_Subtract) value *= -1;
+            
             day->sum += value;
-            offset_sum += value;
-        }
-        else if (entry->type == Entry_Subtract)
-        {
-            s32 value = (s32)entry->time;
-            day->sum -= value;
-            offset_sum -= value;
+
+            if (print && entry->description)
+            {
+                print_offset(value);
+                printf("\t\"%s\"\n", entry->description);
+            }
+            else
+            {
+                offset_sum += value;
+            }
         }
         else if (entry->type == Entry_Start)
         {
             Assert(!start && !end);
             start = entry->date_stamp + entry->time;
+            start_desc = entry->description;
         }
         else if (entry->type == Entry_End)
         {
@@ -142,7 +150,7 @@ internal void calculate_work_time(Day *day, b32 print = false)
             Assert(end > start);
             day->sum += (s32)(end - start);
 
-            if (print) print_work_time_row(start, end, offset_sum);
+            if (print) print_work_time_row(start, end, offset_sum, start_desc, entry->description);
 
             start = 0;
             end = 0;
@@ -161,7 +169,7 @@ internal void calculate_work_time(Day *day, b32 print = false)
             day->missing = Missing_Assumed;
             day->sum += (s32)(now - start);
 
-            if (print) print_work_time_row(start, 0, offset_sum, "now");
+            if (print) print_work_time_row(start, 0, offset_sum, start_desc, NULL, "now");
         }
         else
         {
@@ -169,7 +177,7 @@ internal void calculate_work_time(Day *day, b32 print = false)
 
             if (print) 
             {
-                print_work_time_row(start, 0, offset_sum, "...");
+                print_work_time_row(start, 0, offset_sum, start_desc, NULL, "...");
             }
             else
             {

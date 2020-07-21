@@ -25,8 +25,28 @@ internal void get_date_string(char *output, u32 output_size, tm *s)
              s->tm_year + 1900, s->tm_mon, s->tm_mday);
 }
 
-internal void print_work_time_row(time_t start, time_t end, 
-                                  s32 offset_sum, char *replace_end = NULL)
+internal void print_offset(s32 offset_sum)
+{
+    const u32 size = MAX_TIME_STRING_SIZE + 2;
+    char offset_time_str[size];
+
+    if (offset_sum > Minutes(1))        offset_time_str[0] = '+';
+    else if (offset_sum < -Minutes(1))  offset_time_str[0] = '-';
+    else                                offset_time_str[0] = 0;
+
+    if (offset_time_str[0])
+    {
+        get_time_string(offset_time_str + 1, size - 2, offset_sum);
+        offset_time_str[size - 2] = '\t';
+        offset_time_str[size - 1] = 0;
+    }
+
+    printf("%s", offset_time_str);
+}
+
+internal void print_work_time_row(time_t start, time_t end, s32 offset_sum, 
+                                  char *start_desc, char *end_desc, 
+                                  char *replace_end = NULL)
 {
     char start_time_str[MAX_TIME_STRING_SIZE];
     get_time_string(start_time_str, sizeof(start_time_str), start);
@@ -34,26 +54,15 @@ internal void print_work_time_row(time_t start, time_t end,
     char end_time_str[MAX_TIME_STRING_SIZE];
     get_time_string(end_time_str, sizeof(end_time_str), end);
 
-    char offset_time_str[MAX_TIME_STRING_SIZE + 1];
-    if (offset_sum > Minutes(1))
-    {
-        offset_time_str[0] = '+';
-        get_time_string(offset_time_str + 1, sizeof(offset_time_str - 1), offset_sum);
-    }
-    else if (offset_sum < -Minutes(1))
-    {
-        offset_time_str[0] = '-';
-        get_time_string(offset_time_str + 1, sizeof(offset_time_str - 1), offset_sum);
-    }
-    else
-    {
-        offset_time_str[0] = 0;
-    }
+    printf("%s -> %s\t", start_time_str, 
+           replace_end ? replace_end : end_time_str);
 
-    printf("%s - %s %s\n", 
-           start_time_str, 
-           (replace_end ? replace_end : end_time_str), 
-           offset_time_str);
+    print_offset(offset_sum);
+
+    if (start_desc) printf("\"%s\" ", start_desc);
+    if (end_desc)   printf("\"%s\" ", end_desc);
+    
+    printf("\n");
 }
 
 

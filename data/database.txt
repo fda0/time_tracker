@@ -1,10 +1,10 @@
-start 2020-06-24 17:30 "test description lala1";
-add 01:10;
-end 2020-06-24 18:35;
+start 2020-06-24 17:30 "start desc";
+add 01:10 "add desc";
+end 2020-06-24 18:35 "end desc";
 start 2020-06-24 19:30;
 end 2020-06-24 20:30;
 
-start 2020-07-20 23:22;
+start 2020-07-20 23:22 "start 2 desc";
 sub 01:45;
 end 2020-07-21 01:12;
 
