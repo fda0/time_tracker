@@ -1,0 +1,5 @@
+build/
+test_build/
+old_code/
+*.sublime-workspace
+*.rdbg
