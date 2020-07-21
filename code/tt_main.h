@@ -34,6 +34,10 @@ typedef double f64;
 #define Gigabytes(Value) (Megabytes(Value) * (u64)1024)
 #define Terabytes(Value) (Gigabytes(Value) * (u64)1024)
 
+#define Days(Value) (Hours(Value) * 24)
+#define Hours(Value) (Minutes(Value) * 60)
+#define Minutes(Value) (Value * 60)
+
 
 #define Assert(Expression) \
     if(!(Expression)) {*(int*)0 = 1;}
@@ -43,3 +47,37 @@ typedef double f64;
 
 #define Invalid_Code_Path Assert(0)
 
+
+enum Entry_Type
+{
+    Entry_None,
+
+    Entry_Start,
+    Entry_End,
+    Entry_Subtract,
+    Entry_Add,
+};
+
+struct Time_Entry
+{
+    Entry_Type type;
+    time_t date_stamp;
+    time_t time;
+    char *description;
+    Time_Entry *next_in_day;
+};
+
+enum Missing_Type
+{
+    Missing_None,
+    Missing_Assumed,
+    Missing_Critical
+};
+
+struct Day
+{
+    time_t date_stamp;
+    s32 sum;
+    Missing_Type missing;
+    Time_Entry first_time_entry;
+};

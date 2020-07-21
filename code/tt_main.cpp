@@ -12,36 +12,8 @@
 
 #include "tt_token.cpp"
 #include "tt_memory.h"
+#include "tt_print.cpp"
 
-#define Days(Value) (Hours(Value) * 24)
-#define Hours(Value) (Minutes(Value) * 60)
-#define Minutes(Value) (Value * 60)
-
-enum Entry_Type
-{
-    Entry_None,
-
-    Entry_Start,
-    Entry_End,
-    Entry_Subtract,
-    Entry_Add,
-};
-
-struct Time_Entry
-{
-    Entry_Type type;
-    time_t date_stamp;
-    time_t time;
-    char *description;
-    Time_Entry *next_in_day;
-};
-
-struct Day
-{
-    time_t date_stamp;
-    s32 sum;
-    Time_Entry first_time_entry;
-};
 
 
 // TODO(mateusz): (Maybe) More dynamic memory - eg. for days?
@@ -132,83 +104,82 @@ inline time_t truncate_to_date_timestamp(time_t timestamp)
     return result;
 }
 
-internal void get_timestamp_string(tm *s, char *output, u32 output_size)
-{
-    snprintf(output, output_size, "%04d-%02d-%02d %02d:%02d", 
-             s->tm_year + 1900, s->tm_mon, s->tm_mday,
-             s->tm_hour, s->tm_min);
-}
 
-internal void get_time_string(time_t time, char *output, u32 output_size)
+internal void calculate_work_time(Day *day, b32 print = false)
 {
-    snprintf(output, output_size, "%02d:%02d", 
-             (s32)(time / Hours(1) % (Days(1) / Hours(1))), 
-             (s32)(time / Minutes(1)) % (Hours(1) / Minutes(1)));
-}
+    time_t start = 0;
+    time_t end = 0;
 
-internal void get_date_string(tm *s, char *output, u32 output_size)
-{
-    snprintf(output, output_size, "%04d-%02d-%02d", 
-             s->tm_year + 1900, s->tm_mon, s->tm_mday);
-}
+    day->sum = 0;
+    s32 offset_sum = 0;
 
-internal void calculate_work_time(Day *day)
-{
-    time_t start_timestamp = 0;
-    time_t end_timestamp = 0;
-    s32 sum = 0;
     for (Time_Entry *entry = &day->first_time_entry;
          entry;
          entry = entry->next_in_day)
     {
         if (entry->type == Entry_Add)
         {
-            sum += (s32)entry->time;
+            s32 value = (s32)entry->time;
+            day->sum += value;
+            offset_sum += value;
         }
         else if (entry->type == Entry_Subtract)
         {
-            sum -= (s32)entry->time;
+            s32 value = (s32)entry->time;
+            day->sum -= value;
+            offset_sum -= value;
         }
         else if (entry->type == Entry_Start)
         {
-            Assert(start_timestamp == 0 && end_timestamp == 0);
-            start_timestamp = entry->date_stamp + entry->time;
+            Assert(!start && !end);
+            start = entry->date_stamp + entry->time;
         }
         else if (entry->type == Entry_End)
         {
-            Assert(start_timestamp);
-            end_timestamp = entry->date_stamp + entry->time;
+            Assert(start && !end);
+            end = entry->date_stamp + entry->time;
 
-            Assert(end_timestamp > start_timestamp);
-            sum += (s32)(end_timestamp - start_timestamp);
-            start_timestamp = 0;
-            end_timestamp = 0;
+            Assert(end > start);
+            day->sum += (s32)(end - start);
+
+            if (print) print_work_time_row(start, end, offset_sum);
+
+            start = 0;
+            end = 0;
+            offset_sum = 0;
         }
     }
 
-    if (start_timestamp && !end_timestamp)
+    if (start && !end)
     {
         time_t now;
         time(&now);
         
-        if (now > start_timestamp &&
-            now - Days(1) < start_timestamp)
+        if (now > start &&
+            now - Days(1) < start)
         {
-            sum += (s32)(now - start_timestamp);
-            printf("End time assumed as now\n");
+            day->missing = Missing_Assumed;
+            day->sum += (s32)(now - start);
+
+            if (print) print_work_time_row(start, now, offset_sum);
         }
         else
         {
-            tm *date = localtime(&start_timestamp);
-            char timestamp_str[64];
-            get_timestamp_string(date, timestamp_str, sizeof(timestamp_str));
-            printf("MISSING end time for start: %s\n", timestamp_str);
+            day->missing = Missing_Critical;
+
+            if (print) 
+            {
+                print_work_time_row(start, TIME_T_SPECIAL, offset_sum);
+            }
+            else
+            {
+                tm *date = localtime(&start);
+                char timestamp_str[64];
+                get_timestamp_string(timestamp_str, sizeof(timestamp_str), date);
+                printf("MISSING end time for start: %s\n", timestamp_str);
+            }
         }
-
-
     }
-
-    day->sum = sum;
 }
 
 internal void load_file(char *filename, Data_State *state)
@@ -245,7 +216,8 @@ internal void load_file(char *filename, Data_State *state)
                     {
                         entry.type = Entry_Add;
                     }
-                    else if (token_equals(token, "subtract"))
+                    else if (token_equals(token, "subtract") ||
+                             token_equals(token, "sub"))
                     {
                         entry.type = Entry_Subtract;
                     }
@@ -364,6 +336,7 @@ internal void load_file(char *filename, Data_State *state)
 //     }
 // }
 
+
 internal void print_all_days(Day *days, u32 day_count)
 {
     for (u32 day_index = 0;
@@ -374,14 +347,21 @@ internal void print_all_days(Day *days, u32 day_count)
 
         tm *date = localtime(&day->date_stamp);
         char date_str[64];
-        get_date_string(date, date_str, sizeof(date_str));
+        get_date_string(date_str, sizeof(date_str), date);
 
-        char time_str[64];
-        get_time_string(day->sum, time_str, sizeof(time_str));
+        char sum_str[64];
+        get_time_string(sum_str, sizeof(sum_str), day->sum);
 
-        printf("%s\t time: %s\n", date_str, time_str);
+        char bar_str[MAX_PROGRESS_BAR_SIZE];
+        get_progress_bar_string(bar_str, sizeof(bar_str), day->sum, day->missing);
+        printf("\n%s\n", date_str);
+
+        calculate_work_time(day, true);
+
+        printf("sum: %s\t%s\n", sum_str, bar_str);
     }
 }
+
 
 int main(int arg_count, char **args)
 {
