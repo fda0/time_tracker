@@ -5,6 +5,13 @@ internal void get_timestamp_string(char *output, u32 output_size, tm *s)
              s->tm_hour, s->tm_min);
 }
 
+internal void get_timestamp_string_for_file(char *output, u32 output_size, tm *s)
+{
+    snprintf(output, output_size, "%04d-%02d-%02d_%02d-%02d", 
+             s->tm_year + 1900, s->tm_mon, s->tm_mday,
+             s->tm_hour, s->tm_min);
+}
+
 #define MAX_TIME_STRING_SIZE sizeof("00:00")
 internal void get_time_string(char *output, u32 output_size, time_t time)
 {
@@ -116,4 +123,17 @@ internal void get_progress_bar_string(char *output, s32 output_size, time_t time
 
     output[i] = 0;
     Assert(i < output_size);
+}
+
+
+
+internal void add_ending_slash_to_path(char *path)
+{
+    u32 length = (u32)strlen(path);
+    if (path[length - 1] != '/' ||
+        path[length - 1] != '\\')
+    {
+        path[length] = '/';
+        path[length + 1] = 0;
+    }
 }

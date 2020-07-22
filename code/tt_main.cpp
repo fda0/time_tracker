@@ -5,13 +5,17 @@
 
     * Add timezones support + (maybe) ensure timezone safeness? Or get rid of timezone concept.
     * Add nice error messages and don't crash the program if not needed
-*/
 
+    * Allow for start without date (in the same day).
+    * Delete asserts where possible - add user facing message errors instead.
+    * Rename end to stop.
+
+*/
 
 #include "tt_main.h"
 
 #include "tt_token.cpp"
-#include "tt_print.cpp"
+#include "tt_string.cpp"
 
 
 
@@ -152,7 +156,8 @@ internal void calculate_work_time(Day *day, b32 print = false)
         }
     }
 
-    if (start)
+
+    if (start) // NOTE(mateusz): Day ends with start - missing end entry.
     {
         time_t now;
         time(&now);
@@ -211,7 +216,23 @@ internal void print_all_days(Day *days, u32 day_count)
     }
 }
 
-internal void save_to_file(Data_State *state)
+internal void archive_current_file(Program_State *state)
+{
+    time_t now;
+    time(&now);
+    tm *date = localtime(&now);
+
+    char timestamp[MAX_PATH];
+    get_timestamp_string_for_file(timestamp, sizeof(timestamp), date);
+
+    char archive_filename[MAX_PATH];
+    snprintf(archive_filename, sizeof(archive_filename), "%s%s_%s.txt", 
+             state->archive_directory, state->input_filename, timestamp);
+
+    copy_file(state->input_filename, archive_filename);
+}
+
+internal void save_to_file(Program_State *state)
 {
     // FILE *file = fopen(state->file_path, "w");
     // if (file)
@@ -225,7 +246,7 @@ internal void save_to_file(Data_State *state)
 }
 
 
-internal void process_input(char *content, Data_State *state, 
+internal void process_input(char *content, Program_State *state, 
                             b32 reading_from_file, b32 *program_is_running = NULL)
 {
     Tokenizer tokenizer = {};
@@ -237,10 +258,21 @@ internal void process_input(char *content, Data_State *state,
     bool parsing = true;
     while (parsing)
     {
-        // TODO(mateusz): User facing message errors instead of Asserts and crashing.
         Token token = get_token(&tokenizer);
         switch (token.type)
         {
+
+            //
+            // NOTE(mateusz): Processing macros.
+            //
+
+            #define Not_Supported_In_File_Continue \
+            { \
+                printf("%.*s keyword is not supported in files\n", \
+                       (s32)token.text_length, token.text); continue; \
+            }
+
+
             case Token_Identifier:
             {
                 if (token_equals(token, "start")) 
@@ -279,54 +311,42 @@ internal void process_input(char *content, Data_State *state,
                 else if (token_equals(token, "show"))
                 {
                     Assert(instruction == Ins_None);
-                    if (!reading_from_file)
-                    {
-                        instruction = Ins_Show;
-                    }
-                    else
-                    {
-                        printf("%.*s keyword is not supported in files\n", 
-                               (s32)token.text_length, token.text);
-                    }
+                    if (reading_from_file) Not_Supported_In_File_Continue;
+
+
+                    instruction = Ins_Show;
                 }
                 else if (token_equals(token, "exit"))
                 {
                     Assert(instruction == Ins_None);
-                    if (!reading_from_file)
-                    {
-                        instruction = Ins_Exit;
-                    }
-                    else
-                    {
-                        printf("%.*s keyword is not supported in files\n", 
-                               (s32)token.text_length, token.text);
-                    }
+                    if (reading_from_file) Not_Supported_In_File_Continue;
+                    
+
+                    instruction = Ins_Exit;
                 }
                 else if (token_equals(token, "save"))
                 {
                     Assert(instruction == Ins_None);
-                    if (!reading_from_file)
-                    {
-                        instruction = Ins_Save;
-                    }
-                    else
-                    {
-                        printf("%.*s keyword is not supported in files\n", 
-                               (s32)token.text_length, token.text);
-                    }
+                    if (reading_from_file) Not_Supported_In_File_Continue;
+                    
+
+                    instruction = Ins_Save;
+                }
+                else if (token_equals(token, "archive"))
+                {
+                    Assert(instruction == Ins_None);
+                    if (reading_from_file) Not_Supported_In_File_Continue;
+                    
+
+                    instruction = Ins_Archive;
                 }
                 else if (token_equals(token, "no-save"))
                 {
                     Assert(instruction == Ins_Exit);
-                    if (!reading_from_file)
-                    {
-                        flag |= Flag_No_Save;
-                    }
-                    else
-                    {
-                        printf("%.*s keyword is not supported in files\n", 
-                               (s32)token.text_length, token.text);
-                    }
+                    if (reading_from_file) Not_Supported_In_File_Continue;
+                    
+
+                    flag |= Flag_No_Save;
                 }
                 else
                 {
@@ -362,7 +382,22 @@ internal void process_input(char *content, Data_State *state,
             case Token_End_Of_Stream: 
             {
                 parsing = false;
-            } if (reading_from_file) break;
+
+                if (reading_from_file)
+                {
+                    if (instruction != Ins_None)
+                    {
+                        printf("Missing semicolon at the end of the file\n");
+                    }
+
+                    break;
+                }
+                else
+                {
+                    // NOTE(mateusz): Don't break.
+                    //                Assume additional semicolon at the end of the console input.
+                }
+            } 
 
             case Token_Semicolon:
             {
@@ -424,6 +459,10 @@ internal void process_input(char *content, Data_State *state,
                 {
                     save_to_file(state);
                 }
+                else if (instruction == Ins_Archive)
+                {
+                    archive_current_file(state);
+                }
 
 
 
@@ -444,7 +483,7 @@ internal void process_input(char *content, Data_State *state,
     }
 }
 
-internal void load_file(char *filename, Data_State *state)
+internal void load_file(char *filename, Program_State *state)
 {
     char *file_content = read_entire_file_and_null_terminate(filename);
     if (file_content)
@@ -461,7 +500,7 @@ internal void load_file(char *filename, Data_State *state)
 
 int main(int arg_count, char **args)
 {
-    Data_State *state = (Data_State *)malloc(sizeof(Data_State));
+    Program_State *state = (Program_State *)malloc(sizeof(Program_State));
     if (state == NULL)
     {
         printf("Failed to allocate required memory!\n");
@@ -469,10 +508,9 @@ int main(int arg_count, char **args)
     }
     else
     {
-        memset(state, 0, sizeof(Data_State));
+        memset(state, 0, sizeof(Program_State));
 
-        // TODO(mateusz): Research if it is needed...
-        // Are there problems with accessing not byte aligned structs?
+
         initialize_arena(&state->description_arena, sizeof(state->byte_memory_block), 
                          state->byte_memory_block);
 
@@ -480,9 +518,14 @@ int main(int arg_count, char **args)
                          state->aligned_memory_block);
     }
 
-    sprintf(state->file_path, "database.txt");
+    // TODO(mateusz): Get these filenames/paths from input arguments.
+    sprintf(state->input_filename, "database.txt");
 
-    load_file(state->file_path, state);
+    sprintf(state->archive_directory, "archive");
+    add_ending_slash_to_path(state->archive_directory);
+    create_directory(state->archive_directory);
+
+    load_file(state->input_filename, state);
     print_all_days(state->days, state->day_count);
 
 

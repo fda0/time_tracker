@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include <time.h>
 
+//
+// NOTE(mateusz): Types
+//
+
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -24,6 +28,34 @@ typedef double f64;
 #define internal static 
 #define global_variable static
 #define local_persist static
+
+
+
+
+
+//
+// NOTE(mautesz): Platforms and compilers
+//
+
+#define COMPILER_MSVC 1
+
+
+#if COMPILER_MSVC
+#include "win32_platform.cpp"
+#endif
+
+
+
+
+
+
+
+
+
+
+//
+// NOTE(mateusz): Macros
+//
 
 #define Array_Count(Array) (sizeof(Array) / sizeof((Array)[0]))
 
@@ -47,6 +79,14 @@ typedef double f64;
 
 #define Invalid_Code_Path Assert(0)
 
+
+
+
+
+
+//
+//
+//
 
 enum Entry_Type
 {
@@ -83,22 +123,27 @@ struct Day
 };
 
 
+
 #include "tt_memory.h"
 
 
-// TODO(mateusz): (Maybe) More dynamic memory - eg. for days?
-struct Data_State
+struct Program_State
 {
-    char file_path[256];
+    char input_filename[MAX_PATH];
+    char archive_directory[MAX_PATH];
 
-    Day days[365];
+    Day days[365]; // TODO(mateusz): Add memory arena support for days.
     u32 day_count;
 
     Memory_Arena description_arena;
     Memory_Arena struct_arena;
 
-    // memory
-    u8 byte_memory_block[Megabytes(8)];
+    // TODO(mateusz): Allocate at high virtual address and 
+    // allocate more pages from windows if needed.
+
+    // TODO(mateusz): Research if two differenet memory blocks are needed...
+    // Are there problems with accessing not byte aligned structs?
+    u8 byte_memory_block[Megabytes(8)]; 
     u8 aligned_memory_block[Megabytes(8)];
 };
 
@@ -109,6 +154,7 @@ enum Instruction_Type
     Ins_Time_Entry,
     Ins_Show,
     Ins_Save,
+    Ins_Archive,
 
     Ins_Exit
 };
