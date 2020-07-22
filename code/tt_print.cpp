@@ -44,23 +44,26 @@ internal void print_offset(s32 offset_sum)
     printf("%s", offset_time_str);
 }
 
-internal void print_work_time_row(time_t start, time_t end, s32 offset_sum, 
-                                  char *start_desc, char *end_desc, 
-                                  char *replace_end = NULL)
+internal void print_work_time_row(Time_Entry *start, Time_Entry *stop, s32 offset_sum,  
+                                  char *replace_stop = NULL)
 {
     char start_time_str[MAX_TIME_STRING_SIZE];
-    get_time_string(start_time_str, sizeof(start_time_str), start);
+    get_time_string(start_time_str, sizeof(start_time_str), start->time);
 
-    char end_time_str[MAX_TIME_STRING_SIZE];
-    get_time_string(end_time_str, sizeof(end_time_str), end);
+    char stop_time_str[MAX_TIME_STRING_SIZE];
+    if (replace_stop == NULL)
+    {
+        Assert(stop);
+        get_time_string(stop_time_str, sizeof(stop_time_str), stop->time);
+        replace_stop = stop_time_str;
+    }
 
-    printf("%s -> %s\t", start_time_str, 
-           replace_end ? replace_end : end_time_str);
+    printf("%s -> %s\t", start_time_str, replace_stop);
 
     print_offset(offset_sum);
 
-    if (start_desc) printf("\"%s\" ", start_desc);
-    if (end_desc)   printf("\"%s\" ", end_desc);
+    if (start->description)         printf("\"%s\" ", start->description);
+    if (stop && stop->description)  printf("\"%s\" ", stop->description);
     
     printf("\n");
 }

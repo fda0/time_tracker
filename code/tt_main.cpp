@@ -11,24 +11,9 @@
 #include "tt_main.h"
 
 #include "tt_token.cpp"
-#include "tt_memory.h"
 #include "tt_print.cpp"
 
 
-
-// TODO(mateusz): (Maybe) More dynamic memory - eg. for days?
-struct Data_State
-{
-    Day days[365];
-    u32 day_count;
-
-    Memory_Arena description_arena;
-    Memory_Arena struct_arena;
-
-    // memory
-    u8 byte_memory_block[Megabytes(8)];
-    u8 aligned_memory_block[Megabytes(8)];
-};
 
 internal char *create_description(Memory_Arena *arena, Token token)
 {
@@ -107,9 +92,7 @@ inline time_t truncate_to_date_timestamp(time_t timestamp)
 
 internal void calculate_work_time(Day *day, b32 print = false)
 {
-    time_t start = 0;
-    char *start_desc = NULL;
-    time_t end = 0;
+    Time_Entry *start = 0;
 
     day->sum = 0;
     s32 offset_sum = 0;
@@ -138,38 +121,51 @@ internal void calculate_work_time(Day *day, b32 print = false)
         }
         else if (entry->type == Entry_Start)
         {
-            Assert(!start && !end);
-            start = entry->date_stamp + entry->time;
-            start_desc = entry->description;
+            Assert(!start);
+            start = entry;
         }
         else if (entry->type == Entry_End)
         {
-            Assert(start && !end);
-            end = entry->date_stamp + entry->time;
+            Assert(start);
+            if (entry->date_stamp == 0) entry->date_stamp = start->date_stamp;
 
-            Assert(end > start);
-            day->sum += (s32)(end - start);
+            time_t start_time = start->date_stamp + start->time;
+            time_t stop_time = entry->date_stamp + entry->time;
 
-            if (print) print_work_time_row(start, end, offset_sum, start_desc, entry->description);
+            if (stop_time < start_time)
+            {
+                if (stop_time + Days(1) > start_time)
+                {
+                    entry->date_stamp += Days(1);
+                    stop_time += Days(1);
+                }
+            }
 
-            start = 0;
-            end = 0;
+            Assert(stop_time > start_time);
+
+            day->sum += (s32)(stop_time - start_time);
+
+            if (print) print_work_time_row(start, entry, offset_sum);
+
+            start = NULL;
             offset_sum = 0;
         }
     }
 
-    if (start && !end)
+    if (start)
     {
         time_t now;
         time(&now);
         
-        if (now > start &&
-            now - Days(1) < start)
+        time_t start_time = start->date_stamp + start->time;
+
+        if (now > start_time &&
+            now - Days(1) < start_time)
         {
             day->missing = Missing_Assumed;
-            day->sum += (s32)(now - start);
+            day->sum += (s32)(now - start_time);
 
-            if (print) print_work_time_row(start, 0, offset_sum, start_desc, NULL, "now");
+            if (print) print_work_time_row(start, NULL, offset_sum, "now");
         }
         else
         {
@@ -177,11 +173,11 @@ internal void calculate_work_time(Day *day, b32 print = false)
 
             if (print) 
             {
-                print_work_time_row(start, 0, offset_sum, start_desc, NULL, "...");
+                print_work_time_row(start, 0, offset_sum, "...");
             }
             else
             {
-                tm *date = localtime(&start);
+                tm *date = localtime(&start->date_stamp);
                 char timestamp_str[64];
                 get_timestamp_string(timestamp_str, sizeof(timestamp_str), date);
                 printf("MISSING end time for start: %s\n", timestamp_str);
@@ -189,161 +185,6 @@ internal void calculate_work_time(Day *day, b32 print = false)
         }
     }
 }
-
-internal void load_file(char *filename, Data_State *state)
-{
-    char *file_content = read_entire_file_and_null_terminate(filename);
-    if (file_content)
-    {
-        printf("File read: %s\n", filename);
-
-        Tokenizer tokenizer = {};
-        tokenizer.at = file_content;
-
-        Time_Entry entry = {};
-        bool parsing = true;
-        while (parsing)
-        {
-            // TODO(mateusz): User facing message errors instead of Asserts and crashing.
-            Token token = get_token(&tokenizer);
-            switch (token.type)
-            {
-                case Token_Identifier:
-                {
-                    Assert(!entry.type); // NOTE(mateusz): For exclusive options (start, end, add etc.)
-
-                    if (token_equals(token, "start")) 
-                    {
-                        entry.type = Entry_Start;
-                    }
-                    else if (token_equals(token, "end"))
-                    {
-                        entry.type = Entry_End;
-                    }
-                    else if (token_equals(token, "add"))
-                    {
-                        entry.type = Entry_Add;
-                    }
-                    else if (token_equals(token, "subtract") ||
-                             token_equals(token, "sub"))
-                    {
-                        entry.type = Entry_Subtract;
-                    }
-                } break;
-
-                case Token_Date:
-                {
-                    Assert(!entry.date_stamp);
-                    auto date_stamp = parse_date(token);
-                    entry.date_stamp = date_stamp;
-                } break;
-
-                case Token_Time:
-                {
-                    Assert(!entry.time);
-                    auto time = parse_time(token);
-                    entry.time = time;
-                } break;
-
-                case Token_String:
-                {
-                    Assert(!entry.description);
-                    entry.description = create_description(&state->description_arena, token);
-                } break;
-
-                case Token_Unknown:
-                default:
-                {
-                } break;
-
-                case Token_Semicolon:
-                {
-                    if (entry.type)
-                    {
-                        Day *day = NULL;
-
-                        // TODO(mateusz): Good error reporting for user with line count.
-                        if (entry.type == Entry_Start)
-                        {
-                            if ((state->day_count == 0) ||
-                                (state->days[state->day_count - 1].date_stamp < entry.date_stamp))
-                            {
-                                if (state->day_count != 0)
-                                {
-                                    calculate_work_time(&state->days[state->day_count - 1]);
-                                }
-
-                                Assert(state->day_count < Array_Count(state->days));
-                                day = &state->days[state->day_count++];
-                                day->date_stamp = entry.date_stamp;
-                            }
-                            else
-                            {
-                                Assert(state->days[state->day_count - 1].date_stamp == entry.date_stamp);
-                                day = &state->days[state->day_count - 1];
-                            }
-                        }
-                        else
-                        {
-                            Assert(state->day_count != 0);
-                            day = &state->days[state->day_count - 1];
-                        }
-
-                        Time_Entry *entry_dest = &day->first_time_entry;
-                        while (entry_dest->type != Entry_None)
-                        {
-                            if (entry_dest->next_in_day == NULL)
-                            {
-                                entry_dest->next_in_day = Push_Struct(&state->struct_arena, Time_Entry);
-                            }
-
-                            entry_dest = entry_dest->next_in_day;
-                        }
-
-                        *entry_dest = entry;
-                        entry = {};
-                    }
-                    else
-                    {
-                        Invalid_Code_Path;
-                    }
-                } break;
-
-                case Token_End_Of_Stream: 
-                {
-                    parsing = false;
-                } break;
-            }
-        }
-
-        if (state->day_count > 0)
-        {
-            auto last_day = &state->days[state->day_count - 1];
-            if (last_day->sum == 0)
-            {
-                calculate_work_time(last_day);
-            }
-        }
-
-        printf("File processed: %s\n", filename);
-        free(file_content);
-    }
-}
-
-// internal void save_to_file(char *path)
-// {
-//     FILE *file = fopen(path, "w");
-//     if (file)
-//     {
-
-//         // fputs();
-//     }
-//     else
-//     {
-//         printf("Failed to write to file: %s\n", path);
-//     }
-// }
-
 
 internal void print_all_days(Day *days, u32 day_count)
 {
@@ -370,13 +211,260 @@ internal void print_all_days(Day *days, u32 day_count)
     }
 }
 
+internal void save_to_file(Data_State *state)
+{
+    // FILE *file = fopen(state->file_path, "w");
+    // if (file)
+    // {
+    //     // fputs();
+    // }
+    // else
+    // {
+    //     printf("Failed to write to file: %s\n", state->file_path);
+    // }
+}
+
+
+internal void process_input(char *content, Data_State *state, 
+                            b32 reading_from_file, b32 *program_is_running = NULL)
+{
+    Tokenizer tokenizer = {};
+    tokenizer.at = content;
+
+    Instruction_Type instruction = Ins_None;
+    u32 flag = 0;
+    Time_Entry entry = {};
+    bool parsing = true;
+    while (parsing)
+    {
+        // TODO(mateusz): User facing message errors instead of Asserts and crashing.
+        Token token = get_token(&tokenizer);
+        switch (token.type)
+        {
+            case Token_Identifier:
+            {
+                if (token_equals(token, "start")) 
+                {
+                    Assert(instruction == Ins_None);
+                    Assert(!entry.type);
+
+                    entry.type = Entry_Start;
+                    instruction = Ins_Time_Entry;
+                }
+                else if (token_equals(token, "end"))
+                {
+                    Assert(instruction == Ins_None);
+                    Assert(!entry.type);
+                    
+                    entry.type = Entry_End;
+                    instruction = Ins_Time_Entry;
+                }
+                else if (token_equals(token, "add"))
+                {
+                    Assert(instruction == Ins_None);
+                    Assert(!entry.type);
+                    
+                    entry.type = Entry_Add;
+                    instruction = Ins_Time_Entry;
+                }
+                else if (token_equals(token, "subtract") ||
+                         token_equals(token, "sub"))
+                {
+                    Assert(instruction == Ins_None);
+                    Assert(!entry.type);
+                    
+                    entry.type = Entry_Subtract;
+                    instruction = Ins_Time_Entry;
+                }
+                else if (token_equals(token, "show"))
+                {
+                    Assert(instruction == Ins_None);
+                    if (!reading_from_file)
+                    {
+                        instruction = Ins_Show;
+                    }
+                    else
+                    {
+                        printf("%.*s keyword is not supported in files\n", 
+                               (s32)token.text_length, token.text);
+                    }
+                }
+                else if (token_equals(token, "exit"))
+                {
+                    Assert(instruction == Ins_None);
+                    if (!reading_from_file)
+                    {
+                        instruction = Ins_Exit;
+                    }
+                    else
+                    {
+                        printf("%.*s keyword is not supported in files\n", 
+                               (s32)token.text_length, token.text);
+                    }
+                }
+                else if (token_equals(token, "save"))
+                {
+                    Assert(instruction == Ins_None);
+                    if (!reading_from_file)
+                    {
+                        instruction = Ins_Save;
+                    }
+                    else
+                    {
+                        printf("%.*s keyword is not supported in files\n", 
+                               (s32)token.text_length, token.text);
+                    }
+                }
+                else if (token_equals(token, "no-save"))
+                {
+                    Assert(instruction == Ins_Exit);
+                    if (!reading_from_file)
+                    {
+                        flag |= Flag_No_Save;
+                    }
+                    else
+                    {
+                        printf("%.*s keyword is not supported in files\n", 
+                               (s32)token.text_length, token.text);
+                    }
+                }
+                else
+                {
+                    printf("Unknown identifier: %.*s\n", (s32)token.text_length, token.text);
+                }
+            } break;
+
+            case Token_Date:
+            {
+                Assert(!entry.date_stamp);
+                auto date_stamp = parse_date(token);
+                entry.date_stamp = date_stamp;
+            } break;
+
+            case Token_Time:
+            {
+                Assert(!entry.time);
+                auto time = parse_time(token);
+                entry.time = time;
+            } break;
+
+            case Token_String:
+            {
+                Assert(!entry.description);
+                entry.description = create_description(&state->description_arena, token);
+            } break;
+
+            case Token_Unknown:
+            default:
+            {
+            } break;
+
+            case Token_End_Of_Stream: 
+            {
+                parsing = false;
+            } if (reading_from_file) break;
+
+            case Token_Semicolon:
+            {
+                if (instruction == Ins_Time_Entry)
+                {
+                    Day *day = NULL;
+
+                    // TODO(mateusz): Good error reporting for user with line count.
+                    if (entry.type == Entry_Start)
+                    {
+                        if ((state->day_count == 0) ||
+                            (state->days[state->day_count - 1].date_stamp < entry.date_stamp))
+                        {
+                            if (state->day_count != 0)
+                            {
+                                calculate_work_time(&state->days[state->day_count - 1]);
+                            }
+
+                            Assert(state->day_count < Array_Count(state->days));
+                            day = &state->days[state->day_count++];
+                            day->date_stamp = entry.date_stamp;
+                        }
+                        else
+                        {
+                            Assert(state->days[state->day_count - 1].date_stamp == entry.date_stamp);
+                            day = &state->days[state->day_count - 1];
+                        }
+                    }
+                    else
+                    {
+                        Assert(state->day_count != 0);
+                        day = &state->days[state->day_count - 1];
+                    }
+
+                    Time_Entry *entry_dest = &day->first_time_entry;
+                    while (entry_dest->type != Entry_None)
+                    {
+                        if (entry_dest->next_in_day == NULL)
+                        {
+                            entry_dest->next_in_day = Push_Struct(&state->struct_arena, Time_Entry);
+                        }
+
+                        entry_dest = entry_dest->next_in_day;
+                    }
+
+                    *entry_dest = entry;
+                }
+                else if (instruction == Ins_Show)
+                {
+                    print_all_days(state->days, state->day_count);
+                }
+                else if (instruction == Ins_Exit)
+                {
+                    if (!(flag & Flag_No_Save)) save_to_file(state);
+                    Assert(program_is_running);
+                    *program_is_running = false;
+                }
+                else if (instruction == Ins_Save)
+                {
+                    save_to_file(state);
+                }
+
+
+
+                instruction = Ins_None;
+                flag = 0;
+                entry = {};
+            } break;
+        }
+    }
+
+    if (state->day_count > 0)
+    {
+        auto last_day = &state->days[state->day_count - 1];
+        if (last_day->sum == 0)
+        {
+            calculate_work_time(last_day);
+        }
+    }
+}
+
+internal void load_file(char *filename, Data_State *state)
+{
+    char *file_content = read_entire_file_and_null_terminate(filename);
+    if (file_content)
+    {
+        printf("File read: %s\n", filename);
+
+        process_input(file_content, state, true);
+
+        printf("File processed: %s\n", filename);
+        free(file_content);
+    }
+}
+
 
 int main(int arg_count, char **args)
 {
     Data_State *state = (Data_State *)malloc(sizeof(Data_State));
     if (state == NULL)
     {
-        printf("Failed to allocate memory for state");
+        printf("Failed to allocate required memory!\n");
         return 1;
     }
     else
@@ -392,38 +480,20 @@ int main(int arg_count, char **args)
                          state->aligned_memory_block);
     }
 
-    char database_filename[] = "database.txt";
+    sprintf(state->file_path, "database.txt");
 
-    load_file(database_filename, state);
+    load_file(state->file_path, state);
     print_all_days(state->days, state->day_count);
 
 
-    // b32 is_running = true;
-    // while (is_running)
-    // {
-    //     char input_buffer[256];
-    //     printf("Input: \n");
-    //     fgets(input_buffer, sizeof(input_buffer), stdin);
-    //     auto command = parse_command(input_buffer);
-
-    //     switch (command)
-    //     {
-    //         default: 
-    //         {
-    //             printf("?\n");
-    //         } break;
-
-    //         case Command_Exit:
-    //         {
-    //             is_running = false;
-    //         } break;
-
-    //         case Command_Save: 
-    //         {
-    //             save_to_file(database_filename);
-    //         } break;
-    //     }
-    // }
+    b32 is_running = true;
+    while (is_running)
+    {
+        char input_buffer[256];
+        printf(">");
+        fgets(input_buffer, sizeof(input_buffer), stdin);
+        process_input(input_buffer, state, false, &is_running);
+    }
 
     return 0;
 }

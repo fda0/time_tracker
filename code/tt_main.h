@@ -81,3 +81,40 @@ struct Day
     Missing_Type missing;
     Time_Entry first_time_entry;
 };
+
+
+#include "tt_memory.h"
+
+
+// TODO(mateusz): (Maybe) More dynamic memory - eg. for days?
+struct Data_State
+{
+    char file_path[256];
+
+    Day days[365];
+    u32 day_count;
+
+    Memory_Arena description_arena;
+    Memory_Arena struct_arena;
+
+    // memory
+    u8 byte_memory_block[Megabytes(8)];
+    u8 aligned_memory_block[Megabytes(8)];
+};
+
+enum Instruction_Type
+{
+    Ins_None,
+
+    Ins_Time_Entry,
+    Ins_Show,
+    Ins_Save,
+
+    Ins_Exit
+};
+
+enum Instruction_Flag : u32
+{
+    Flag_Clear = 0,
+    Flag_No_Save = (1 << 0),
+};

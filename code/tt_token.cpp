@@ -116,7 +116,8 @@ internal Token get_token(Tokenizer *tokenizer)
 
                 while (is_alpha(tokenizer->at[0]) ||
                        is_number(tokenizer->at[0]) ||
-                       tokenizer->at[0] == '_')
+                       tokenizer->at[0] == '_' ||
+                       tokenizer->at[0] == '-')
                 {
                     ++tokenizer->at;
                 }
