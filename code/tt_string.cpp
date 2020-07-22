@@ -1,14 +1,19 @@
-internal void get_timestamp_string(char *output, u32 output_size, tm *s)
+
+#define MAX_TIMESTAMP_STRING_SIZE sizeof("2020-12-31 13:45")
+internal void get_timestamp_string(char *output, u32 output_size, time_t time)
 {
+    tm *s = gmtime(&time);
+
+    Assert(MAX_TIMESTAMP_STRING_SIZE <= output_size);
     snprintf(output, output_size, "%04d-%02d-%02d %02d:%02d", 
-             s->tm_year + 1900, s->tm_mon, s->tm_mday,
+             s->tm_year + 1900, s->tm_mon + 1, s->tm_mday,
              s->tm_hour, s->tm_min);
 }
 
 internal void get_timestamp_string_for_file(char *output, u32 output_size, tm *s)
 {
     snprintf(output, output_size, "%04d-%02d-%02d_%02d-%02d", 
-             s->tm_year + 1900, s->tm_mon, s->tm_mday,
+             s->tm_year + 1900, s->tm_mon + 1, s->tm_mday,
              s->tm_hour, s->tm_min);
 }
 
@@ -29,7 +34,7 @@ internal void get_time_string(char *output, u32 output_size, time_t time)
 internal void get_date_string(char *output, u32 output_size, tm *s)
 {
     snprintf(output, output_size, "%04d-%02d-%02d", 
-             s->tm_year + 1900, s->tm_mon, s->tm_mday);
+             s->tm_year + 1900, s->tm_mon + 1, s->tm_mday);
 }
 
 internal void print_offset(s32 offset_sum)
@@ -76,7 +81,7 @@ internal void print_work_time_row(Time_Entry *start, Time_Entry *stop, s32 offse
 }
 
 
-#define MAX_PROGRESS_BAR_SIZE sizeof("[++++ ++++ ++++ +-  )!")
+#define MAX_PROGRESS_BAR_SIZE sizeof("[++++ ++++ ++++ ++++ ++++ ++- )!")
 internal void get_progress_bar_string(char *output, s32 output_size, time_t time, Missing_Type type)
 {
     // NOTE(mateusz): Max output:

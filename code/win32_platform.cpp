@@ -9,3 +9,8 @@ internal void copy_file(char *source, char *destination)
 {
     CopyFileA(source, destination, TRUE);
 }
+
+inline time_t tm_to_time(tm *date)
+{
+    return _mkgmtime(date);
+}

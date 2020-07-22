@@ -93,7 +93,7 @@ enum Entry_Type
     Entry_None,
 
     Entry_Start,
-    Entry_End,
+    Entry_Stop,
     Entry_Subtract,
     Entry_Add,
 };
@@ -101,7 +101,7 @@ enum Entry_Type
 struct Time_Entry
 {
     Entry_Type type;
-    time_t date_stamp;
+    time_t date;
     time_t time;
     char *description;
     Time_Entry *next_in_day;
@@ -131,6 +131,8 @@ struct Program_State
 {
     char input_filename[MAX_PATH];
     char archive_directory[MAX_PATH];
+
+    s32 error_count;
 
     Day days[365]; // TODO(mateusz): Add memory arena support for days.
     u32 day_count;

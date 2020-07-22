@@ -1,16 +1,13 @@
 /*
     TODO(mateusz):
-    * Add in program interface for adding/undo/showing data
-    * Add save feature
-
-    * Add timezones support + (maybe) ensure timezone safeness? Or get rid of timezone concept.
     * Add nice error messages and don't crash the program if not needed
 
     * Allow for start without date (in the same day).
     * Delete asserts where possible - add user facing message errors instead.
-    * Rename end to stop.
 
 */
+
+// NOTE(mateusz): This program ignores concept of timezones to simplify usage.
 
 #include "tt_main.h"
 
@@ -67,7 +64,7 @@ internal time_t parse_date(Token token)
     date.tm_mday = parse_number(text, 2);
     text += 2;
 
-    time_t timestamp = mktime(&date);
+    time_t timestamp = tm_to_time(&date);
     return timestamp;
 }
 
@@ -94,10 +91,13 @@ inline time_t truncate_to_date_timestamp(time_t timestamp)
 }
 
 
-internal void calculate_work_time(Day *day, b32 print = false)
+internal void calculate_work_time(Day *day, s32 *error_count)
 {
-    Time_Entry *start = 0;
+    // NOTE(mateusz): If error_count == NULL function will print to console.
+    b32 print = error_count == NULL;
 
+    Time_Entry *start = 0;
+    day->missing = Missing_None;
     day->sum = 0;
     s32 offset_sum = 0;
 
@@ -128,19 +128,19 @@ internal void calculate_work_time(Day *day, b32 print = false)
             Assert(!start);
             start = entry;
         }
-        else if (entry->type == Entry_End)
+        else if (entry->type == Entry_Stop)
         {
             Assert(start);
-            if (entry->date_stamp == 0) entry->date_stamp = start->date_stamp;
+            if (entry->date == 0) entry->date = start->date;
 
-            time_t start_time = start->date_stamp + start->time;
-            time_t stop_time = entry->date_stamp + entry->time;
+            time_t start_time = start->date + start->time;
+            time_t stop_time = entry->date + entry->time;
 
             if (stop_time < start_time)
             {
                 if (stop_time + Days(1) > start_time)
                 {
-                    entry->date_stamp += Days(1);
+                    entry->date += Days(1);
                     stop_time += Days(1);
                 }
             }
@@ -162,7 +162,7 @@ internal void calculate_work_time(Day *day, b32 print = false)
         time_t now;
         time(&now);
         
-        time_t start_time = start->date_stamp + start->time;
+        time_t start_time = start->date + start->time;
 
         if (now > start_time &&
             now - Days(1) < start_time)
@@ -182,10 +182,9 @@ internal void calculate_work_time(Day *day, b32 print = false)
             }
             else
             {
-                tm *date = localtime(&start->date_stamp);
-                char timestamp_str[64];
-                get_timestamp_string(timestamp_str, sizeof(timestamp_str), date);
-                printf("MISSING end time for start: %s\n", timestamp_str);
+                char timestamp_str[MAX_TIMESTAMP_STRING_SIZE];
+                get_timestamp_string(timestamp_str, sizeof(timestamp_str), start_time);
+                printf("[Error #%d] MISSING stop time: %s\n", *error_count++, timestamp_str);
             }
         }
     }
@@ -199,7 +198,7 @@ internal void print_all_days(Day *days, u32 day_count)
     {
         Day *day = &days[day_index];
 
-        tm *date = localtime(&day->date_stamp);
+        tm *date = gmtime(&day->date_stamp);
         char date_str[64];
         get_date_string(date_str, sizeof(date_str), date);
 
@@ -210,7 +209,7 @@ internal void print_all_days(Day *days, u32 day_count)
         get_progress_bar_string(bar_str, sizeof(bar_str), day->sum, day->missing);
         printf("\n%s\n", date_str);
 
-        calculate_work_time(day, true);
+        calculate_work_time(day, NULL);
 
         printf("sum: %s\t%s\n", sum_str, bar_str);
     }
@@ -220,7 +219,7 @@ internal void archive_current_file(Program_State *state)
 {
     time_t now;
     time(&now);
-    tm *date = localtime(&now);
+    tm *date = gmtime(&now);
 
     char timestamp[MAX_PATH];
     get_timestamp_string_for_file(timestamp, sizeof(timestamp), date);
@@ -230,19 +229,84 @@ internal void archive_current_file(Program_State *state)
              state->archive_directory, state->input_filename, timestamp);
 
     copy_file(state->input_filename, archive_filename);
+    printf("File archived to: %s\n", archive_filename);
 }
 
 internal void save_to_file(Program_State *state)
 {
-    // FILE *file = fopen(state->file_path, "w");
-    // if (file)
-    // {
-    //     // fputs();
-    // }
-    // else
-    // {
-    //     printf("Failed to write to file: %s\n", state->file_path);
-    // }
+    FILE *file = fopen(state->input_filename, "w");
+    if (file)
+    {
+        for (u32 day_index = 0;
+             day_index < state->day_count;
+             ++day_index)
+        {
+            Day *day = &state->days[day_index];
+
+            for (Time_Entry *entry = &day->first_time_entry;
+                 entry;
+                 entry = entry->next_in_day)
+            {
+                if (entry->type == Entry_Start)
+                {
+                    time_t time = entry->date + entry->time;
+                    char timestamp[MAX_TIMESTAMP_STRING_SIZE];
+                    get_timestamp_string(timestamp, sizeof(timestamp), time);
+                    fprintf(file, "start %s", timestamp);
+                }
+                else if (entry->type == Entry_Stop)
+                {
+                    if (entry->date == day->date_stamp)
+                    {
+                        char time_string[MAX_TIME_STRING_SIZE];
+                        get_time_string(time_string, sizeof(time_string), entry->time);
+
+                        fprintf(file, "stop %s", time_string);
+                    }
+                    else
+                    {
+                        time_t time = entry->date + entry->time;
+                        char timestamp[MAX_TIMESTAMP_STRING_SIZE];
+                        get_timestamp_string(timestamp, sizeof(timestamp), time);
+                        fprintf(file, "stop %s", timestamp);
+                    }
+                }
+                else 
+                {
+                    char *tag = NULL;
+                    if (entry->type == Entry_Add)           tag = "add";
+                    else if (entry->type == Entry_Subtract) tag = "sub";
+                    else
+                    {
+                        Invalid_Code_Path;
+                        continue;
+                    }
+
+                    char time_string[MAX_TIME_STRING_SIZE];
+                    get_time_string(time_string, sizeof(time_string), entry->time);
+                    fprintf(file, "%s %s", tag, time_string);
+                }
+
+                if (entry->description)
+                {
+                    fprintf(file, " \"%s\";\n", entry->description);
+                }
+                else
+                {
+                    fprintf(file, ";\n");
+                }
+            }
+
+            fprintf(file, "\n");
+        }
+    
+        printf("File saved\n");
+        fclose(file);
+    }
+    else
+    {
+        printf("Failed to write to file: %s\n", state->input_filename);
+    }
 }
 
 
@@ -268,8 +332,8 @@ internal void process_input(char *content, Program_State *state,
 
             #define Not_Supported_In_File_Continue \
             { \
-                printf("%.*s keyword is not supported in files\n", \
-                       (s32)token.text_length, token.text); continue; \
+                printf("[Error #%d] %.*s keyword is not supported in files\n", \
+                       state->error_count++, (s32)token.text_length, token.text); continue; \
             }
 
 
@@ -283,12 +347,12 @@ internal void process_input(char *content, Program_State *state,
                     entry.type = Entry_Start;
                     instruction = Ins_Time_Entry;
                 }
-                else if (token_equals(token, "end"))
+                else if (token_equals(token, "stop"))
                 {
                     Assert(instruction == Ins_None);
                     Assert(!entry.type);
                     
-                    entry.type = Entry_End;
+                    entry.type = Entry_Stop;
                     instruction = Ins_Time_Entry;
                 }
                 else if (token_equals(token, "add"))
@@ -356,9 +420,9 @@ internal void process_input(char *content, Program_State *state,
 
             case Token_Date:
             {
-                Assert(!entry.date_stamp);
-                auto date_stamp = parse_date(token);
-                entry.date_stamp = date_stamp;
+                Assert(!entry.date);
+                auto date = parse_date(token);
+                entry.date = date;
             } break;
 
             case Token_Time:
@@ -409,20 +473,21 @@ internal void process_input(char *content, Program_State *state,
                     if (entry.type == Entry_Start)
                     {
                         if ((state->day_count == 0) ||
-                            (state->days[state->day_count - 1].date_stamp < entry.date_stamp))
+                            (state->days[state->day_count - 1].date_stamp < entry.date))
                         {
                             if (state->day_count != 0)
                             {
-                                calculate_work_time(&state->days[state->day_count - 1]);
+                                calculate_work_time(&state->days[state->day_count - 1], 
+                                                    &state->error_count);
                             }
 
                             Assert(state->day_count < Array_Count(state->days));
                             day = &state->days[state->day_count++];
-                            day->date_stamp = entry.date_stamp;
+                            day->date_stamp = entry.date;
                         }
                         else
                         {
-                            Assert(state->days[state->day_count - 1].date_stamp == entry.date_stamp);
+                            Assert(state->days[state->day_count - 1].date_stamp == entry.date);
                             day = &state->days[state->day_count - 1];
                         }
                     }
@@ -451,12 +516,18 @@ internal void process_input(char *content, Program_State *state,
                 }
                 else if (instruction == Ins_Exit)
                 {
-                    if (!(flag & Flag_No_Save)) save_to_file(state);
+                    if (!(flag & Flag_No_Save)) 
+                    {
+                        archive_current_file(state);
+                        save_to_file(state);
+                    }
+
                     Assert(program_is_running);
                     *program_is_running = false;
                 }
                 else if (instruction == Ins_Save)
                 {
+                    archive_current_file(state);
                     save_to_file(state);
                 }
                 else if (instruction == Ins_Archive)
@@ -478,7 +549,7 @@ internal void process_input(char *content, Program_State *state,
         auto last_day = &state->days[state->day_count - 1];
         if (last_day->sum == 0)
         {
-            calculate_work_time(last_day);
+            calculate_work_time(last_day, &state->error_count);
         }
     }
 }
@@ -510,7 +581,6 @@ int main(int arg_count, char **args)
     {
         memset(state, 0, sizeof(Program_State));
 
-
         initialize_arena(&state->description_arena, sizeof(state->byte_memory_block), 
                          state->byte_memory_block);
 
@@ -526,7 +596,10 @@ int main(int arg_count, char **args)
     create_directory(state->archive_directory);
 
     load_file(state->input_filename, state);
-    print_all_days(state->days, state->day_count);
+    if (state->error_count == 0)
+    {
+        print_all_days(state->days, state->day_count);
+    }
 
 
     b32 is_running = true;
