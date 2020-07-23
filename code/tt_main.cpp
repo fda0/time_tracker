@@ -14,6 +14,7 @@
 
 #include "tt_token.cpp"
 #include "tt_string.cpp"
+#include "tt_time.cpp"
 
 
 
@@ -83,28 +84,6 @@ internal time_t parse_time(Token token)
 
     time_t timestamp = hour*60*60 + minute*60;
     return timestamp;
-}
-
-inline time_t truncate_to_date(time_t timestamp)
-{
-    time_t result = (timestamp / Days(1)) * Days(1);
-    return result;
-}
-
-inline time_t turnacate_to_time(time_t timestamp)
-{
-    time_t result = timestamp % Days(1);
-    return result;
-}
-
-
-internal time_t get_current_time(Program_State *state)
-{
-    time_t now;
-    time(&now);
-
-    time_t result = now + state->timezone_offset;
-    return result;
 }
 
 
@@ -184,7 +163,11 @@ internal void calculate_work_time(Program_State *state, Day *day, b32 print)
             day->missing = Missing_Assumed;
             day->sum += (s32)(now - start_time);
 
-            if (print) print_work_time_row(start, NULL, offset_sum, "now");
+            if (print) 
+            {
+                print_work_time_row(start, NULL, offset_sum, "now");
+                offset_sum = 0;
+            }
         }
         else
         {
@@ -193,6 +176,7 @@ internal void calculate_work_time(Program_State *state, Day *day, b32 print)
             if (print) 
             {
                 print_work_time_row(start, 0, offset_sum, "...");
+                offset_sum = 0;
             }
             else
             {
@@ -203,7 +187,16 @@ internal void calculate_work_time(Program_State *state, Day *day, b32 print)
             }
         }
     }
+
+    if (offset_sum != 0)
+    {
+        print_offset(offset_sum);
+        printf("\n");
+    }
 }
+
+
+
 
 internal void print_all_days(Program_State *state)
 {
@@ -219,13 +212,10 @@ internal void print_all_days(Program_State *state)
 
         calculate_work_time(state, day, true);
 
-        char sum_str[64];
-        get_time_string(sum_str, sizeof(sum_str), day->sum);
+        char sum_bar_str[MAX_SUM_AND_PROGRESS_BAR_STRING_SIZE];
+        get_sum_and_progress_bar_string(sum_bar_str, sizeof(sum_bar_str), day);
 
-        char bar_str[MAX_PROGRESS_BAR_SIZE];
-        get_progress_bar_string(bar_str, sizeof(bar_str), day->sum, day->missing);
-
-        printf("sum: %s\t%s\n", sum_str, bar_str);
+        printf("%s\n", sum_bar_str);
     }
 }
 
@@ -250,14 +240,6 @@ internal void archive_current_file(Program_State *state, b32 force = false)
 
 internal void save_to_file(Program_State *state)
 {
-    if (state->error_count > 0)
-    {
-        archive_current_file(state, true);
-        printf("Saving with errors\n");
-    }
-
-    // state->change_count = 0; // TODO(mateusz): implement change counter for saving?
-
     FILE *file = fopen(state->input_filename, "w");
     if (file)
     {
@@ -266,6 +248,11 @@ internal void save_to_file(Program_State *state)
              ++day_index)
         {
             Day *day = &state->days[day_index];
+            calculate_work_time(state, day, false);
+
+            char day_of_week_str[16];
+            get_day_of_the_week_string(day_of_week_str, sizeof(day_of_week_str), day->date_start);
+            fprintf(file, "// %s\n", day_of_week_str);
 
             for (Time_Entry *entry = &day->first_time_entry;
                  entry;
@@ -321,7 +308,9 @@ internal void save_to_file(Program_State *state)
                 }
             }
 
-            fprintf(file, "\n");
+            char sum_bar_str[MAX_SUM_AND_PROGRESS_BAR_STRING_SIZE];
+            get_sum_and_progress_bar_string(sum_bar_str, sizeof(sum_bar_str), day);
+            fprintf(file, "// %s\n\n", sum_bar_str);
         }
     
         printf("File saved\n");
@@ -331,6 +320,8 @@ internal void save_to_file(Program_State *state)
     {
         printf("Failed to write to file: %s\n", state->input_filename);
     }
+
+    state->change_count = 0;
 }
 
 
@@ -419,6 +410,7 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
         entry_dest = entry_dest->next_in_day;
     }
 
+    ++state->change_count;
     *entry_dest = *entry;
 }
 
@@ -597,8 +589,11 @@ internal void process_input(char *content, Program_State *state,
                 {
                     if (!(flag & Flag_No_Save)) 
                     {
-                        archive_current_file(state);
-                        save_to_file(state);
+                        if (state->change_count > 0)
+                        {
+                            archive_current_file(state);
+                            save_to_file(state);
+                        }
                     }
 
                     Assert(program_is_running);
@@ -644,19 +639,6 @@ internal void load_file(char *filename, Program_State *state)
         printf("File processed: %s\n", filename);
         free(file_content);
     }
-}
-
-
-internal void initialize_timezone_offset(Program_State *state)
-{
-    time_t test_time;
-    time(&test_time);
-
-    tm *local_date = localtime(&test_time);
-    time_t utc_test_time = tm_to_time(local_date);
-
-    time_t offset = utc_test_time - test_time;
-    state->timezone_offset = offset;
 }
 
 

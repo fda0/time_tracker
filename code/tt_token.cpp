@@ -69,6 +69,15 @@ internal void eat_all_whitespace(Tokenizer *tokenizer)
         {
             ++tokenizer->at;
         }
+        else if (tokenizer->at[0] == '/' &&
+                 tokenizer->at[1] == '/')
+        {
+            tokenizer->at += 2;
+            while (tokenizer->at[0] && !is_end_of_line(tokenizer->at[0]))
+            {
+                ++tokenizer->at;
+            }
+        }
         else
         {
             break;

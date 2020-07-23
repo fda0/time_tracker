@@ -134,6 +134,7 @@ struct Program_State
 
     time_t timezone_offset;
     s32 error_count;
+    s32 change_count;
 
     Day days[365]; // TODO(mateusz): Add memory arena support for days.
     u32 day_count;
