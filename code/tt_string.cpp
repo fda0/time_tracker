@@ -10,8 +10,10 @@ internal void get_timestamp_string(char *output, u32 output_size, time_t time)
              s->tm_hour, s->tm_min);
 }
 
-internal void get_timestamp_string_for_file(char *output, u32 output_size, tm *s)
+internal void get_timestamp_string_for_file(char *output, u32 output_size, time_t time)
 {
+    tm *s = gmtime(&time);
+
     snprintf(output, output_size, "%04d-%02d-%02d_%02d-%02d", 
              s->tm_year + 1900, s->tm_mon + 1, s->tm_mday,
              s->tm_hour, s->tm_min);
@@ -31,8 +33,10 @@ internal void get_time_string(char *output, u32 output_size, time_t time)
     snprintf(output, output_size, "%02d:%02d", hours, minutes);
 }
 
-internal void get_date_string(char *output, u32 output_size, tm *s)
+internal void get_date_string(char *output, u32 output_size, time_t timestamp)
 {
+    tm *s = gmtime(&timestamp);
+
     snprintf(output, output_size, "%04d-%02d-%02d", 
              s->tm_year + 1900, s->tm_mon + 1, s->tm_mday);
 }
@@ -81,7 +85,7 @@ internal void print_work_time_row(Time_Entry *start, Time_Entry *stop, s32 offse
 }
 
 
-#define MAX_PROGRESS_BAR_SIZE sizeof("[++++ ++++ ++++ ++++ ++++ ++- )!")
+#define MAX_PROGRESS_BAR_SIZE sizeof("[++++ ++++ ++++ ++++ ++++ +++-> stop is missing!")
 internal void get_progress_bar_string(char *output, s32 output_size, time_t time, Missing_Type type)
 {
     // NOTE(mateusz): Max output:
@@ -124,7 +128,10 @@ internal void get_progress_bar_string(char *output, s32 output_size, time_t time
 
     if (type == Missing_None)          output[i++] = ']';
     if (type == Missing_Assumed)       output[i++] = ')';
-    else if (type == Missing_Critical) { output[i++] = ')'; output[i++] = '!'; }
+    else if (type == Missing_Critical) 
+    { 
+        i += sprintf(&output[i], "> stop is missing!");
+    }
 
     output[i] = 0;
     Assert(i < output_size);

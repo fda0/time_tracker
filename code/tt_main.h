@@ -116,7 +116,7 @@ enum Missing_Type
 
 struct Day
 {
-    time_t date_stamp;
+    time_t date_start;
     s32 sum;
     Missing_Type missing;
     Time_Entry first_time_entry;
@@ -132,6 +132,7 @@ struct Program_State
     char input_filename[MAX_PATH];
     char archive_directory[MAX_PATH];
 
+    time_t timezone_offset;
     s32 error_count;
 
     Day days[365]; // TODO(mateusz): Add memory arena support for days.
@@ -152,11 +153,13 @@ struct Program_State
 enum Instruction_Type
 {
     Ins_None,
+    Ins_Unsupported,
 
     Ins_Time_Entry,
     Ins_Show,
     Ins_Save,
     Ins_Archive,
+    Ins_Time,
 
     Ins_Exit
 };

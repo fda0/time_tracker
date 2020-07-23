@@ -12,5 +12,6 @@ internal void copy_file(char *source, char *destination)
 
 inline time_t tm_to_time(tm *date)
 {
-    return _mkgmtime(date);
+    time_t result = _mkgmtime(date);
+    return result;
 }
