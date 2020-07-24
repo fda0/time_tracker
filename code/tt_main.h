@@ -31,6 +31,13 @@ typedef double f64;
 
 
 
+struct Thread_Memory
+{
+    char input_buffer[256];
+    char cursor[64];
+    b32 new_data;
+};
+
 
 //
 // NOTE(mautesz): Platforms and compilers
@@ -131,7 +138,6 @@ struct Day
 
 #include "tt_memory.h"
 
-
 struct Program_State
 {
     char input_filename[MAX_PATH];
@@ -142,6 +148,7 @@ struct Program_State
     s32 save_error_count;
     s32 load_error_count;
     s32 change_count;
+    File_Time loaded_input_mod_time;
 
     Day days[365]; // TODO(mateusz): Add memory arena support for days.
     u32 day_count;

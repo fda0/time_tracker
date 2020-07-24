@@ -27,7 +27,7 @@ internal void initialize_timezone_offset(Program_State *state)
     time(&test_time);
 
     tm *local_date = localtime(&test_time);
-    time_t utc_test_time = tm_to_time(local_date);
+    time_t utc_test_time = platform_tm_to_time(local_date);
 
     time_t offset = utc_test_time - test_time;
     state->timezone_offset = offset;

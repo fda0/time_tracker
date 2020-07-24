@@ -1,8 +1,10 @@
 /*
     TODO(mateusz):
     * Colors in output.
-    * Auto-save & auto-load on changes.
-
+    
+    * Add edit command - opens editor with file.
+    * Add help command.
+    * Don't use relative path by default - use path based on executable root path.
 
 */
 
@@ -66,7 +68,7 @@ internal time_t parse_date(Token token)
     date.tm_mday = parse_number(text, 2);
     text += 2;
 
-    time_t timestamp = tm_to_time(&date);
+    time_t timestamp = platform_tm_to_time(&date);
     return timestamp;
 }
 
@@ -247,8 +249,9 @@ internal void archive_current_file(Program_State *state, b32 long_format = false
     snprintf(archive_filename, sizeof(archive_filename), "%s%s_%s.txt", 
              state->archive_directory, state->input_filename, timestamp);
 
-    copy_file(state->input_filename, archive_filename);
-    printf("File archived to: %s\n", archive_filename);
+    platform_copy_file(state->input_filename, archive_filename);
+
+    if (long_format) printf("File archived as: %s\n", archive_filename);
 }
 
 internal void save_to_file(Program_State *state)
@@ -341,8 +344,9 @@ internal void save_to_file(Program_State *state)
             fprintf(stdout, "// Save error count: %d\n", state->save_error_count);
         }
     
-        printf("File saved\n");
         fclose(file);
+
+        state->loaded_input_mod_time = platform_get_file_mod_time(state->input_filename);
     }
     else
     {
@@ -692,6 +696,7 @@ internal void process_input(char *content, Program_State *state,
                 else if (instruction == Ins_Save)
                 {                    
                     save_to_file(state);
+                    printf("File saved\n");
                 }
                 else if (instruction == Ins_Archive)
                 {
@@ -715,19 +720,20 @@ internal void process_input(char *content, Program_State *state,
     }
 }
 
-internal void load_file(char *filename, Program_State *state)
+internal void load_file(Program_State *state)
 {
+    char *filename = state->input_filename;
     state->load_error_count = 0;
 
     char *file_content = read_entire_file_and_null_terminate(filename);
     if (file_content)
     {
-        printf("File read: %s\n", filename);
+        printf("File loaded: %s\n", filename);
 
         process_input(file_content, state, true);
 
-        printf("File processed: %s\n", filename);
         free(file_content);
+        state->loaded_input_mod_time = platform_get_file_mod_time(state->input_filename);
     }
     else
     {
@@ -737,6 +743,23 @@ internal void load_file(char *filename, Program_State *state)
 }
 
 
+internal void read_from_keyboard(Thread_Memory *thread_memory)
+{
+    for (;;)
+    {
+        if (thread_memory->new_data)
+        {
+            // spinlock while new_data == true
+        }
+        else
+        {
+            printf(thread_memory->cursor);
+            fgets(thread_memory->input_buffer, sizeof(thread_memory->input_buffer), stdin);
+            thread_memory->new_data = true;
+        }
+    }
+}
+
 int main(int arg_count, char **args)
 {
     Program_State *state = (Program_State *)malloc(sizeof(Program_State));
@@ -745,42 +768,74 @@ int main(int arg_count, char **args)
         printf("Failed to allocate required memory!\n");
         return 1;
     }
-    else
-    {
-        memset(state, 0, sizeof(Program_State));
 
-        initialize_arena(&state->description_arena, sizeof(state->byte_memory_block), 
-                         state->byte_memory_block);
+    //
+    // NOTE(mateusz): Initialization 
+    //
 
-        initialize_arena(&state->struct_arena, sizeof(state->aligned_memory_block), 
-                         state->aligned_memory_block);
+    memset(state, 0, sizeof(Program_State));
 
-        initialize_timezone_offset(state);
-    }
+    initialize_arena(&state->description_arena, sizeof(state->byte_memory_block), 
+                     state->byte_memory_block);
+
+    initialize_arena(&state->struct_arena, sizeof(state->aligned_memory_block), 
+                     state->aligned_memory_block);
+
+    initialize_timezone_offset(state);
 
     // TODO(mateusz): Get these filenames/paths from input arguments.
     sprintf(state->input_filename, "database.txt");
 
     sprintf(state->archive_directory, "archive");
     add_ending_slash_to_path(state->archive_directory);
-    create_directory(state->archive_directory);
-
-    load_file(state->input_filename, state);
+    platform_create_directory(state->archive_directory);
 
 
-    if (state->save_error_count == 0)
+    load_file(state);
+
+    if (state->load_error_count == 0)
     {
         print_all_days(state);
+        save_to_file(state);
+    }
+    else
+    {
+        state->change_count = 0;
     }
 
+    // TODO(mateusz): Factor out windows code away.
+    Thread_Memory thread_memory = {};
+    sprintf(thread_memory.cursor, "::>");
+    platform_create_thread((LPTHREAD_START_ROUTINE)read_from_keyboard, &thread_memory);
+
+
+    //
+    // NOTE(mateusz): Main loop
+    //
 
     b32 is_running = true;
     while (is_running)
     {
-        char input_buffer[256];
-        printf("::>");
-        fgets(input_buffer, sizeof(input_buffer), stdin);
-        process_input(input_buffer, state, false, &is_running);
+        if (thread_memory.new_data)
+        {
+            process_input(thread_memory.input_buffer, state, false, &is_running);
+            if (state->change_count > 0)
+            {
+                save_to_file(state);
+            }
+
+            thread_memory.new_data = false;
+        }
+
+        auto current_input_mod_time = platform_get_file_mod_time(state->input_filename);
+        b32 source_file_changed =  (platform_compare_file_time(
+            state->loaded_input_mod_time, current_input_mod_time) != 0);
+
+        if (source_file_changed)
+        {
+            load_file(state);
+        }
+        Sleep(33);
     }
 
     return 0;
