@@ -16,7 +16,8 @@ internal char *read_entire_file_and_null_terminate(char *filename)
         size_t file_size = ftell(file);
         fseek(file, 0, SEEK_SET);
 
-        result = (char *)malloc(file_size + 1);
+        // TODO(mateusz): Get rid of malloc here/reuse previous malloc.
+        result = (char *)malloc(file_size + 1); 
         fread(result, file_size, 1, file);
         result[file_size] = 0;
         

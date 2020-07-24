@@ -9,6 +9,7 @@ internal void initialize_arena(Memory_Arena *arena, size_t size, u8 *base)
 {
     arena->size = size;
     arena->base = base;
+    arena->used = 0;
 }
 
 // TODO(mateusz): Add aligned memory support (add padding).

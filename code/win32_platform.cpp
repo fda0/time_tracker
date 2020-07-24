@@ -35,12 +35,29 @@ internal s32 platform_compare_file_time(File_Time first, File_Time second)
     return result;
 }
 
-internal void platform_create_thread(LPTHREAD_START_ROUTINE start_func, Thread_Memory *data)
+internal void platform_create_thread(void *start_func, Thread_Memory *data)
 {
-    CreateThread(NULL, 0, start_func, data, 0, NULL);
+    CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)start_func, data, 0, NULL);
 }
 
 inline void platform_sleep(u32 miliseconds)
 {
     Sleep(miliseconds);
+}
+
+internal void platform_add_ending_slash_to_path(char *path)
+{
+    u32 length = (u32)strlen(path);
+    if (path[length - 1] != '/' ||
+        path[length - 1] != '\\')
+    {
+        path[length] = '\\';
+        path[length + 1] = 0;
+    }
+}
+
+
+internal void platform_open_in_default_editor(char *filename)
+{
+    ShellExecuteA(NULL, "open", filename, NULL, NULL, SW_SHOWNORMAL);
 }

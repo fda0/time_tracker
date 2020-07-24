@@ -2,10 +2,14 @@
     TODO(mateusz):
     * Colors in output.
     
-    * Add edit command - opens editor with file.
     * Add help command.
     * Don't use relative path by default - use path based on executable root path.
+    
+    * Smarter parsing of incorrect dates/incomplete formats.
+    * Get these filenames/paths from input arguments.
+    * Config file?
 
+    * Dynamic memory.
 */
 
 
@@ -16,6 +20,10 @@
 #include "tt_token.cpp"
 #include "tt_string.cpp"
 #include "tt_time.cpp"
+
+
+internal void load_file(Program_State *state);
+
 
 
 
@@ -181,8 +189,8 @@ internal void calculate_day_sum_and_validate(Program_State *state, Day *day,
         
         time_t start_time = start->date + start->time;
 
-        if (now > start_time &&
-            now - Days(1) < start_time)
+        if (now >= start_time &&
+            now - Days(1) <= start_time)
         {
             day->missing = Missing_Assumed;
             day->sum += (s32)(now - start_time);
@@ -203,11 +211,12 @@ internal void calculate_day_sum_and_validate(Program_State *state, Day *day,
                 offset_sum = 0;
             }
 
-            fprintf(error_output, "// [Error #%d] Missing last stop for a day\n", state->save_error_count++);
+            fprintf(error_output, "// [Error #%d] Missing last stop for a day\n", 
+                    state->save_error_count++);
         }
     }
 
-    if (offset_sum != 0)
+    if (print && offset_sum != 0)
     {
         print_offset(offset_sum);
         printf("\n");
@@ -413,6 +422,7 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
 
         Assert(state->day_count < Array_Count(state->days)); // TODO(mateusz): Dynamic memory for days.
         day = &state->days[state->day_count++];
+        *day = {};
         day->date_start = entry->date;
     }
     else if (entry->date == 0)
@@ -446,6 +456,7 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
         if (entry_dest->next_in_day == NULL)
         {
             entry_dest->next_in_day = Push_Struct(&state->struct_arena, Time_Entry);
+            *entry_dest->next_in_day = {};
         }
 
         entry_dest = entry_dest->next_in_day;
@@ -454,6 +465,7 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
     ++state->change_count;
     *entry_dest = *entry;
 }
+
 
 
 
@@ -565,12 +577,33 @@ internal void process_input(char *content, Program_State *state,
 
                     instruction = Ins_Archive;
                 }
+                else if (token_equals(token, "load"))
+                {
+                    Continue_If_Instruction_Already_Set;
+                    Program_Interface_Only;
+
+                    instruction = Ins_Load;
+                }
                 else if (token_equals(token, "time"))
                 {
                     Continue_If_Instruction_Already_Set;
                     Program_Interface_Only;
 
                     instruction = Ins_Time;
+                }
+                else if (token_equals(token, "edit"))
+                {
+                    Continue_If_Instruction_Already_Set;
+                    Program_Interface_Only;
+
+                    instruction = Ins_Edit;
+                }
+                else if (token_equals(token, "help"))
+                {
+                    Continue_If_Instruction_Already_Set;
+                    Program_Interface_Only;
+
+                    instruction = Ins_Help;
                 }
                 else if (token_equals(token, "no-save"))
                 {
@@ -702,12 +735,42 @@ internal void process_input(char *content, Program_State *state,
                 {
                     archive_current_file(state, true);
                 }
+                else if (instruction == Ins_Load)
+                {
+                    load_file(state);
+                }
                 else if (instruction == Ins_Time)
                 {
                     time_t now = get_current_time(state);
                     char now_str[MAX_TIMESTAMP_STRING_SIZE];
                     get_timestamp_string(now_str, sizeof(now_str), now);
                     printf("Current time: %s\n", now_str);
+                }
+                else if (instruction == Ins_Edit)
+                {
+                    platform_open_in_default_editor(state->input_filename);
+                }
+                else if (instruction == Ins_Help)
+                {
+                    printf("Commands available everywhere:\n"
+                           "start 2025-12-31 11:20;\tstarts new timespan\n"
+                           "stop 2025-12-31 14:12;\tstops current timespan\n"
+                           "add 01:00;\t\tadds time to current day\n"
+                           "\t\t\tcan also work like: add 2026-01-01 03:00;\n"
+                           "sub 01:00;\t\tsubtracts time from current day\n"
+                           
+                           "\nCommands available only in console:\n"
+                           "start & stop assumes current time when unspecified in console\n"
+                           "show;\t\t\tshows current history\n"
+                           "time;\t\t\tshows current time...\n"
+                           "edit;\t\t\topens database file in your default editor\n"
+                           "\t\t\tworks best if your editor supports hot-loading\n"
+
+                           "\nThese actions happen automatically:\n"
+                           "save;\t\t\tforces save\n"
+                           "archive;\t\tforces backup\n"
+                           "load;\t\t\tforces load from file\n"
+                           );
                 }
 
 
@@ -720,24 +783,42 @@ internal void process_input(char *content, Program_State *state,
     }
 }
 
+
+internal void initialize_memory(Program_State *state)
+{
+    memset(state->days, 0, sizeof(state->days));
+    state->day_count = 0;
+
+
+    initialize_arena(&state->description_arena, sizeof(state->byte_memory_block), 
+                     state->byte_memory_block);
+
+    initialize_arena(&state->struct_arena, sizeof(state->aligned_memory_block), 
+                     state->aligned_memory_block);
+}
+
+
 internal void load_file(Program_State *state)
 {
-    char *filename = state->input_filename;
+    initialize_memory(state);
     state->load_error_count = 0;
+
+
+    char *filename = state->input_filename;
 
     char *file_content = read_entire_file_and_null_terminate(filename);
     if (file_content)
     {
-        printf("File loaded: %s\n", filename);
-
+        printf("Start file load: %s\n", filename);
         process_input(file_content, state, true);
-
         free(file_content);
+
         state->loaded_input_mod_time = platform_get_file_mod_time(state->input_filename);
+        printf("File loaded: %s\n", filename);
     }
     else
     {
-        printf("[Load Error #%d] Failed to open the file: %s", 
+        printf("[Load Error #%d] Failed to open the file: %s\n",
                state->load_error_count++, filename);
     }
 }
@@ -760,6 +841,7 @@ internal void read_from_keyboard(Thread_Memory *thread_memory)
     }
 }
 
+
 int main(int arg_count, char **args)
 {
     Program_State *state = (Program_State *)malloc(sizeof(Program_State));
@@ -774,20 +856,19 @@ int main(int arg_count, char **args)
     //
 
     memset(state, 0, sizeof(Program_State));
-
-    initialize_arena(&state->description_arena, sizeof(state->byte_memory_block), 
-                     state->byte_memory_block);
-
-    initialize_arena(&state->struct_arena, sizeof(state->aligned_memory_block), 
-                     state->aligned_memory_block);
+    initialize_memory(state);
 
     initialize_timezone_offset(state);
 
     // TODO(mateusz): Get these filenames/paths from input arguments.
-    sprintf(state->input_filename, "database.txt");
+    char base_path[MAX_PATH];
+    strncpy(base_path, args[0], sizeof(base_path));
+    terminate_string_after_last_slash(base_path);
 
-    sprintf(state->archive_directory, "archive");
-    add_ending_slash_to_path(state->archive_directory);
+    sprintf(state->input_filename, "%sdatabase.txt", base_path);
+
+    sprintf(state->archive_directory, "%sarchive", base_path);
+    platform_add_ending_slash_to_path(state->archive_directory);
     platform_create_directory(state->archive_directory);
 
 
@@ -803,10 +884,12 @@ int main(int arg_count, char **args)
         state->change_count = 0;
     }
 
+
+
     // TODO(mateusz): Factor out windows code away.
     Thread_Memory thread_memory = {};
     sprintf(thread_memory.cursor, "::>");
-    platform_create_thread((LPTHREAD_START_ROUTINE)read_from_keyboard, &thread_memory);
+    platform_create_thread(read_from_keyboard, &thread_memory);
 
 
     //
@@ -822,6 +905,11 @@ int main(int arg_count, char **args)
             if (state->change_count > 0)
             {
                 save_to_file(state);
+                if (state->day_count > 0)
+                {
+                    Day *last_day = &state->days[state->day_count - 1];
+                    calculate_day_sum_and_validate(state, last_day, true);
+                }
             }
 
             thread_memory.new_data = false;
@@ -834,8 +922,12 @@ int main(int arg_count, char **args)
         if (source_file_changed)
         {
             load_file(state);
+            state->change_count = 0;
+            printf(thread_memory.cursor);
         }
-        Sleep(33);
+
+
+        platform_sleep(33);
     }
 
     return 0;

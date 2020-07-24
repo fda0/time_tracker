@@ -96,6 +96,8 @@ struct Thread_Memory
 
 
 
+
+
 //
 // NOTE(mateusz): Data types
 //
@@ -140,30 +142,27 @@ struct Day
 
 struct Program_State
 {
+    u8 byte_memory_block[Megabytes(8)]; 
+    u8 aligned_memory_block[Megabytes(8)];
+  
+    Day days[365]; // TODO(mateusz): Add memory arena support for days.
+    u32 day_count;
+  
+    Memory_Arena description_arena;
+    Memory_Arena struct_arena;
+
     char input_filename[MAX_PATH];
     char archive_directory[MAX_PATH];
 
     time_t timezone_offset;
-
+    File_Time loaded_input_mod_time;
+    
     s32 save_error_count;
     s32 load_error_count;
     s32 change_count;
-    File_Time loaded_input_mod_time;
-
-    Day days[365]; // TODO(mateusz): Add memory arena support for days.
-    u32 day_count;
-
-    Memory_Arena description_arena;
-    Memory_Arena struct_arena;
-
-    // TODO(mateusz): Allocate at high virtual address and 
-    // allocate more pages from windows if needed.
-
-    // TODO(mateusz): Research if two differenet memory blocks are needed...
-    // Are there problems with accessing not byte aligned structs?
-    u8 byte_memory_block[Megabytes(8)]; 
-    u8 aligned_memory_block[Megabytes(8)];
 };
+
+
 
 enum Instruction_Type
 {
@@ -174,7 +173,10 @@ enum Instruction_Type
     Ins_Show,
     Ins_Save,
     Ins_Archive,
+    Ins_Load,
     Ins_Time,
+    Ins_Edit,
+    Ins_Help,
 
     Ins_Exit
 };
@@ -184,3 +186,6 @@ enum Instruction_Flag : u32
     Flag_Clear = 0,
     Flag_No_Save = (1 << 0),
 };
+
+
+

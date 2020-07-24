@@ -188,13 +188,20 @@ internal void get_day_of_the_week_string(char *output, s32 output_size, time_t t
 }
 
 
-internal void add_ending_slash_to_path(char *path)
+internal void terminate_string_after_last_slash(char *path)
 {
-    u32 length = (u32)strlen(path);
-    if (path[length - 1] != '/' ||
-        path[length - 1] != '\\')
+    s32 len = (s32)strlen(path);
+
+    for (s32 index = len - 1; 
+         index >= 0; 
+         --index)
     {
-        path[length] = '/';
-        path[length + 1] = 0;
+        if (path[index] == '\\' || 
+            path[index] == '/')
+        {
+            path[index + 1] = 0;
+            break;
+        }
     }
 }
+
