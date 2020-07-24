@@ -1,12 +1,11 @@
 /*
     TODO(mateusz):
-    * Add nice error messages and don't crash the program if not needed
+    * Colors in output.
+    * Auto-save & auto-load on changes.
 
-    * Allow for start without date (in the same day).
-    * Delete asserts where possible - add user facing message errors instead.
-    * Add comments support.
-    * Don't save if there are errors or no changes.
+
 */
+
 
 // NOTE(mateusz): This program ignores concept of timezones to simplify usage.
 
@@ -33,6 +32,7 @@ internal char *create_description(Memory_Arena *arena, Token token)
     return result;
 }
 
+// TODO(mateusz): Smarter parsing of incorrect dates/incomplete formats.
 internal s32 parse_number(char *src, s32 count)
 {
     s32 result = 0;
@@ -87,9 +87,12 @@ internal time_t parse_time(Token token)
 }
 
 
-internal void calculate_work_time(Program_State *state, Day *day, b32 print)
+internal void calculate_day_sum_and_validate(Program_State *state, Day *day, 
+                                             b32 print, FILE *errors_to_file = NULL)
 {
-    // NOTE(mateusz): If error_count == NULL function will print to console.
+    FILE *error_output = stdout;
+    if (errors_to_file) error_output = errors_to_file;
+
     Time_Entry *start = 0;
     day->missing = Missing_None;
     day->sum = 0;
@@ -119,12 +122,25 @@ internal void calculate_work_time(Program_State *state, Day *day, b32 print)
         }
         else if (entry->type == Entry_Start)
         {
-            Assert(!start);
+            if (start)
+            {
+                fprintf(error_output, "// [Error #%d] two start commands in a row - stop is missing\n", 
+                        state->save_error_count++);
+                return;
+            }
+
             start = entry;
         }
         else if (entry->type == Entry_Stop)
         {
-            Assert(start);
+            if (!start)
+            {
+                fprintf(error_output, "// [Error #%d] stop is missing its start\n", 
+                        state->save_error_count++);
+                return;
+            }
+
+
             if (entry->date == 0) entry->date = start->date;
 
             time_t start_time = start->date + start->time;
@@ -139,7 +155,13 @@ internal void calculate_work_time(Program_State *state, Day *day, b32 print)
                 }
             }
 
-            Assert(stop_time > start_time);
+            if (stop_time < start_time)
+            {
+                fprintf(error_output, "// [Error #%d] stop time is earlier than start time\n", 
+                        state->save_error_count++);
+                return;
+            }
+
 
             day->sum += (s32)(stop_time - start_time);
 
@@ -178,13 +200,8 @@ internal void calculate_work_time(Program_State *state, Day *day, b32 print)
                 print_work_time_row(start, 0, offset_sum, "...");
                 offset_sum = 0;
             }
-            else
-            {
-                char timestamp_str[MAX_TIMESTAMP_STRING_SIZE];
-                get_timestamp_string(timestamp_str, sizeof(timestamp_str), start_time);
-                printf("[Error #%d] Missing stop time: %s\n", 
-                       state->error_count++, timestamp_str);
-            }
+
+            fprintf(error_output, "// [Error #%d] Missing last stop for a day\n", state->save_error_count++);
         }
     }
 
@@ -210,7 +227,7 @@ internal void print_all_days(Program_State *state)
         get_date_string(date_str, sizeof(date_str), day->date_start);
         printf("\n%s\n", date_str);
 
-        calculate_work_time(state, day, true);
+        calculate_day_sum_and_validate(state, day, true);
 
         char sum_bar_str[MAX_SUM_AND_PROGRESS_BAR_STRING_SIZE];
         get_sum_and_progress_bar_string(sum_bar_str, sizeof(sum_bar_str), day);
@@ -219,27 +236,26 @@ internal void print_all_days(Program_State *state)
     }
 }
 
-internal void archive_current_file(Program_State *state, b32 force = false)
+internal void archive_current_file(Program_State *state, b32 long_format = false)
 {
-    // TODO(mateusz): Return if no changes but not force
-    // if (state->change_count > 0 || force)
-    {
-        time_t now = get_current_time(state);
+    time_t now = get_current_time(state);
 
-        char timestamp[MAX_PATH];
-        get_timestamp_string_for_file(timestamp, sizeof(timestamp), now);
+    char timestamp[MAX_PATH];
+    get_timestamp_string_for_file(timestamp, sizeof(timestamp), now, long_format);
 
-        char archive_filename[MAX_PATH];
-        snprintf(archive_filename, sizeof(archive_filename), "%s%s_%s.txt", 
-                 state->archive_directory, state->input_filename, timestamp);
+    char archive_filename[MAX_PATH];
+    snprintf(archive_filename, sizeof(archive_filename), "%s%s_%s.txt", 
+             state->archive_directory, state->input_filename, timestamp);
 
-        copy_file(state->input_filename, archive_filename);
-        printf("File archived to: %s\n", archive_filename);
-    }
+    copy_file(state->input_filename, archive_filename);
+    printf("File archived to: %s\n", archive_filename);
 }
 
 internal void save_to_file(Program_State *state)
 {
+    archive_current_file(state);
+    state->save_error_count = 0;
+
     FILE *file = fopen(state->input_filename, "w");
     if (file)
     {
@@ -248,7 +264,7 @@ internal void save_to_file(Program_State *state)
              ++day_index)
         {
             Day *day = &state->days[day_index];
-            calculate_work_time(state, day, false);
+            calculate_day_sum_and_validate(state, day, false, file);
 
             char day_of_week_str[16];
             get_day_of_the_week_string(day_of_week_str, sizeof(day_of_week_str), day->date_start);
@@ -312,6 +328,18 @@ internal void save_to_file(Program_State *state)
             get_sum_and_progress_bar_string(sum_bar_str, sizeof(sum_bar_str), day);
             fprintf(file, "// %s\n\n", sum_bar_str);
         }
+
+        if (state->load_error_count > 0)
+        {
+            fprintf(file, "// Load error count: %d\n", state->load_error_count);
+            fprintf(stdout, "// Load error count: %d\n", state->load_error_count);
+        }
+
+        if (state->save_error_count > 0)
+        {
+            fprintf(file, "// Save error count: %d\n", state->save_error_count);
+            fprintf(stdout, "// Save error count: %d\n", state->save_error_count);
+        }
     
         printf("File saved\n");
         fclose(file);
@@ -327,7 +355,7 @@ internal void save_to_file(Program_State *state)
 
 internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 reading_from_file)
 {
-    // TODO(mateusz): Inplement insert sorting for start/stop/add/sub.                
+    // TODO(mateusz): Implement insert sorting for start/stop/add/sub.                
 
     if (!reading_from_file)
     {
@@ -379,7 +407,7 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
             entry->date += Days(1);
         }
 
-        Assert(state->day_count < Array_Count(state->days))
+        Assert(state->day_count < Array_Count(state->days)); // TODO(mateusz): Dynamic memory for days.
         day = &state->days[state->day_count++];
         day->date_start = entry->date;
     }
@@ -389,8 +417,17 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
     }
     else if ((entry->date > day->date_start) && (entry->type != Entry_Stop))
     {
-        printf("[Error #%d] Out of order item insertion not supported yet :(\n", state->error_count++);
-        Invalid_Code_Path;
+        if (reading_from_file)
+        {
+            printf("[Error #%d] Out of order item insertion not supported yet :(\n", 
+                   state->save_error_count++);
+            Invalid_Code_Path;
+        }
+        else
+        {
+            printf("Can't insert entry into the past yet :(\n");
+            return;
+        }
     }
 
 
@@ -436,44 +473,54 @@ internal void process_input(char *content, Program_State *state,
             // NOTE(mateusz): Processing macros.
             //
 
-            #define Print_Not_Supported_In_File \
-            { \
-                printf("[Error #%d] %.*s keyword is not supported in files\n", \
-                       state->error_count++, (s32)token.text_length, token.text); \
+            #define Print_Not_Supported_In_File                     \
+            {                                                       \
+                printf("%.*s keyword is not supported in files\n",  \
+                       (s32)token.text_length, token.text);         \
             }
 
-            #define Program_Interface_Only          \
-            Assert(instruction == Ins_None);        \
-            if (reading_from_file)                  \
-            {                                       \
-                Print_Not_Supported_In_File;        \
-                instruction = Ins_Unsupported;      \
-                continue;                           \
+
+            #define Program_Interface_Only       \
+            if (reading_from_file)               \
+            {                                    \
+                Print_Not_Supported_In_File;     \
+                instruction = Ins_Unsupported;   \
+                continue;                        \
             }
+
+
+            #define Continue_If_Instruction_Already_Set           \
+            if (instruction != Ins_None)                          \
+            {                                                     \
+                printf("%.*s is ignored"                          \
+                       " - other instruction is already set\n",   \
+                       (s32)token.text_length, token.text);       \
+                continue;                                         \
+            }
+
+
+
 
 
             case Token_Identifier:
             {
                 if (token_equals(token, "start")) 
                 {
-                    Assert(instruction == Ins_None);
-                    Assert(!entry.type);
+                    Continue_If_Instruction_Already_Set;
 
                     entry.type = Entry_Start;
                     instruction = Ins_Time_Entry;
                 }
                 else if (token_equals(token, "stop"))
                 {
-                    Assert(instruction == Ins_None);
-                    Assert(!entry.type);
+                    Continue_If_Instruction_Already_Set;
                     
                     entry.type = Entry_Stop;
                     instruction = Ins_Time_Entry;
                 }
                 else if (token_equals(token, "add"))
                 {
-                    Assert(instruction == Ins_None);
-                    Assert(!entry.type);
+                    Continue_If_Instruction_Already_Set;
                     
                     entry.type = Entry_Add;
                     instruction = Ins_Time_Entry;
@@ -481,44 +528,49 @@ internal void process_input(char *content, Program_State *state,
                 else if (token_equals(token, "subtract") ||
                          token_equals(token, "sub"))
                 {
-                    Assert(instruction == Ins_None);
-                    Assert(!entry.type);
+                    Continue_If_Instruction_Already_Set;
                     
                     entry.type = Entry_Subtract;
                     instruction = Ins_Time_Entry;
                 }
                 else if (token_equals(token, "show"))
                 {
+                    Continue_If_Instruction_Already_Set;
                     Program_Interface_Only;
 
                     instruction = Ins_Show;
                 }
                 else if (token_equals(token, "exit"))
                 {
+                    Continue_If_Instruction_Already_Set;
                     Program_Interface_Only;
 
                     instruction = Ins_Exit;
                 }
                 else if (token_equals(token, "save"))
                 {
+                    Continue_If_Instruction_Already_Set;
                     Program_Interface_Only;
 
                     instruction = Ins_Save;
                 }
                 else if (token_equals(token, "archive"))
                 {
+                    Continue_If_Instruction_Already_Set;
                     Program_Interface_Only;
 
                     instruction = Ins_Archive;
                 }
                 else if (token_equals(token, "time"))
                 {
+                    Continue_If_Instruction_Already_Set;
                     Program_Interface_Only;
 
                     instruction = Ins_Time;
                 }
                 else if (token_equals(token, "no-save"))
                 {
+                    Continue_If_Instruction_Already_Set;
                     Program_Interface_Only;
 
                     flag |= Flag_No_Save;
@@ -531,22 +583,61 @@ internal void process_input(char *content, Program_State *state,
 
             case Token_Date:
             {
-                Assert(!entry.date);
-                auto date = parse_date(token);
-                entry.date = date;
+                if (instruction == Ins_Time_Entry)
+                {
+                    if (!entry.date)
+                    {
+                        auto date = parse_date(token);
+                        entry.date = date;
+                    }
+                    else
+                    {
+                        printf("Only one date per command is supported\n");
+                    }
+                }
+                else
+                {
+                    printf("Date supported only for start/stop/add/sub\n");
+                }
             } break;
 
             case Token_Time:
             {
-                Assert(!entry.time);
-                auto time = parse_time(token);
-                entry.time = time;
+                if (instruction == Ins_Time_Entry)
+                {
+                    if (!entry.time)
+                    {
+                        auto time = parse_time(token);
+                        entry.time = time;
+                    }
+                    else
+                    {
+                        printf("Only one time per command is supported\n");
+                    }
+                }
+                else
+                {
+                    printf("Time supported only for start/stop/add/sub\n");
+                }
             } break;
 
             case Token_String:
             {
-                Assert(!entry.description);
-                entry.description = create_description(&state->description_arena, token);
+                if (instruction == Ins_Time_Entry)
+                {
+                    if (!entry.description)
+                    {
+                        entry.description = create_description(&state->description_arena, token);
+                    }
+                    else
+                    {
+                        printf("Only one description per command is supported\n");
+                    }
+                }
+                else
+                {
+                    printf("Description supported only for start/stop/add/sub\n");
+                }
             } break;
 
             case Token_Unknown:
@@ -562,8 +653,8 @@ internal void process_input(char *content, Program_State *state,
                 {
                     if (instruction != Ins_None)
                     {
-                        printf("[Error #%d] Missing semicolon at the end of the file\n",
-                               state->error_count++);
+                        printf("[Load Error #%d] Missing semicolon at the end of the file\n",
+                               state->load_error_count++);
                     }
 
                     break;
@@ -591,7 +682,6 @@ internal void process_input(char *content, Program_State *state,
                     {
                         if (state->change_count > 0)
                         {
-                            archive_current_file(state);
                             save_to_file(state);
                         }
                     }
@@ -600,14 +690,12 @@ internal void process_input(char *content, Program_State *state,
                     *program_is_running = false;
                 }
                 else if (instruction == Ins_Save)
-                {
-                    archive_current_file(state);
-                    
+                {                    
                     save_to_file(state);
                 }
                 else if (instruction == Ins_Archive)
                 {
-                    archive_current_file(state);
+                    archive_current_file(state, true);
                 }
                 else if (instruction == Ins_Time)
                 {
@@ -629,6 +717,8 @@ internal void process_input(char *content, Program_State *state,
 
 internal void load_file(char *filename, Program_State *state)
 {
+    state->load_error_count = 0;
+
     char *file_content = read_entire_file_and_null_terminate(filename);
     if (file_content)
     {
@@ -638,6 +728,11 @@ internal void load_file(char *filename, Program_State *state)
 
         printf("File processed: %s\n", filename);
         free(file_content);
+    }
+    else
+    {
+        printf("[Load Error #%d] Failed to open the file: %s", 
+               state->load_error_count++, filename);
     }
 }
 
@@ -673,7 +768,7 @@ int main(int arg_count, char **args)
     load_file(state->input_filename, state);
 
 
-    if (state->error_count == 0)
+    if (state->save_error_count == 0)
     {
         print_all_days(state);
     }

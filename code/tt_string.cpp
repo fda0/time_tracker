@@ -10,13 +10,23 @@ internal void get_timestamp_string(char *output, u32 output_size, time_t time)
              date->tm_hour, date->tm_min);
 }
 
-internal void get_timestamp_string_for_file(char *output, u32 output_size, time_t time)
+internal void get_timestamp_string_for_file(char *output, u32 output_size, 
+                                            time_t time, b32 long_format)
 {
     tm *date = gmtime(&time);
 
-    snprintf(output, output_size, "%04d-%02d-%02d_%02d-%02d", 
-             date->tm_year + 1900, date->tm_mon + 1, date->tm_mday,
-             date->tm_hour, date->tm_min);
+    if (long_format)
+    {
+        snprintf(output, output_size, "%04d-%02d-%02d_%02d-%02d-%02d", 
+                 date->tm_year + 1900, date->tm_mon + 1, date->tm_mday,
+                 date->tm_hour, date->tm_min, date->tm_sec);
+    }
+    else
+    {
+        snprintf(output, output_size, "%04d-%02d-%02d_%02d-%02d", 
+                 date->tm_year + 1900, date->tm_mon + 1, date->tm_mday,
+                 date->tm_hour, date->tm_min);
+    }
 }
 
 #define MAX_TIME_STRING_SIZE sizeof("00:00")
@@ -65,6 +75,8 @@ internal void print_offset(s32 offset_sum)
 internal void print_work_time_row(Time_Entry *start, Time_Entry *stop, s32 offset_sum,  
                                   char *replace_stop = NULL)
 {
+    Assert(start);
+
     char start_time_str[MAX_TIME_STRING_SIZE];
     get_time_string(start_time_str, sizeof(start_time_str), start->time);
 
@@ -144,22 +156,14 @@ internal s32 get_progress_bar_string(char *output, s32 output_size, time_t time,
 internal void get_sum_and_progress_bar_string(char *output, s32 output_size, Day *day)
 {
     Assert(output_size >= MAX_SUM_AND_PROGRESS_BAR_STRING_SIZE);
-    s32 offest1 = sprintf(output, "sum: ");
-    output += offest1;
-    output_size -= offest1;
 
-    s32 offset2 = get_time_string(output, output_size, day->sum);
-    output += offset2;
-    output_size -= offset2;
+    char time_str[MAX_TIME_STRING_SIZE];
+    get_time_string(time_str, sizeof(time_str), day->sum);
 
-    output[0] = '\t';
-    output += 1;
-    output_size -= 1;
+    char bar_str[MAX_PROGRESS_BAR_SIZE];
+    get_progress_bar_string(bar_str, sizeof(bar_str), day->sum, day->missing);
 
-    s32 offset3 = get_progress_bar_string(output, output_size, day->sum, day->missing);
-    output_size -= offset3;
-
-    Assert(0 < output_size - 1);
+    snprintf(output, output_size, "sum: %s\t%s", time_str, bar_str);
 }
 
 

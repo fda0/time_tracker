@@ -17,9 +17,12 @@ start 2020-07-21 15:00;
 stop 16:00;
 // sum: 01:00	[+   ]
 
+// [Error #0] stop is missing its start
 // Thursday
 start 2020-07-23 15:13;
 add 01:10;
-stop 15:14;
+stop 15:14 "last good stop";
+stop 2020-07-24 11:23 "bad stop!!!";
 // sum: 01:11	[+-  ]
 
+// Save error count: 1

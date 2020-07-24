@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
 #include <string.h>
 #include <stdint.h>
 #include <time.h>
@@ -37,6 +36,8 @@ typedef double f64;
 // NOTE(mautesz): Platforms and compilers
 //
 
+#define DEBUG_COMPILATION 1
+
 #define COMPILER_MSVC 1
 
 
@@ -51,11 +52,24 @@ typedef double f64;
 
 
 
-
-
 //
 // NOTE(mateusz): Macros
 //
+
+
+#if DEBUG_COMPILATION
+
+#define Assert(Expression) \
+    if(!(Expression)) {*(int*)0 = 1;}
+
+#else
+    #define Assert(Expression)
+#endif
+
+#define Invalid_Code_Path Assert(0)
+
+
+
 
 #define Array_Count(Array) (sizeof(Array) / sizeof((Array)[0]))
 
@@ -71,21 +85,12 @@ typedef double f64;
 #define Minutes(Value) (Value * 60)
 
 
-#define Assert(Expression) \
-    if(!(Expression)) {*(int*)0 = 1;}
-
-#define Assert_Message(Expression, Message) \
-    if(!(Expression)) {puts(Message); __debugbreak(); *(int*)0 = 1;}
-
-#define Invalid_Code_Path Assert(0)
-
-
 
 
 
 
 //
-//
+// NOTE(mateusz): Data types
 //
 
 enum Entry_Type
@@ -133,7 +138,9 @@ struct Program_State
     char archive_directory[MAX_PATH];
 
     time_t timezone_offset;
-    s32 error_count;
+
+    s32 save_error_count;
+    s32 load_error_count;
     s32 change_count;
 
     Day days[365]; // TODO(mateusz): Add memory arena support for days.
