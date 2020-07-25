@@ -164,6 +164,19 @@ struct Program_State
 
 
 
+struct Parse_Time_Result
+{
+    time_t time;
+    b32 success;
+};
+
+struct Parse_Number_Result
+{
+    s32 time;
+    b32 success;
+};
+
+
 enum Instruction_Type
 {
     Ins_None,
