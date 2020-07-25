@@ -1,8 +1,8 @@
 /*
     TODO(mateusz):
-    * Colors in output.
     * Allow to specify input filenames/paths from input arguments.
     * Config file?
+    * Convert to use Unicode?
     * Dynamic memory.
 */
 
@@ -138,8 +138,23 @@ internal Parse_Time_Result parse_time(Token token)
 internal void calculate_day_sum_and_validate(Program_State *state, Day *day, 
                                              b32 print, FILE *errors_to_file = NULL)
 {
-    FILE *error_output = stdout;
-    if (errors_to_file) error_output = errors_to_file;
+
+
+#define PRINT_ERROR(Message)                    \
+if (errors_to_file)                             \
+{                                               \
+    fprintf(errors_to_file, "// " Message,      \
+            state->save_error_count++);         \
+}                                               \
+else                                            \
+{                                               \
+    printf("%s" Message "%s",                   \
+           b_error, state->save_error_count++,  \
+           b_reset);                            \
+}
+
+
+    using namespace Global_Color;
 
     Time_Entry *start = 0;
     day->missing = Missing_None;
@@ -172,8 +187,7 @@ internal void calculate_day_sum_and_validate(Program_State *state, Day *day,
         {
             if (start)
             {
-                fprintf(error_output, "// [Error #%d] two start commands in a row - stop is missing\n", 
-                        state->save_error_count++);
+                PRINT_ERROR("[Error #%d] two start commands in a row - stop is missing\n");
                 return;
             }
 
@@ -183,8 +197,7 @@ internal void calculate_day_sum_and_validate(Program_State *state, Day *day,
         {
             if (!start)
             {
-                fprintf(error_output, "// [Error #%d] stop is missing its start\n", 
-                        state->save_error_count++);
+                PRINT_ERROR("[Error #%d] stop is missing its start\n");
                 return;
             }
 
@@ -205,8 +218,7 @@ internal void calculate_day_sum_and_validate(Program_State *state, Day *day,
 
             if (stop_time < start_time)
             {
-                fprintf(error_output, "// [Error #%d] stop time is earlier than start time\n", 
-                        state->save_error_count++);
+                PRINT_ERROR("[Error #%d] stop time is earlier than start time\n");
                 return;
             }
 
@@ -249,8 +261,7 @@ internal void calculate_day_sum_and_validate(Program_State *state, Day *day,
                 offset_sum = 0;
             }
 
-            fprintf(error_output, "// [Error #%d] Missing last stop for a day\n", 
-                    state->save_error_count++);
+            PRINT_ERROR("[Error #%d] Missing last stop for a day\n");
         }
     }
 
@@ -262,26 +273,38 @@ internal void calculate_day_sum_and_validate(Program_State *state, Day *day,
 }
 
 
-
-
-internal void print_all_days(Program_State *state)
+internal void print_all_days(Program_State *state, b32 print_last_day = false)
 {
-    for (u32 day_index = 0;
+    u32 day_index = 0;
+    if (state->day_count > 0 && print_last_day)
+    {
+        day_index = state->day_count - 1;
+    }
+
+    for ( ;
          day_index < state->day_count;
          ++day_index)
     {
+        using namespace Global_Color;
         Day *day = &state->days[day_index];
+
 
         char date_str[64];
         get_date_string(date_str, sizeof(date_str), day->date_start);
-        printf("\n%s\n", date_str);
+        
+        char day_of_week[32];
+        get_day_of_the_week_string(day_of_week, sizeof(day_of_week), day->date_start);
+        printf("\n%s%s %s%s\n", f_date, date_str, day_of_week, f_reset);
+
+
+
 
         calculate_day_sum_and_validate(state, day, true);
 
         char sum_bar_str[MAX_SUM_AND_PROGRESS_BAR_STRING_SIZE];
         get_sum_and_progress_bar_string(sum_bar_str, sizeof(sum_bar_str), day);
 
-        printf("%s\n", sum_bar_str);
+        printf("%s%s%s\n", f_sum, sum_bar_str, f_reset);
     }
 }
 
@@ -379,16 +402,19 @@ internal void save_to_file(Program_State *state)
             fprintf(file, "// %s\n\n", sum_bar_str);
         }
 
+        using namespace Global_Color;
+
         if (state->load_error_count > 0)
         {
             fprintf(file, "// Load error count: %d\n", state->load_error_count);
-            fprintf(stdout, "// Load error count: %d\n", state->load_error_count);
+            printf("%sLoad error count: %d%s\n", b_error, state->load_error_count, b_reset);
         }
 
         if (state->save_error_count > 0)
         {
+
             fprintf(file, "// Save error count: %d\n", state->save_error_count);
-            fprintf(stdout, "// Save error count: %d\n", state->save_error_count);
+            printf("%sSave error count: %d%s\n", b_error, state->save_error_count, b_reset);
         }
     
         fclose(file);
@@ -927,13 +953,14 @@ int main(int arg_count, char **args)
     initialize_memory(state);
 
     initialize_timezone_offset(state);
+    initialize_colors(false);
 
     // TODO(mateusz): Get these filenames/paths from input arguments.
     char base_path[MAX_PATH];
-    strncpy(base_path, args[0], sizeof(base_path));
+    platform_get_executable_path(base_path, sizeof(base_path));
     terminate_string_after_last_slash(base_path);
 
-    sprintf(state->input_filename, "%sdatabase.txt", base_path);
+    sprintf(state->input_filename, "%stime_tracker.txt", base_path);
 
     sprintf(state->archive_directory, "%sarchive", base_path);
     platform_add_ending_slash_to_path(state->archive_directory);
@@ -974,9 +1001,7 @@ int main(int arg_count, char **args)
                 save_to_file(state);
                 if (state->day_count > 0)
                 {
-                    printf("Today:\n");
-                    Day *last_day = &state->days[state->day_count - 1];
-                    calculate_day_sum_and_validate(state, last_day, true);
+                    print_all_days(state, true);
                 }
             }
 

@@ -38,6 +38,17 @@ struct Thread_Memory
     b32 new_data;
 };
 
+namespace Global_Color
+{
+    char *f_date = "\033[33m";
+    char *f_sum = "\033[32m";
+    char *f_reset = "\033[39m";
+
+    char *b_error = "\033[41m";
+    char *b_reset = "\033[49m";
+};
+
+
 
 //
 // NOTE(mautesz): Platforms and compilers
@@ -90,9 +101,6 @@ struct Thread_Memory
 #define Days(Value) (Hours(Value) * 24)
 #define Hours(Value) (Minutes(Value) * 60)
 #define Minutes(Value) (Value * 60)
-
-
-
 
 
 

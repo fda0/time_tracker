@@ -61,3 +61,44 @@ internal void platform_open_in_default_editor(char *filename)
 {
     ShellExecuteA(NULL, "open", filename, NULL, NULL, SW_SHOWNORMAL);
 }
+
+internal void platform_get_executable_path(char *output, u32 output_size)
+{
+    GetModuleFileNameA(0, output, output_size);
+}
+
+internal void initialize_colors(bool turn_off_colors)
+{
+    if (!turn_off_colors)
+    {
+        // Set output mode to handle virtual terminal sequences
+        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (hOut == INVALID_HANDLE_VALUE)
+        {
+            turn_off_colors = true;
+        }
+        else
+        {
+            DWORD dwMode = 0;
+            if (!GetConsoleMode(hOut, &dwMode))
+            {
+                turn_off_colors = true;
+            }
+            else
+            {
+                dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+                if (!SetConsoleMode(hOut, dwMode))
+                {
+                    turn_off_colors = true;
+                }                
+            }
+        }
+    }
+
+    if (turn_off_colors)
+    {
+        using namespace Global_Color;
+        f_date = "";
+        f_reset = "";
+    }
+}
