@@ -5,6 +5,12 @@ It reads the file, validates it, calculates sums and updates it with new formatt
 
 Changes are saved and archived automatically. If decide to edit the file directly changes will get automatically loaded.
 
+
+### TODOs
+- [ ] Dynamic memory - to support arbitrary input sizes (soon).
+- [ ] Support for advanced queries - selecting from data ranges and/or searching in description.
+
+
 ### In action
 ![Screenshot](screenshot_01.png)
 
@@ -73,7 +79,3 @@ save;                   forces save
 archive;                forces backup
 load;                   forces load from file
 ```
-
-### TODOs
-- [ ] Dynamic memory - to support arbitrary input sizes (soon).
-- [ ] Support for advanced queries - selecting from data ranges and/or searching in description.
