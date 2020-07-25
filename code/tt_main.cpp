@@ -319,7 +319,7 @@ internal void archive_current_file(Program_State *state, b32 long_format = false
     snprintf(archive_filename, sizeof(archive_filename), "%s%s_%s.txt", 
              state->archive_directory, state->input_filename, timestamp);
 
-    platform_copy_file(state->input_filename, archive_filename);
+    platform_copy_file(state->input_file_full_path, archive_filename);
 
     if (long_format) printf("File archived as: %s\n", archive_filename);
 }
@@ -329,7 +329,7 @@ internal void save_to_file(Program_State *state)
     archive_current_file(state);
     state->save_error_count = 0;
 
-    FILE *file = fopen(state->input_filename, "w");
+    FILE *file = fopen(state->input_file_full_path, "w");
     if (file)
     {
         for (u32 day_index = 0;
@@ -419,11 +419,11 @@ internal void save_to_file(Program_State *state)
     
         fclose(file);
 
-        state->loaded_input_mod_time = platform_get_file_mod_time(state->input_filename);
+        state->loaded_input_mod_time = platform_get_file_mod_time(state->input_file_full_path);
     }
     else
     {
-        printf("Failed to write to file: %s\n", state->input_filename);
+        printf("Failed to write to file: %s\n", state->input_file_full_path);
     }
 
     state->change_count = 0;
@@ -863,7 +863,7 @@ internal void process_input(char *content, Program_State *state,
                 }
                 else if (instruction == Ins_Edit)
                 {
-                    platform_open_in_default_editor(state->input_filename);
+                    platform_open_in_default_editor(state->input_file_full_path);
                 }
                 else if (instruction == Ins_Clear)
                 {
@@ -924,7 +924,7 @@ internal void load_file(Program_State *state)
     state->load_error_count = 0;
 
 
-    char *filename = state->input_filename;
+    char *filename = state->input_file_full_path;
 
     char *file_content = read_entire_file_and_null_terminate(filename);
     if (file_content)
@@ -932,7 +932,7 @@ internal void load_file(Program_State *state)
         process_input(file_content, state, true);
         free(file_content);
 
-        state->loaded_input_mod_time = platform_get_file_mod_time(state->input_filename);
+        state->loaded_input_mod_time = platform_get_file_mod_time(state->input_file_full_path);
         printf("File reloaded\n");
     }
     else
@@ -986,7 +986,8 @@ int main(int arg_count, char **args)
     platform_get_executable_path(base_path, sizeof(base_path));
     terminate_string_after_last_slash(base_path);
 
-    sprintf(state->input_filename, "%stime_tracker.txt", base_path);
+    sprintf(state->input_filename, "time_tracker.txt");
+    sprintf(state->input_file_full_path, "%s%s", base_path, state->input_filename);
 
     sprintf(state->archive_directory, "%sarchive", base_path);
     platform_add_ending_slash_to_path(state->archive_directory);
@@ -1036,7 +1037,7 @@ int main(int arg_count, char **args)
 
 
 
-        auto current_input_mod_time = platform_get_file_mod_time(state->input_filename);
+        auto current_input_mod_time = platform_get_file_mod_time(state->input_file_full_path);
         b32 source_file_changed =  (platform_compare_file_time(
             state->loaded_input_mod_time, current_input_mod_time) != 0);
 

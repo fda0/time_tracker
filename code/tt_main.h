@@ -159,6 +159,7 @@ struct Program_State
     Memory_Arena description_arena;
     Memory_Arena struct_arena;
 
+    char input_file_full_path[MAX_PATH];
     char input_filename[MAX_PATH];
     char archive_directory[MAX_PATH];
 
