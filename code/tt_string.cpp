@@ -75,6 +75,7 @@ internal void print_offset(s32 offset_sum)
 internal void print_work_time_row(Time_Entry *start, Time_Entry *stop, s32 offset_sum,  
                                   char *replace_stop = NULL)
 {
+    using namespace Global_Color;
     Assert(start);
 
     char start_time_str[MAX_TIME_STRING_SIZE];
@@ -92,8 +93,8 @@ internal void print_work_time_row(Time_Entry *start, Time_Entry *stop, s32 offse
 
     print_offset(offset_sum);
 
-    if (start->description)         printf("\"%s\" ", start->description);
-    if (stop && stop->description)  printf("\"%s\" ", stop->description);
+    if (start->description)         printf("%s\"%s\"%s ", f_desc, start->description, f_reset);
+    if (stop && stop->description)  printf("%s\"%s\"%s ", f_desc, stop->description, f_reset);
     
     printf("\n");
 }

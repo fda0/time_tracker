@@ -176,7 +176,7 @@ else                                            \
             if (print && entry->description)
             {
                 print_offset(value);
-                printf("\t\"%s\"\n", entry->description);
+                printf("\t%s\"%s\"%s\n", f_desc, entry->description, f_reset);
             }
             else
             {
@@ -665,6 +665,13 @@ internal void process_input(char *content, Program_State *state,
 
                     instruction = Ins_Edit;
                 }
+                else if (token_equals(token, "clear"))
+                {
+                    Continue_If_Instruction_Already_Set;
+                    Program_Interface_Only;
+
+                    instruction = Ins_Clear;
+                }
                 else if (token_equals(token, "help"))
                 {
                     Continue_If_Instruction_Already_Set;
@@ -844,6 +851,10 @@ internal void process_input(char *content, Program_State *state,
                 {
                     platform_open_in_default_editor(state->input_filename);
                 }
+                else if (instruction == Ins_Clear)
+                {
+                    platform_clear_screen();
+                }
                 else if (instruction == Ins_Help)
                 {
                     printf("Commands available everywhere:\n"
@@ -857,6 +868,7 @@ internal void process_input(char *content, Program_State *state,
                            "start & stop assumes current time when unspecified in console\n"
                            "show;\t\t\tshows current history\n"
                            "time;\t\t\tshows current time...\n"
+                           "clear;\t\t\tclears the screen\n"
                            "edit;\t\t\topens database file in your default editor\n"
                            "\t\t\tworks best if your editor supports hot-loading\n"
 

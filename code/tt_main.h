@@ -42,6 +42,7 @@ namespace Global_Color
 {
     char *f_date = "\033[33m";
     char *f_sum = "\033[32m";
+    char *f_desc = "\033[36m";
     char *f_reset = "\033[39m";
 
     char *b_error = "\033[41m";
@@ -54,16 +55,15 @@ namespace Global_Color
 // NOTE(mautesz): Platforms and compilers
 //
 
-#define DEBUG_COMPILATION 1
 
 #define COMPILER_MSVC 1
-
 
 #if COMPILER_MSVC
 #include "win32_platform.cpp"
 #endif
 
 
+#define DEBUG_COMPILATION 1
 
 
 
@@ -197,6 +197,7 @@ enum Instruction_Type
     Ins_Load,
     Ins_Time,
     Ins_Edit,
+    Ins_Clear,
     Ins_Help,
 
     Ins_Exit
