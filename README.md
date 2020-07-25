@@ -5,6 +5,9 @@ It reads the file, validates it, calculates sums and updates it with new formatt
 
 Changes are saved and archived automatically. If decide to edit the file directly changes will get automatically loaded.
 
+### In action
+![Screenshot](screenshot_01.png)
+
 
 ### Example time_tracker.txt
 Raw:
@@ -47,11 +50,8 @@ stop 2020-07-24 01:16;
 // sum: 02:27   [++- ]
 ```
 
-### In action
-![Screenshot](screenshot_01.png)
 
-
-Output from 'help' command:
+### Output from 'help' command:
 ```
 Commands available everywhere:
 start 2025-12-31 11:20; starts new timespan
@@ -73,3 +73,7 @@ save;                   forces save
 archive;                forces backup
 load;                   forces load from file
 ```
+
+### TODOs
+- [ ] Dynamic memory - to support arbitrary input sizes (soon).
+- [ ] Support for advanced queries - selecting from data ranges and/or searching in description.
