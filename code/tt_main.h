@@ -40,13 +40,13 @@ struct Thread_Memory
 
 namespace Global_Color
 {
-    char *f_date = "\033[33m";
-    char *f_sum = "\033[32m";
-    char *f_desc = "\033[36m";
-    char *f_reset = "\033[39m";
+    global_variable char *f_date = "\033[33m";
+    global_variable char *f_sum = "\033[32m";
+    global_variable char *f_desc = "\033[36m";
+    global_variable char *f_reset = "\033[39m";
 
-    char *b_error = "\033[41m";
-    char *b_reset = "\033[49m";
+    global_variable char *b_error = "\033[41m";
+    global_variable char *b_reset = "\033[49m";
 };
 
 

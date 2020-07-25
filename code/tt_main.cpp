@@ -433,6 +433,7 @@ internal void save_to_file(Program_State *state)
 internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 reading_from_file)
 {
     // TODO(mateusz): Implement insert sorting for start/stop/add/sub.                
+    using namespace Global_Color;
 
     if (!reading_from_file)
     {
@@ -459,7 +460,7 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
                 }
                 else
                 {
-                    printf("You need to specify time (example: 01:10)\n");
+                    printf("%sYou need to specify time (example: 01:10)%s\n", b_error, b_reset);
                     return;
                 }
             }
@@ -480,7 +481,9 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
         if (entry->date == 0)
         {
             Invalid_Code_Path;
-            printf("[Warning] First item can't have missing date! - 1970 assumed :(\n");
+            printf("%s[Warning] First item can't have missing date! - 1970 assumed :(%s\n",  
+                   b_error, b_reset);
+
             entry->date += Days(1);
         }
 
@@ -497,13 +500,13 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
     {
         if (reading_from_file)
         {
-            printf("[Error #%d] Out of order item insertion not supported yet :(\n", 
-                   state->save_error_count++);
+            printf("%s[Error #%d] Out of order item insertion not supported yet :(%s\n", 
+                    b_error, state->save_error_count++, b_reset);
             Invalid_Code_Path;
         }
         else
         {
-            printf("Can't insert entry into the past yet :(\n");
+            printf("%sCan't insert entry into the past yet :(%s\n", b_error, b_reset);
             return;
         }
     }
@@ -536,6 +539,8 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
 internal void process_input(char *content, Program_State *state, 
                             b32 reading_from_file, b32 *main_loop_is_running = NULL)
 {
+    using namespace Global_Color;
+
     Tokenizer tokenizer = {};
     tokenizer.at = content;
 
@@ -553,10 +558,11 @@ internal void process_input(char *content, Program_State *state,
             // NOTE(mateusz): Processing macros.
             //
 
-            #define Print_Not_Supported_In_File                     \
-            {                                                       \
-                printf("%.*s keyword is not supported in files\n",  \
-                       (s32)token.text_length, token.text);         \
+            #define Print_Not_Supported_In_File                         \
+            {                                                           \
+                printf("%s%.*s keyword is not supported in files%s\n",  \
+                       b_error, (s32)token.text_length,                 \
+                       token.text, b_reset);                            \
             }
 
 
@@ -572,14 +578,19 @@ internal void process_input(char *content, Program_State *state,
             #define Continue_If_Instruction_Already_Set           \
             if (instruction != Ins_None)                          \
             {                                                     \
-                printf("%.*s is ignored"                          \
-                       " - other instruction is already set\n",   \
-                       (s32)token.text_length, token.text);       \
+                printf("%s%.*s is ignored"                        \
+                       " - other instruction is already set%s\n", \
+                       b_error, (s32)token.text_length,           \
+                       token.text, b_reset);                      \
                 continue;                                         \
             }
 
-            #define Print_Load_Error \
-            if (reading_from_file) { printf("[Load Error #%d] ", state->load_error_count++); }
+            #define Print_Load_Error                        \
+            if (reading_from_file)                          \
+            {                                               \
+                printf("%s[Load Error #%d] ",               \
+                       b_error, state->load_error_count++); \
+            }
 
 
 
@@ -689,7 +700,8 @@ internal void process_input(char *content, Program_State *state,
                 else
                 {
                     Print_Load_Error;
-                    printf("Unknown identifier: %.*s\n", (s32)token.text_length, token.text);
+                    printf("%sUnknown identifier: %.*s. (Try help)%s\n", 
+                           b_error, (s32)token.text_length, token.text, b_reset);
                 }
             } break;
 
@@ -707,7 +719,8 @@ internal void process_input(char *content, Program_State *state,
                         else
                         {
                             Print_Load_Error;
-                            printf("Incorrect date format: %.*s\n", (s32)token.text_length, token.text);
+                            printf("%sIncorrect date format: %.*s%s\n", 
+                                   b_error, (s32)token.text_length, token.text, b_reset);
 
                             if (!reading_from_file) instruction = Ins_Unsupported;
                         }
@@ -715,13 +728,13 @@ internal void process_input(char *content, Program_State *state,
                     else
                     {
                         Print_Load_Error;
-                        printf("Only one date per command is supported\n");
+                        printf("%sOnly one date per command is supported%s\n", b_error, b_reset);
                     }
                 }
                 else
                 {
                     Print_Load_Error;
-                    printf("Date supported only for start/stop/add/sub\n");
+                    printf("%sDate supported only for start/stop/add/sub%s\n", b_error, b_reset);
                 }
             } break;
 
@@ -739,7 +752,8 @@ internal void process_input(char *content, Program_State *state,
                         else
                         {
                             Print_Load_Error;
-                            printf("Incorrect time format: %.*s\n", (s32)token.text_length, token.text);
+                            printf("%sIncorrect time format: %.*s\n%s", 
+                                   b_error, (s32)token.text_length, token.text, b_reset);
 
                             if (!reading_from_file) instruction = Ins_Unsupported;
                         }
@@ -747,13 +761,13 @@ internal void process_input(char *content, Program_State *state,
                     else
                     {
                         Print_Load_Error;
-                        printf("Only one time per command is supported\n");
+                        printf("%sOnly one time per command is supported%s\n", b_error, b_reset);
                     }
                 }
                 else
                 {
                     Print_Load_Error;
-                    printf("Time supported only for start/stop/add/sub\n");
+                    printf("%sTime supported only for start/stop/add/sub%s\n", b_error, b_reset);
                 }
             } break;
 
@@ -768,13 +782,13 @@ internal void process_input(char *content, Program_State *state,
                     else
                     {
                         Print_Load_Error;
-                        printf("Only one description per command is supported\n");
+                        printf("%sOnly one description per command is supported%s\n", b_error, b_reset);
                     }
                 }
                 else
                 {
                     Print_Load_Error;
-                    printf("Description supported only for start/stop/add/sub\n");
+                    printf("%sDescription supported only for start/stop/add/sub%s\n", b_error, b_reset);
                 }
             } break;
 
@@ -792,7 +806,7 @@ internal void process_input(char *content, Program_State *state,
                     if (instruction != Ins_None)
                     {
                         Print_Load_Error;
-                        printf("Missing semicolon at the end of the file\n");
+                        printf("%sMissing semicolon at the end of the file%s\n", b_error, b_reset);
                     }
 
                     break;

@@ -99,7 +99,12 @@ internal void initialize_colors(bool turn_off_colors)
     {
         using namespace Global_Color;
         f_date = "";
+        f_sum = "";
+        f_desc = "";
         f_reset = "";
+
+        b_error = "";
+        b_reset = "";
     }
 }
 
