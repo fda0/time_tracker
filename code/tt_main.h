@@ -152,6 +152,7 @@ struct Program_State
 {
     u8 byte_memory_block[Megabytes(8)]; 
     u8 aligned_memory_block[Megabytes(8)];
+    char *file_content;
   
     Day days[365]; // TODO(mateusz): Add memory arena support for days.
     u32 day_count;

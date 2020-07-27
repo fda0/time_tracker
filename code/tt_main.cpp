@@ -4,6 +4,11 @@
     * Config file?
     * Convert to use Unicode?
     * Dynamic memory.
+    
+    * Sum of the month in the file like:
+        // ~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=
+        //           Sum of the month 2020-07-**        123:20
+        // ~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=
 */
 
 
@@ -95,7 +100,7 @@ internal Parse_Time_Result parse_time(Token token)
     // NOTE(mateusz): Supported format: 10:32, 02:00, 2:0, 120...
 
     Parse_Time_Result result = {};
-    if (token.text_length > 5 || token.text_length == 0) return result;
+    if (token.text_length == 0) return result;
 
     b32 had_first_colon = false;
     u32 multiplier = 1;
@@ -767,7 +772,8 @@ internal void process_input(char *content, Program_State *state,
                 else
                 {
                     Print_Load_Error;
-                    printf("%sTime supported only for start/stop/add/sub%s\n", b_error, b_reset);
+                    printf("%sTime \"%.*s\" supported only for start/stop/add/sub%s\n", 
+                           b_error, (s32)token.text_length, token.text, b_reset);
                 }
             } break;
 
@@ -924,13 +930,14 @@ internal void load_file(Program_State *state)
     state->load_error_count = 0;
 
 
+    if (state->file_content) free(state->file_content);
+
     char *filename = state->input_file_full_path;
 
-    char *file_content = read_entire_file_and_null_terminate(filename);
-    if (file_content)
+    state->file_content = read_entire_file_and_null_terminate(filename);
+    if (state->file_content)
     {
-        process_input(file_content, state, true);
-        free(file_content);
+        process_input(state->file_content, state, true);
 
         state->loaded_input_mod_time = platform_get_file_mod_time(state->input_file_full_path);
         printf("File reloaded\n");
@@ -1022,6 +1029,7 @@ int main(int arg_count, char **args)
     {
         if (thread_memory.new_data)
         {
+            printf("!!!\n");
             process_input(thread_memory.input_buffer, state, false, &is_running);
             if (state->change_count > 0)
             {

@@ -29,14 +29,13 @@ internal void get_timestamp_string_for_file(char *output, u32 output_size,
     }
 }
 
-#define MAX_TIME_STRING_SIZE sizeof("00:00")
+#define MAX_TIME_STRING_SIZE sizeof("00000000000:00")
 internal s32 get_time_string(char *output, u32 output_size, time_t time)
 {
     Assert(output_size >= MAX_TIME_STRING_SIZE);
     time = abs(time);
 
-    s32 hours_in_day = 24;
-    s32 hours = (s32)((time / Hours(1)) % hours_in_day);
+    s32 hours = (s32)((time / Hours(1)));
 
     s32 minutes_in_hour = 60;
     s32 minutes = (s32)((time / Minutes(1)) % minutes_in_hour);
@@ -58,8 +57,8 @@ internal void print_offset(s32 offset_sum)
     const u32 size = MAX_TIME_STRING_SIZE + 2;
     char offset_time_str[size];
 
-    if (offset_sum > Minutes(1))        offset_time_str[0] = '+';
-    else if (offset_sum < -Minutes(1))  offset_time_str[0] = '-';
+    if (offset_sum >= Minutes(1))        offset_time_str[0] = '+';
+    else if (offset_sum <= -Minutes(1))  offset_time_str[0] = '-';
     else                                offset_time_str[0] = 0;
 
     if (offset_time_str[0])

@@ -9,7 +9,7 @@ internal char *read_entire_file_and_null_terminate(char *filename)
 {
     char *result = 0;
     
-    FILE *file = fopen(filename, "r");
+    FILE *file = fopen(filename, "rb");
     if(file)
     {
         fseek(file, 0, SEEK_END);
