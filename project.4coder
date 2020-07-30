@@ -1,0 +1,33 @@
+version(1);
+project_name = "TimeTracker";
+patterns = {
+"*.c",
+"*.cpp",
+"*.h",
+"*.m",
+"*.bat",
+"*.sh",
+"*.4coder",
+};
+blacklist_patterns = {
+".*",
+};
+load_paths_base = {
+ { ".", .relative = true, .recursive = true, },
+};
+load_paths = {
+ { load_paths_base, .os = "win", },
+};
+
+command_list = {
+ { .name = "build",
+   .out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
+   .cmd = { { "misc\\4coder_build.bat" , .os = "win"   }, },
+ },
+	
+ { .name = "debug",
+   .cmd = { { "remedybg debug_session.rdbg" , .os = "win"   }, }, },
+
+};
+fkey_command[1] = "build";
+fkey_command[3] = "debug";

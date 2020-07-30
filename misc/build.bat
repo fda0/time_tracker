@@ -1,4 +1,5 @@
 @echo off
+
 set AbsolutePath=C:\Dev\TimeTracker
 
 pushd %AbsolutePath%\build
