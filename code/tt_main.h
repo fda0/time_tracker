@@ -44,7 +44,7 @@ namespace Global_Color
     global_variable char *f_sum = "\033[32m";
     global_variable char *f_desc = "\033[36m";
     global_variable char *f_reset = "\033[39m";
-
+    
     global_variable char *b_error = "\033[41m";
     global_variable char *b_reset = "\033[49m";
 };
@@ -78,10 +78,10 @@ namespace Global_Color
 #if DEBUG_COMPILATION
 
 #define Assert(Expression) \
-    if(!(Expression)) {*(int*)0 = 1;}
+if(!(Expression)) {*(int*)0 = 1;}
 
 #else
-    #define Assert(Expression)
+#define Assert(Expression)
 #endif
 
 #define Invalid_Code_Path Assert(0)
@@ -113,7 +113,7 @@ namespace Global_Color
 enum Entry_Type
 {
     Entry_None,
-
+    
     Entry_Start,
     Entry_Stop,
     Entry_Subtract,
@@ -150,20 +150,13 @@ struct Day
 
 struct Program_State
 {
-    u8 byte_memory_block[Megabytes(8)]; 
-    u8 aligned_memory_block[Megabytes(8)];
-    char *file_content;
-  
-    Day days[365]; // TODO(mateusz): Add memory arena support for days.
-    u32 day_count;
-  
-    Memory_Arena description_arena;
-    Memory_Arena struct_arena;
-
+    Memory_Arena element_arena;
+    Memory_Arena day_arena;
+    
     char input_file_full_path[MAX_PATH];
     char input_filename[MAX_PATH];
     char archive_directory[MAX_PATH];
-
+    
     time_t timezone_offset;
     File_Time loaded_input_mod_time;
     
@@ -191,7 +184,7 @@ enum Instruction_Type
 {
     Ins_None,
     Ins_Unsupported,
-
+    
     Ins_Time_Entry,
     Ins_Show,
     Ins_Save,
@@ -201,7 +194,7 @@ enum Instruction_Type
     Ins_Edit,
     Ins_Clear,
     Ins_Help,
-
+    
     Ins_Exit
 };
 

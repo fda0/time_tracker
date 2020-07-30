@@ -3,9 +3,8 @@
     * Allow to specify input filenames/paths from input arguments.
     * Config file?
     * Convert to use Unicode?
-    * Dynamic memory.
     
-    * Sum of the month in the file like:
+    * Add sum of the month in the file. Can look like:
         // ~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=
         //           Sum of the month 2020-07-**        123:20
         // ~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=
@@ -23,7 +22,16 @@
 
 internal void load_file(Program_State *state);
 
-
+inline Day *get_day(Memory_Arena *day_arena, u32 day_index)
+{
+    Day *result = NULL;
+    if (day_index < day_arena->count)
+    {
+        result = ((Day *)day_arena->base) + day_index;
+    }
+    
+    return result;
+}
 
 
 internal char *create_description(Memory_Arena *arena, Token token)
@@ -41,7 +49,6 @@ internal char *create_description(Memory_Arena *arena, Token token)
     return result;
 }
 
-// TODO(mateusz): Smarter parsing of incorrect dates/incomplete formats.
 internal Parse_Number_Result parse_number(char *src, s32 count)
 {
     Parse_Number_Result result = {};
@@ -281,27 +288,24 @@ b_reset);                            \
 internal void print_all_days(Program_State *state, b32 print_last_day = false)
 {
     u32 day_index = 0;
-    if (state->day_count > 0 && print_last_day)
+    if (state->day_arena.count > 0 && print_last_day)
     {
-        day_index = state->day_count - 1;
+        day_index = state->day_arena.count - 1;
     }
     
     for ( ;
-         day_index < state->day_count;
+         day_index < state->day_arena.count;
          ++day_index)
     {
-        using namespace Global_Color;
-        Day *day = &state->days[day_index];
-        
+        Day *day = get_day(&state->day_arena, day_index);
         
         char date_str[64];
         get_date_string(date_str, sizeof(date_str), day->date_start);
         
         char day_of_week[32];
         get_day_of_the_week_string(day_of_week, sizeof(day_of_week), day->date_start);
+        using namespace Global_Color;
         printf("\n%s%s %s%s\n", f_date, date_str, day_of_week, f_reset);
-        
-        
         
         
         calculate_day_sum_and_validate(state, day, true);
@@ -338,10 +342,10 @@ internal void save_to_file(Program_State *state)
     if (file)
     {
         for (u32 day_index = 0;
-             day_index < state->day_count;
+             day_index < state->day_arena.count;
              ++day_index)
         {
-            Day *day = &state->days[day_index];
+            Day *day = get_day(&state->day_arena, day_index);
             calculate_day_sum_and_validate(state, day, false, file);
             
             char day_of_week_str[16];
@@ -440,8 +444,11 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
     // TODO(mateusz): Implement insert sorting for start/stop/add/sub.                
     using namespace Global_Color;
     
-    if (!reading_from_file)
+    if (!reading_from_file) 
     {
+        // NOTE(mateusz): In terminal mode you don't need to specify date/hour.
+        // Missing data is filled with current time.
+        
         b32 missing_date = (entry->date == 0);
         b32 missing_time = (entry->time == 0);
         
@@ -473,15 +480,11 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
     }
     
     
-    //
     // NOTE(mateusz): Select correct day slot.
-    //
+    Day *day = get_day(&state->day_arena, state->day_arena.count - 1);
     
-    Day *day = &state->days[state->day_count - 1];
-    
-    if ((state->day_count == 0) ||
-        ((day->date_start < entry->date) && 
-         (entry->type != Entry_Stop)))
+    if (day == NULL ||
+        ((day->date_start < entry->date) && (entry->type != Entry_Stop)))
     {
         if (entry->date == 0)
         {
@@ -492,8 +495,7 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
             entry->date += Days(1);
         }
         
-        Assert(state->day_count < Array_Count(state->days)); // TODO(mateusz): Dynamic memory for days.
-        day = &state->days[state->day_count++];
+        day = Push_Struct(&state->day_arena, Day);
         *day = {};
         day->date_start = entry->date;
     }
@@ -518,16 +520,13 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
     
     
     
-    //
-    // NOTE(mateusz): Add Time_Entry to previously selected day.
-    //
-    
+    // NOTE(mateusz): Add Time_Entry to previously selected day slot.
     Time_Entry *entry_dest = &day->first_time_entry;
     while (entry_dest->type != Entry_None)
     {
         if (entry_dest->next_in_day == NULL)
         {
-            entry_dest->next_in_day = Push_Struct(&state->struct_arena, Time_Entry);
+            entry_dest->next_in_day = Push_Struct(&state->element_arena, Time_Entry);
             *entry_dest->next_in_day = {};
         }
         
@@ -558,12 +557,9 @@ internal void process_input(char *content, Program_State *state,
         Token token = get_token(&tokenizer);
         switch (token.type)
         {
+            // NOTE(mateusz): Token macro helpers. To add/prohibit usage of certian features.
             
-            //
-            // NOTE(mateusz): Processing macros.
-            //
-            
-#define Print_Not_Supported_In_File                         \
+#define Print_Not_Supported_In_File                             \
 {                                                           \
 printf("%s%.*s keyword is not supported in files%s\n",  \
 b_error, (s32)token.text_length,                 \
@@ -571,7 +567,7 @@ token.text, b_reset);                            \
 }
             
             
-#define Program_Interface_Only       \
+#define Program_Interface_Only           \
 if (reading_from_file)               \
 {                                    \
 Print_Not_Supported_In_File;     \
@@ -580,7 +576,7 @@ continue;                        \
 }
             
             
-#define Continue_If_Instruction_Already_Set           \
+#define Continue_If_Instruction_Already_Set               \
 if (instruction != Ins_None)                          \
 {                                                     \
 printf("%s%.*s is ignored"                        \
@@ -590,15 +586,14 @@ token.text, b_reset);                      \
 continue;                                         \
 }
             
-#define Print_Load_Error                        \
+#define Print_Load_Error                            \
 if (reading_from_file)                          \
 {                                               \
 printf("%s[Load Error #%d] ",               \
 b_error, state->load_error_count++); \
 }
             
-            
-            
+            // end of macros
             
             
             case Token_Identifier:
@@ -783,7 +778,7 @@ b_error, state->load_error_count++); \
                 {
                     if (!entry.description)
                     {
-                        entry.description = create_description(&state->description_arena, token);
+                        entry.description = create_description(&state->element_arena, token);
                     }
                     else
                     {
@@ -820,7 +815,7 @@ b_error, state->load_error_count++); \
                 else
                 {
                     // NOTE(mateusz): Don't break.
-                    //                Assume additional semicolon at the end of the console input.
+                    // Assume additional semicolon at the end of the console input.
                 }
             } 
             
@@ -910,34 +905,24 @@ b_error, state->load_error_count++); \
 }
 
 
-internal void initialize_memory(Program_State *state)
+internal void clear_memory(Program_State *state)
 {
-    memset(state->days, 0, sizeof(state->days));
-    state->day_count = 0;
-    
-    
-    initialize_arena(&state->description_arena, sizeof(state->byte_memory_block), 
-                     state->byte_memory_block);
-    
-    initialize_arena(&state->struct_arena, sizeof(state->aligned_memory_block), 
-                     state->aligned_memory_block);
+    state->day_arena.count = 0;
+    clear_arena(&state->day_arena);
+    clear_arena(&state->element_arena);
 }
 
 
 internal void load_file(Program_State *state)
 {
-    initialize_memory(state);
+    clear_memory(state);
     state->load_error_count = 0;
     
-    
-    if (state->file_content) free(state->file_content);
-    
     char *filename = state->input_file_full_path;
-    
-    state->file_content = read_entire_file_and_null_terminate(filename);
-    if (state->file_content)
+    char *file_content = read_entire_file_and_null_terminate(&state->element_arena, filename);
+    if (file_content)
     {
-        process_input(state->file_content, state, true);
+        process_input(file_content, state, true);
         
         state->loaded_input_mod_time = platform_get_file_mod_time(state->input_file_full_path);
         printf("File reloaded\n");
@@ -957,7 +942,7 @@ internal void read_from_keyboard(Thread_Memory *thread_memory)
         if (thread_memory->new_data)
         {
             platform_sleep(1);
-            // NOTE(mateusz): spinlock while new_data == true
+            // NOTE(mateusz): Spinlock while waiting for main thread to process work.
         }
         else
         {
@@ -969,23 +954,22 @@ internal void read_from_keyboard(Thread_Memory *thread_memory)
 }
 
 
+
+
+
 int main(int arg_count, char **args)
 {
-    Program_State *state = (Program_State *)malloc(sizeof(Program_State));
-    if (state == NULL)
-    {
-        printf("Failed to allocate required memory!\n");
-        return 1;
-    }
-    
     //
     // NOTE(mateusz): Initialization 
     //
+    Program_State state = {};
     
-    memset(state, 0, sizeof(Program_State));
-    initialize_memory(state);
+    // NOTE(mateusz): Initialize arenas:
+    alocate_arena(&state.element_arena, Megabytes(16));
+    alocate_arena(&state.day_arena, Megabytes(16));
+    clear_memory(&state);
     
-    initialize_timezone_offset(state);
+    initialize_timezone_offset(&state);
     initialize_colors(false);
     
     // TODO(mateusz): Get these filenames/paths from input arguments.
@@ -993,28 +977,28 @@ int main(int arg_count, char **args)
     platform_get_executable_path(base_path, sizeof(base_path));
     terminate_string_after_last_slash(base_path);
     
-    sprintf(state->input_filename, "time_tracker.txt");
-    sprintf(state->input_file_full_path, "%s%s", base_path, state->input_filename);
+    sprintf(state.input_filename, "time_tracker.txt");
+    sprintf(state.input_file_full_path, "%s%s", base_path, state.input_filename);
     
-    sprintf(state->archive_directory, "%sarchive", base_path);
-    platform_add_ending_slash_to_path(state->archive_directory);
-    platform_create_directory(state->archive_directory);
+    sprintf(state.archive_directory, "%sarchive", base_path);
+    platform_add_ending_slash_to_path(state.archive_directory);
+    platform_create_directory(state.archive_directory);
     
     
-    load_file(state);
-    
-    if (state->load_error_count == 0)
+    // NOTE(mautesz): Load file. Save with better formatting if there was no load errors.
+    load_file(&state);
+    if (state.load_error_count == 0)
     {
-        print_all_days(state);
-        save_to_file(state);
+        print_all_days(&state);
+        save_to_file(&state);
     }
     else
     {
-        state->change_count = 0;
+        state.change_count = 0;
     }
     
     
-    
+    // NOTE(mateusz): Initialize input thread.
     Thread_Memory thread_memory = {};
     sprintf(thread_memory.cursor, "::>");
     platform_create_thread(read_from_keyboard, &thread_memory);
@@ -1023,19 +1007,18 @@ int main(int arg_count, char **args)
     //
     // NOTE(mateusz): Main loop
     //
-    
     b32 is_running = true;
     while (is_running)
     {
         if (thread_memory.new_data)
         {
-            process_input(thread_memory.input_buffer, state, false, &is_running);
-            if (state->change_count > 0)
+            process_input(thread_memory.input_buffer, &state, false, &is_running);
+            if (state.change_count > 0)
             {
-                save_to_file(state);
-                if (state->day_count > 0)
+                save_to_file(&state);
+                if (state.day_arena.count > 0)
                 {
-                    print_all_days(state, true);
+                    print_all_days(&state, true);
                 }
             }
             
@@ -1044,14 +1027,14 @@ int main(int arg_count, char **args)
         
         
         
-        auto current_input_mod_time = platform_get_file_mod_time(state->input_file_full_path);
+        auto current_input_mod_time = platform_get_file_mod_time(state.input_file_full_path);
         b32 source_file_changed =  (platform_compare_file_time(
-                                                               state->loaded_input_mod_time, current_input_mod_time) != 0);
+                                                               state.loaded_input_mod_time, current_input_mod_time) != 0);
         
         if (source_file_changed)
         {
-            load_file(state);
-            state->change_count = 0;
+            load_file(&state);
+            state.change_count = 0;
             printf(thread_memory.cursor);
         }
         
