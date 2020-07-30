@@ -7,7 +7,6 @@ Changes are saved and archived automatically. If decide to edit the file directl
 
 
 ### TODOs
-- [ ] Dynamic memory - to support arbitrary input sizes (soon).
 - [ ] Support for advanced queries - selecting from data ranges and/or searching in description.
 - [ ] Linux version.
 
