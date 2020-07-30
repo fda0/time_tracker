@@ -152,17 +152,17 @@ internal void calculate_day_sum_and_validate(Program_State *state, Day *day,
 {
     
     
-#define PRINT_ERROR(Message)                    \
-if (errors_to_file)                             \
-{                                               \
-fprintf(errors_to_file, "// " Message,      \
-state->save_error_count++);         \
-}                                               \
-else                                            \
-{                                               \
-printf("%s" Message "%s",                   \
-b_error, state->save_error_count++,  \
-b_reset);                            \
+#define PRINT_ERROR(Message) \
+if (errors_to_file) \
+{ \
+fprintf(errors_to_file, "// " Message, \
+state->save_error_count++); \
+} \
+else \
+{ \
+printf("%s" Message "%s", \
+b_error, state->save_error_count++, \
+b_reset); \
 }
     
     
@@ -559,37 +559,37 @@ internal void process_input(char *content, Program_State *state,
         {
             // NOTE(mateusz): Token macro helpers. To add/prohibit usage of certian features.
             
-#define Print_Not_Supported_In_File                             \
-{                                                           \
-printf("%s%.*s keyword is not supported in files%s\n",  \
-b_error, (s32)token.text_length,                 \
-token.text, b_reset);                            \
+#define Print_Not_Supported_In_File \
+{ \
+printf("%s%.*s keyword is not supported in files%s\n", \
+b_error, (s32)token.text_length, \
+token.text, b_reset); \
 }
             
             
-#define Program_Interface_Only           \
-if (reading_from_file)               \
-{                                    \
-Print_Not_Supported_In_File;     \
-instruction = Ins_Unsupported;   \
-continue;                        \
+#define Program_Interface_Only  \
+if (reading_from_file) \
+{  \
+Print_Not_Supported_In_File; \
+instruction = Ins_Unsupported; \
+continue; \
 }
             
             
-#define Continue_If_Instruction_Already_Set               \
-if (instruction != Ins_None)                          \
-{                                                     \
-printf("%s%.*s is ignored"                        \
+#define Continue_If_Instruction_Already_Set \
+if (instruction != Ins_None) \
+{ \
+printf("%s%.*s is ignored" \
 " - other instruction is already set%s\n", \
-b_error, (s32)token.text_length,           \
-token.text, b_reset);                      \
-continue;                                         \
+b_error, (s32)token.text_length, \
+token.text, b_reset); \
+continue; \
 }
             
-#define Print_Load_Error                            \
-if (reading_from_file)                          \
-{                                               \
-printf("%s[Load Error #%d] ",               \
+#define Print_Load_Error \
+if (reading_from_file) \
+{ \
+printf("%s[Load Error #%d] ", \
 b_error, state->load_error_count++); \
 }
             
