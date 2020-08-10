@@ -29,5 +29,5 @@ command_list = {
    .cmd = { { "remedybg debug_session.rdbg" , .os = "win"   }, }, },
 
 };
-fkey_command[1] = "build";
-fkey_command[3] = "debug";
+fkey_command[7] = "build";
+fkey_command[10] = "debug";

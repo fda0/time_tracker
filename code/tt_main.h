@@ -40,12 +40,14 @@ struct Thread_Memory
 
 namespace Global_Color
 {
+    global_variable char *f_black = "\033[30m";
     global_variable char *f_date = "\033[33m";
     global_variable char *f_sum = "\033[32m";
     global_variable char *f_desc = "\033[36m";
     global_variable char *f_reset = "\033[39m";
     
     global_variable char *b_error = "\033[41m";
+    global_variable char *b_date = "\033[43m";
     global_variable char *b_reset = "\033[49m";
 };
 
@@ -200,8 +202,30 @@ enum Instruction_Type
 
 enum Instruction_Flag : u32
 {
-    Flag_Clear = 0,
     Flag_No_Save = (1 << 0),
+};
+
+
+enum Show_Input
+{
+    ShowInput_One_Day,
+    ShowInput_From,
+    ShowInput_To
+};
+
+struct Processing_Data
+{
+    Instruction_Type instruction;
+    u32 flags;
+    Show_Input show_input;
+    
+    Entry_Type type;
+    time_t date;
+    time_t date_from;
+    time_t date_to;
+    time_t time;
+    char *description;
+    
 };
 
 

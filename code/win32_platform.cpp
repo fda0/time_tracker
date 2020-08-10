@@ -94,16 +94,18 @@ internal void initialize_colors(bool turn_off_colors)
             }
         }
     }
-
+    
     if (turn_off_colors)
     {
         using namespace Global_Color;
+        f_black = "",
         f_date = "";
         f_sum = "";
         f_desc = "";
         f_reset = "";
-
+        
         b_error = "";
+        b_date = "";
         b_reset = "";
     }
 }
@@ -112,14 +114,14 @@ internal void initialize_colors(bool turn_off_colors)
 internal void platform_clear_screen()
 {
     s32 columns_to_clear = 30;
-
+    
     HANDLE screen = GetStdHandle(STD_OUTPUT_HANDLE);
     CONSOLE_SCREEN_BUFFER_INFO buffer;
     if (GetConsoleScreenBufferInfo(screen, &buffer))
     {
         columns_to_clear = buffer.dwMaximumWindowSize.Y;
     }
-
+    
     for (int i = 0; i < columns_to_clear; ++i)
     {
         printf("\n");
