@@ -347,6 +347,8 @@ internal void save_to_file(Program_State *state)
     archive_current_file(state);
     state->save_error_count = 0;
     
+    
+    
     FILE *file = fopen(state->input_file_full_path, "w");
     if (file)
     {
@@ -361,59 +363,55 @@ internal void save_to_file(Program_State *state)
             get_day_of_the_week_string(day_of_week_str, sizeof(day_of_week_str), day->date_start);
             fprintf(file, "// %s\n", day_of_week_str);
             
+            b32 first_entry = true;
+            
             for (Time_Entry *entry = &day->first_time_entry;
                  entry;
-                 entry = entry->next_in_day)
+                 entry = entry->next_in_day, first_entry = false)
             {
-                if (entry->type == Entry_Start)
+                char *command = NULL;
+                if (entry->type == Entry_Start) command = "start";
+                else if (entry->type == Entry_Stop) command = "stop";
+                else if (entry->type == Entry_Add) command = "add";
+                else if (entry->type == Entry_Subtract) command = "sub";
+                else
                 {
-                    time_t time = entry->date + entry->time;
-                    char timestamp[MAX_TIMESTAMP_STRING_SIZE];
-                    get_timestamp_string(timestamp, sizeof(timestamp), time);
-                    fprintf(file, "start %s", timestamp);
+                    Invalid_Code_Path;
+                    continue;
                 }
-                else if (entry->type == Entry_Stop)
+                
+                fprintf(file, "%s", command);
+                
+                
+                
+                if (first_entry || 
+                    (entry->date != day->date_start))
                 {
-                    if (entry->date == day->date_start)
-                    {
-                        char time_string[MAX_TIME_STRING_SIZE];
-                        get_time_string(time_string, sizeof(time_string), entry->time);
-                        
-                        fprintf(file, "stop %s", time_string);
-                    }
-                    else
-                    {
-                        time_t time = entry->date + entry->time;
-                        char timestamp[MAX_TIMESTAMP_STRING_SIZE];
-                        get_timestamp_string(timestamp, sizeof(timestamp), time);
-                        fprintf(file, "stop %s", timestamp);
-                    }
+                    char date_str[MAX_TIMESTAMP_STRING_SIZE];
+                    get_date_string(date_str, sizeof(date_str), entry->date);
+                    fprintf(file, " %s", date_str);
                 }
-                else 
-                {
-                    char *keyword = NULL;
-                    if (entry->type == Entry_Add)           keyword = "add";
-                    else if (entry->type == Entry_Subtract) keyword = "sub";
-                    else
-                    {
-                        Invalid_Code_Path;
-                        continue;
-                    }
-                    
-                    char time_string[MAX_TIME_STRING_SIZE];
-                    get_time_string(time_string, sizeof(time_string), entry->time);
-                    fprintf(file, "%s %s", keyword, time_string);
-                }
+                
+                
+                
+                char time_string[MAX_TIME_STRING_SIZE];
+                get_time_string(time_string, sizeof(time_string), entry->time);
+                fprintf(file, " %s", time_string);
+                
+                
+                
                 
                 if (entry->description)
                 {
-                    fprintf(file, " \t\"%s\";\n", entry->description);
+                    fprintf(file, " \t\"%s\"", entry->description);
                 }
-                else
-                {
-                    fprintf(file, ";\n");
-                }
+                
+                
+                
+                fprintf(file, ";\n");
             }
+            
+            
             
             char sum_bar_str[MAX_SUM_AND_PROGRESS_BAR_STRING_SIZE];
             get_sum_and_progress_bar_string(sum_bar_str, sizeof(sum_bar_str), day);
