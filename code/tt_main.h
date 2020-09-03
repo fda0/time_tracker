@@ -128,7 +128,7 @@ struct Program_State
     Memory_Arena day_arena;
     
     char input_file_full_path[MAX_PATH];
-    char input_filename[MAX_PATH];
+    char input_file_name[MAX_PATH];
     char archive_directory[MAX_PATH];
     
     time_t timezone_offset;

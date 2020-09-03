@@ -376,13 +376,13 @@ archive_current_file(Program_State *state, b32 long_format = false)
     char timestamp[MAX_PATH];
     get_timestamp_string_for_file(timestamp, sizeof(timestamp), now, long_format);
     
-    char archive_filename[MAX_PATH];
-    snprintf(archive_filename, sizeof(archive_filename), "%s%s_%s.txt", 
-             state->archive_directory, state->input_filename, timestamp);
+    char archive_file_name[MAX_PATH];
+    snprintf(archive_file_name, sizeof(archive_file_name), "%s%s_%s.txt", 
+             state->archive_directory, state->input_file_name, timestamp);
     
-    platform_copy_file(state->input_file_full_path, archive_filename);
+    platform_copy_file(state->input_file_full_path, archive_file_name);
     
-    if (long_format) printf("File archived as: %s\n", archive_filename);
+    if (long_format) printf("File archived as: %s\n", archive_file_name);
 }
 
 internal void 
@@ -1189,8 +1189,8 @@ load_file(Program_State *state)
     clear_memory(state);
     state->load_error_count = 0;
     
-    char *filename = state->input_file_full_path;
-    char *file_content = read_entire_file_and_null_terminate(&state->element_arena, filename);
+    char *file_name = state->input_file_full_path;
+    char *file_content = read_entire_file_and_null_terminate(&state->element_arena, file_name);
     if (file_content)
     {
         process_input(file_content, state, true);
@@ -1201,7 +1201,7 @@ load_file(Program_State *state)
     else
     {
         printf("[Load Error #%d] Failed to open the file: %s\n",
-               state->load_error_count++, filename);
+               state->load_error_count++, file_name);
     }
 }
 
@@ -1227,8 +1227,13 @@ internal void read_from_keyboard(Thread_Memory *thread_memory)
 
 
 
+enum Cmd_Arugment_Type
+{
+    Cmd_None,
+    Cmd_Input_File_Path
+};
 
-int main(int arg_count, char **args)
+int main(int argument_count, char **arguments)
 {
     //~ NOTE: Initialization 
     
@@ -1240,23 +1245,97 @@ int main(int arg_count, char **args)
     alocate_arena(&state.day_arena, raw_memory_block + Megabytes(512), Megabytes(512));
     clear_memory(&state);
     
+    
+    { //~ SCOPE: Processing of command line arugments
+        Cmd_Arugment_Type type = Cmd_None;
+        b32 disable_colors = false;
+        
+        for (s32 argument_index = 1;
+             argument_index < argument_count;
+             ++argument_index)
+        {
+            char *arg = arguments[argument_index];
+            
+            if (type == Cmd_None)
+            {
+                if (arg[0] == '-' || arg[0] == '/' || arg[0] == '?')
+                {
+                    if (arg[0] == '?' || arg[1] == '?' || arg[1] == 'h')
+                    {
+                        printf("tt.exe [-d database.txt] [-m]"
+                               "\n" "Options:"
+                               "\n\t" "-d" "\t\t" "Selects file to load and save data from."
+                               "\n\t" "-m" "\t\t" "Mono mode. Turns off colors."
+                               "\n");
+                        exit(0);
+                    }
+                    else if (arg[1] == 'd')
+                    {
+                        type = Cmd_Input_File_Path;
+                    }
+                    else if (arg[1] == 'm')
+                    {
+                        disable_colors = true;
+                    }
+                    else
+                    {
+                        printf("Unknown switch argument: %s\n", arg);
+                        exit(0);
+                    }
+                }
+            }
+            else if (type == Cmd_Input_File_Path)
+            {
+                strncpy(state.input_file_full_path, arg, Array_Count(state.input_file_full_path));
+                
+                type = Cmd_None;
+            }
+            else
+            {
+                Invalid_Code_Path;
+            }
+        }
+        
+        
+        initialize_colors(disable_colors);
+    }
+    
+    
     initialize_timezone_offset(&state);
-    initialize_colors(false);
     
-    // TODO: Get these filenames/paths from input arguments.
-    char base_path[MAX_PATH];
-    platform_get_executable_path(base_path, sizeof(base_path));
-    terminate_string_after_last_slash(base_path);
     
-    sprintf(state.input_filename, "time_tracker.txt");
-    sprintf(state.input_file_full_path, "%s%s", base_path, state.input_filename);
+    char executable_directory[MAX_PATH];
+    platform_get_executable_path(executable_directory, sizeof(executable_directory));
+    terminate_string_after_last_slash(executable_directory);
     
-    sprintf(state.archive_directory, "%sarchive", base_path);
+    
+    if (!state.input_file_full_path[0])
+    {
+        strncpy(state.input_file_name, "time_tracker.txt", Array_Count(state.input_file_name));
+        snprintf(state.input_file_full_path, Array_Count(state.input_file_full_path), 
+                 "%s%s", executable_directory, state.input_file_name);
+    }
+    else
+    {
+        char *file_name = get_after_last_slash_pointer(state.input_file_full_path);
+        if (file_name)
+        {
+            strncpy(state.input_file_name, file_name, Array_Count(state.input_file_name));
+        }
+        else
+        {
+            strncpy(state.input_file_name, state.input_file_full_path, Array_Count(state.input_file_name));
+        }
+    }
+    
+    sprintf(state.archive_directory, "%sarchive", executable_directory);
     platform_add_ending_slash_to_path(state.archive_directory);
     platform_create_directory(state.archive_directory);
     
     
+    
     //~ NOTE(mautesz): Load file. Save with better formatting if there was no load errors.
+    
     load_file(&state);
     if (state.load_error_count == 0)
     {
@@ -1269,10 +1348,14 @@ int main(int arg_count, char **args)
     }
     
     
-    // NOTE: Initialize input thread.
+    
+    //~ NOTE: Initialize input thread.
+    
     Thread_Memory thread_memory = {};
     sprintf(thread_memory.cursor, "::>");
     platform_create_thread(read_from_keyboard, &thread_memory);
+    
+    
     
     
     

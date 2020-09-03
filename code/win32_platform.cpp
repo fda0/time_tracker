@@ -22,11 +22,11 @@ platform_tm_to_time(tm *date)
 }
 
 internal File_Time 
-platform_get_file_mod_time(char *filename)
+platform_get_file_mod_time(char *file_name)
 {
     FILETIME lastWriteTime = {};
     WIN32_FILE_ATTRIBUTE_DATA data;
-    if (GetFileAttributesEx(filename, GetFileExInfoStandard, &data))
+    if (GetFileAttributesEx(file_name, GetFileExInfoStandard, &data))
     {
         lastWriteTime = data.ftLastWriteTime;
     }
@@ -65,9 +65,9 @@ platform_add_ending_slash_to_path(char *path)
 }
 
 
-internal void platform_open_in_default_editor(char *filename)
+internal void platform_open_in_default_editor(char *file_name)
 {
-    ShellExecuteA(NULL, "open", filename, NULL, NULL, SW_SHOWNORMAL);
+    ShellExecuteA(NULL, "open", file_name, NULL, NULL, SW_SHOWNORMAL);
 }
 
 internal void platform_get_executable_path(char *output, u32 output_size)
@@ -91,29 +91,24 @@ namespace Global_Color
     global_variable char *b_reset = "\033[49m";
 };
 
-internal void initialize_colors(bool turn_off_colors)
+internal void 
+initialize_colors(bool turn_off_colors)
 {
     if (!turn_off_colors)
     {
+        turn_off_colors = true;
+        
         // Set output mode to handle virtual terminal sequences
         HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-        if (hOut == INVALID_HANDLE_VALUE)
-        {
-            turn_off_colors = true;
-        }
-        else
+        if (hOut != INVALID_HANDLE_VALUE)
         {
             DWORD dwMode = 0;
-            if (!GetConsoleMode(hOut, &dwMode))
-            {
-                turn_off_colors = true;
-            }
-            else
+            if (GetConsoleMode(hOut, &dwMode))
             {
                 dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-                if (!SetConsoleMode(hOut, dwMode))
+                if (SetConsoleMode(hOut, dwMode))
                 {
-                    turn_off_colors = true;
+                    turn_off_colors = false;
                 }                
             }
         }

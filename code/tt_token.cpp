@@ -6,11 +6,11 @@
 #include "tt_token.h"
 
 internal char *
-read_entire_file_and_null_terminate(Memory_Arena *arena, char *filename)
+read_entire_file_and_null_terminate(Memory_Arena *arena, char *file_name)
 {
     char *result = 0;
     
-    FILE *file = fopen(filename, "rb");
+    FILE *file = fopen(file_name, "rb");
     if(file)
     {
         fseek(file, 0, SEEK_END);
@@ -22,6 +22,11 @@ read_entire_file_and_null_terminate(Memory_Arena *arena, char *filename)
         result[file_size] = 0;
         
         fclose(file);
+    }
+    else
+    {
+        printf("Failed to read from file: %s\n", file_name);
+        exit(1);
     }
     
     return result;
