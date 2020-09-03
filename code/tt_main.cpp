@@ -1,5 +1,5 @@
 /*
-    TODO(mateusz):
+    TODO:
     * Allow to specify input filenames/paths from input arguments.
     * Config file?
     * Convert to use Unicode?
@@ -11,7 +11,7 @@
 */
 
 
-// NOTE(mateusz): This program ignores concept of timezones to simplify usage.
+// NOTE: This program ignores concept of timezones to simplify usage.
 
 #include "tt_main.h"
 
@@ -70,7 +70,7 @@ internal Parse_Number_Result parse_number(char *src, s32 count)
 
 internal Parse_Time_Result parse_date(Token token)
 {
-    // NOTE(mateusz): Supported format: 2020-12-31
+    // NOTE: Supported format: 2020-12-31
     
     Parse_Time_Result result = {};
     if (token.text_length != (4 + 1 + 2 + 1 + 2)) return result;
@@ -104,7 +104,7 @@ internal Parse_Time_Result parse_date(Token token)
 
 internal Parse_Time_Result parse_time(Token token)
 {
-    // NOTE(mateusz): Supported format: 10:32, 02:00, 2:0, 120...
+    // NOTE: Supported format: 10:32, 02:00, 2:0, 120...
     
     Parse_Time_Result result = {};
     if (token.text_length == 0) return result;
@@ -244,7 +244,7 @@ b_reset); \
     }
     
     
-    if (start) // NOTE(mateusz): Day ends with start - missing end entry.
+    if (start) // NOTE: Day ends with start - missing end entry.
     {
         time_t now = get_current_time(state);
         
@@ -448,12 +448,12 @@ internal void save_to_file(Program_State *state)
 
 internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 reading_from_file)
 {
-    // TODO(mateusz): Implement insert sorting for start/stop/add/sub.                
+    // TODO: Implement insert sorting for start/stop/add/sub.                
     using namespace Global_Color;
     
     if (!reading_from_file) 
     {
-        // NOTE(mateusz): In terminal mode you don't need to specify date/hour.
+        // NOTE: In terminal mode you don't need to specify date/hour.
         // Missing data is filled with current time.
         
         b32 missing_date = (entry->date == 0);
@@ -487,7 +487,7 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
     }
     
     
-    // NOTE(mateusz): Select correct day slot.
+    // NOTE: Select correct day slot.
     Day *day = get_day(&state->day_arena, state->day_arena.count - 1);
     
     if (day == NULL ||
@@ -527,7 +527,7 @@ internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 re
     
     
     
-    // NOTE(mateusz): Add Time_Entry to previously selected day slot.
+    // NOTE: Add Time_Entry to previously selected day slot.
     Time_Entry *entry_dest = &day->first_time_entry;
     while (entry_dest->type != Entry_None)
     {
@@ -589,7 +589,7 @@ internal void process_input(char *content, Program_State *state, b32 reading_fro
         Token token = get_token(&tokenizer);
         switch (token.type)
         {
-            //~ NOTE(mateusz): Token macro helpers. To add/prohibit usage of certian features.
+            //~ NOTE: Token macro helpers. To add/prohibit usage of certian features.
             
 #define Print_Not_Supported_In_File \
 { \
@@ -628,7 +628,7 @@ b_error, state->load_error_count++); \
             // end of macros
             
             
-            //~ NOTE(mg): Identifiers.
+            //~ NOTE: Identifiers.
             case Token_Identifier:
             {
                 if (token_equals(token, "start")) 
@@ -946,7 +946,7 @@ b_error, state->load_error_count++); \
                     }
                     else
                     {
-                        // NOTE(mateusz): Don't break.
+                        // NOTE: Don't break.
                         // Assume additional semicolon at the end of the console input.
                     }
                 } 
@@ -1060,7 +1060,6 @@ b_error, state->load_error_count++); \
 internal void 
 clear_memory(Program_State *state)
 {
-    state->day_arena.count = 0;
     clear_arena(&state->day_arena);
     clear_arena(&state->element_arena);
 }
@@ -1096,7 +1095,7 @@ internal void read_from_keyboard(Thread_Memory *thread_memory)
         if (thread_memory->new_data)
         {
             platform_sleep(1);
-            // NOTE(mateusz): Spinlock while waiting for main thread to process work.
+            // NOTE: Spinlock while waiting for main thread to process work.
         }
         else
         {
@@ -1113,20 +1112,20 @@ internal void read_from_keyboard(Thread_Memory *thread_memory)
 
 int main(int arg_count, char **args)
 {
-    //
-    // NOTE(mateusz): Initialization 
-    //
+    //~ NOTE: Initialization 
+    
     Program_State state = {};
     
-    // NOTE(mateusz): Initialize arenas:
-    alocate_arena(&state.element_arena, Megabytes(16));
-    alocate_arena(&state.day_arena, Megabytes(16));
+    // NOTE: Initialize arenas:
+    static u8 raw_memory_block[Gigabytes(1)];
+    alocate_arena(&state.element_arena, raw_memory_block, Megabytes(512));
+    alocate_arena(&state.day_arena, raw_memory_block + Megabytes(512), Megabytes(512));
     clear_memory(&state);
     
     initialize_timezone_offset(&state);
     initialize_colors(false);
     
-    // TODO(mateusz): Get these filenames/paths from input arguments.
+    // TODO: Get these filenames/paths from input arguments.
     char base_path[MAX_PATH];
     platform_get_executable_path(base_path, sizeof(base_path));
     terminate_string_after_last_slash(base_path);
@@ -1139,7 +1138,7 @@ int main(int arg_count, char **args)
     platform_create_directory(state.archive_directory);
     
     
-    // NOTE(mautesz): Load file. Save with better formatting if there was no load errors.
+    //~ NOTE(mautesz): Load file. Save with better formatting if there was no load errors.
     load_file(&state);
     if (state.load_error_count == 0)
     {
@@ -1152,15 +1151,15 @@ int main(int arg_count, char **args)
     }
     
     
-    // NOTE(mateusz): Initialize input thread.
+    // NOTE: Initialize input thread.
     Thread_Memory thread_memory = {};
     sprintf(thread_memory.cursor, "::>");
     platform_create_thread(read_from_keyboard, &thread_memory);
     
     
-    //
-    // NOTE(mateusz): Main loop
-    //
+    
+    //~ NOTE: Main loop
+    
     b32 is_running = true;
     while (is_running)
     {

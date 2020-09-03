@@ -5,7 +5,7 @@
 #include <time.h>
 
 //
-// NOTE(mateusz): Types
+// NOTE: Types
 //
 
 typedef uint8_t u8;
@@ -38,23 +38,10 @@ struct Thread_Memory
     b32 new_data;
 };
 
-namespace Global_Color
-{
-    global_variable char *f_black = "\033[30m";
-    global_variable char *f_date = "\033[33m";
-    global_variable char *f_sum = "\033[32m";
-    global_variable char *f_desc = "\033[36m";
-    global_variable char *f_reset = "\033[39m";
-    
-    global_variable char *b_error = "\033[41m";
-    global_variable char *b_date = "\033[43m";
-    global_variable char *b_reset = "\033[49m";
-};
-
 
 
 //
-// NOTE(mautesz): Platforms and compilers
+// NOTE: Platforms and compilers
 //
 
 
@@ -68,7 +55,7 @@ namespace Global_Color
 
 
 //
-// NOTE(mateusz): Macros
+// NOTE: Macros
 //
 
 
@@ -90,10 +77,10 @@ if(!(Expression)) {*(int*)0 = 1;}
 
 #define Minimum(A, B) (A > B ? B : A)
 
-#define Kilobytes(Value) ((Value) * 1024ul)
-#define Megabytes(Value) (Kilobytes(Value) * 1024ul)
-#define Gigabytes(Value) (Megabytes(Value) * (u64)1024ul)
-#define Terabytes(Value) (Gigabytes(Value) * (u64)1024ul)
+#define Kilobytes(Value) ((Value) * 1024ULL)
+#define Megabytes(Value) (Kilobytes(Value) * 1024ULL)
+#define Gigabytes(Value) (Megabytes(Value) * (u64)1024ULL)
+#define Terabytes(Value) (Gigabytes(Value) * (u64)1024ULL)
 
 #define Days(Value) (Hours(Value) * 24)
 #define Hours(Value) (Minutes(Value) * 60)
@@ -104,7 +91,7 @@ if(!(Expression)) {*(int*)0 = 1;}
 
 
 //
-// NOTE(mateusz): Data types
+// NOTE: Data types
 //
 
 enum Entry_Type

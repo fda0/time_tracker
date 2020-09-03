@@ -1,6 +1,6 @@
 //
-// NOTE(mateusz): Original tokenizer code inspired by video series 
-//                "Handmade Hero" by Casey Muratori - episode 206
+// NOTE: Original tokenizer code inspired by video series 
+//       "Handmade Hero" by Casey Muratori - episode 206
 //
 
 #include "tt_token.h"
