@@ -45,13 +45,14 @@ void *push_size_aligned_(Memory_Arena *arena, size_t size, u32 aligment, u32 cou
     {
         size_t new_size = needed_size*2;
         
-        arena->base = (u8 *)realloc(arena->base, new_size);
+        arena->base = (u8 *)realloc(arena->base, new_size); // TODO(mg): This is stupid since it might return other memmory address...
+        // TODO(mg): Use virtual alloc and page in more pages if necessary?
+        
         if (arena->base == NULL)
         {
             printf("Failed to allocate memory\n");
             exit(1);
         }
-        
         arena->size = new_size;
     }
     

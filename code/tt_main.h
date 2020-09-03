@@ -58,14 +58,9 @@ namespace Global_Color
 //
 
 
-#define COMPILER_MSVC 1
-
-#if COMPILER_MSVC
+#if OS_WINDOWS
 #include "win32_platform.cpp"
 #endif
-
-
-#define DEBUG_COMPILATION 1
 
 
 
@@ -77,7 +72,7 @@ namespace Global_Color
 //
 
 
-#if DEBUG_COMPILATION
+#if BUILD_INTERNAL
 
 #define Assert(Expression) \
 if(!(Expression)) {*(int*)0 = 1;}
@@ -95,10 +90,10 @@ if(!(Expression)) {*(int*)0 = 1;}
 
 #define Minimum(A, B) (A > B ? B : A)
 
-#define Kilobytes(Value) ((Value) * 1024)
-#define Megabytes(Value) (Kilobytes(Value) * 1024)
-#define Gigabytes(Value) (Megabytes(Value) * (u64)1024)
-#define Terabytes(Value) (Gigabytes(Value) * (u64)1024)
+#define Kilobytes(Value) ((Value) * 1024ul)
+#define Megabytes(Value) (Kilobytes(Value) * 1024ul)
+#define Gigabytes(Value) (Megabytes(Value) * (u64)1024ul)
+#define Terabytes(Value) (Gigabytes(Value) * (u64)1024ul)
 
 #define Days(Value) (Hours(Value) * 24)
 #define Hours(Value) (Minutes(Value) * 60)
