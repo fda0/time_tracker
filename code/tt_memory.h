@@ -27,6 +27,21 @@ internal void alocate_arena(Memory_Arena *arena, u8 *memory_address, size_t size
 }
 
 
+internal size_t
+get_aligment_offset(Memory_Arena *arena, size_t aligment)
+{
+    size_t aligment_offset = 0;
+    size_t pointer = (size_t)arena->base + arena->used;
+    
+    size_t aligment_mask = aligment - 1;
+    if (pointer & aligment_mask)
+    {
+        aligment_offset = aligment - (pointer & aligment_mask);
+    }
+    
+    return aligment_offset;
+}
+
 // NOTE: Gives back aligned pointer with size allocated for any type.
 #define Push_Struct(Arena, Type) \
 ((Type *)push_size_aligned_(Arena, sizeof(Type), alignof(Type), 1))
@@ -43,23 +58,19 @@ void *push_size_aligned_(Memory_Arena *arena, size_t size, u32 aligment, u32 cou
     size_t needed_size = (arena->used + size);
     if (needed_size > arena->size)
     {
-        size_t new_size = needed_size*2;
-        
-        // TODO: Use virtual alloc and page in more pages if necessary?
-        
-        arena->base = NULL;
-        
-        if (arena->base == NULL)
-        {
-            printf("Failed to allocate memory\n");
-            exit(1);
-        }
-        arena->size = new_size;
+        // TODO: (possible in 64bit)
+        // 1. Use VirtualAlloc and allocate memory in "high" address space.
+        // 2. Get more (continuous) memory pages when out of memory.
+        printf("Program ran out of memory\n");
+        exit(1);
     }
     
-    size_t aligned_used = arena->used + (arena->used % aligment);
     
-    void *result = arena->base + aligned_used;
-    arena->used = aligned_used + size;
+    size_t aligment_offset = get_aligment_offset(arena, aligment);
+    void *result = arena->base + arena->used + aligment_offset;
+    
+    size_t effective_size = size + aligment_offset;
+    arena->used += effective_size;
+    
     return result;
 }

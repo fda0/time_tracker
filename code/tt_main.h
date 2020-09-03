@@ -4,9 +4,8 @@
 #include <stdint.h>
 #include <time.h>
 
-//
-// NOTE: Types
-//
+
+//~ NOTE: Types
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -40,9 +39,8 @@ struct Thread_Memory
 
 
 
-//
-// NOTE: Platforms and compilers
-//
+
+//~ NOTE: Platforms and compilers
 
 
 #if OS_WINDOWS
@@ -52,11 +50,7 @@ struct Thread_Memory
 
 
 
-
-
-//
-// NOTE: Macros
-//
+//~ NOTE: Macros
 
 
 #if BUILD_INTERNAL
@@ -89,10 +83,7 @@ if(!(Expression)) {*(int*)0 = 1;}
 
 
 
-
-//
-// NOTE: Data types
-//
+//~ NOTE: Data types
 
 enum Entry_Type
 {
