@@ -55,8 +55,7 @@ struct Thread_Memory
 
 #if BUILD_INTERNAL
 
-#define Assert(Expression) \
-if(!(Expression)) {*(int*)0 = 1;}
+#define Assert(Expression) do {if(!(Expression)) {__debugbreak(); *(int*)0 = 1;}} while(0)
 
 #else
 #define Assert(Expression)
@@ -138,6 +137,8 @@ struct Program_State
     s32 save_error_count;
     s32 load_error_count;
     s32 change_count;
+    
+    b32 reading_from_file;
 };
 
 

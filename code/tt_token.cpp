@@ -5,7 +5,8 @@
 
 #include "tt_token.h"
 
-internal char *read_entire_file_and_null_terminate(Memory_Arena *arena, char *filename)
+internal char *
+read_entire_file_and_null_terminate(Memory_Arena *arena, char *filename)
 {
     char *result = 0;
     
@@ -28,26 +29,28 @@ internal char *read_entire_file_and_null_terminate(Memory_Arena *arena, char *fi
 
 
 
-inline b32 is_end_of_line(char c)
+inline b32 
+is_end_of_line(char c)
 {
-    b32 result = (c == '\n') ||
-        (c == '\r');
+    b32 result = ((c == '\n') ||
+                  (c == '\r'));
     
     return result;
 }
 
-inline b32 is_whitespace(char c)
+inline b32 
+is_whitespace(char c)
 {
-    b32 result = (c == ' ') ||
-        (c == '\t') ||
-        (c == '\v') ||
-        (c == '\f') ||
-        is_end_of_line(c);
+    b32 result = ((c == ' ') ||
+                  (c == '\t') ||
+                  (c == '\v') ||
+                  (c == '\f'));
     
     return result;
 }
 
-inline b32 is_alpha(char c)
+inline b32 
+is_alpha(char c)
 {
     b32 result = (c >= 'a' && c <= 'z') ||
         (c >= 'A' && c <= 'Z');
@@ -55,19 +58,33 @@ inline b32 is_alpha(char c)
     return result;
 }
 
-inline b32 is_number(char c)
+inline b32 
+is_number(char c)
 {
     b32 result = (c >= '0' && c <= '9');
     return result;
 }
 
-internal void eat_all_whitespace(Tokenizer *tokenizer)
+internal void 
+eat_all_whitespace(Tokenizer *tokenizer)
 {
     for (;;)
     {
         if (is_whitespace(tokenizer->at[0]))
         {
             ++tokenizer->at;
+        }
+        else if (is_end_of_line(tokenizer->at[0]))
+        {
+            ++tokenizer->at;
+            tokenizer->line_start = tokenizer->at;
+            ++tokenizer->line_count;
+            
+            if ((tokenizer->at[0] == '\r') && 
+                (tokenizer->at[1] == '\n'))
+            {
+                --tokenizer->line_count;
+            }
         }
         else if (tokenizer->at[0] == '/' &&
                  tokenizer->at[1] == '/')
@@ -86,13 +103,36 @@ internal void eat_all_whitespace(Tokenizer *tokenizer)
 }
 
 
-internal Token get_token(Tokenizer *tokenizer)
+internal Tokenizer
+create_tokenizer(char *input_text)
 {
+    Tokenizer tokenizer = {};
+    tokenizer.at = input_text;
+    tokenizer.rewind_at = input_text;
+    tokenizer.line_start = input_text;
+    
+    return tokenizer;
+}
+
+internal void
+rewind_tokenizer(Tokenizer *tokenizer)
+{
+    tokenizer->at = tokenizer->rewind_at;
+}
+
+
+internal Token 
+get_token(Tokenizer *tokenizer)
+{
+    tokenizer->rewind_at = tokenizer->at;
+    
     eat_all_whitespace(tokenizer);
     
     Token token = {};
     token.text_length = 1;
     token.text = tokenizer->at;
+    token.line_index = tokenizer->line_count;
+    token.line_start = tokenizer->line_start;
     
     char c = tokenizer->at[0];
     ++tokenizer->at;
@@ -157,7 +197,23 @@ internal Token get_token(Tokenizer *tokenizer)
     return token;
 }
 
-internal b32 token_equals(Token token, char *match)
+
+internal Token
+peek_token(Tokenizer *tokenizer)
+{
+    // TODO: Think about saving work from peek_token for the next get_token.
+    //       But itt may prevent/complicate new tokenizer features.
+    
+    Tokenizer tokenizer_copy = *tokenizer;
+    Token result = get_token(&tokenizer_copy);
+    
+    return result;
+}
+
+
+
+internal b32 
+token_equals(Token token, char *match)
 {
     for (u32 index = 0;
          index < token.text_length;

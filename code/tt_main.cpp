@@ -2,6 +2,7 @@
     TODO:
     * Allow to specify input filenames/paths from input arguments.
     * Config file?
+* Clean up error printing code.
     * Convert to use Unicode?
     
     * Add sum of the month in the file. Can look like:
@@ -18,11 +19,12 @@
 #include "tt_token.cpp"
 #include "tt_string.cpp"
 #include "tt_time.cpp"
-
+#include "tt_error.cpp"
 
 internal void load_file(Program_State *state);
 
-inline Day *get_day(Memory_Arena *day_arena, u32 day_index)
+inline Day *
+get_day(Memory_Arena *day_arena, u32 day_index)
 {
     Day *result = NULL;
     if (day_index < day_arena->count)
@@ -33,9 +35,20 @@ inline Day *get_day(Memory_Arena *day_arena, u32 day_index)
     return result;
 }
 
-
-internal char *create_description(Memory_Arena *arena, Token token)
+internal Day *
+get_last_day(Program_State *state)
 {
+    Day *last_day = get_day(&state->day_arena, state->day_arena.count - 1);
+    return last_day;
+}
+
+
+internal char *
+create_description(Memory_Arena *arena, Token token)
+{
+    // TODO: Maybe descriptions should go through hash table to avoid duplication.
+    Assert(token.type == Token_String);
+    
     char *result = Push_Array(arena, token.text_length + 1, char);
     char *dest = result;
     for (u32 index = 0;
@@ -49,7 +62,10 @@ internal char *create_description(Memory_Arena *arena, Token token)
     return result;
 }
 
-internal Parse_Number_Result parse_number(char *src, s32 count)
+
+
+internal Parse_Number_Result 
+parse_number(char *src, s32 count)
 {
     Parse_Number_Result result = {};
     
@@ -68,87 +84,113 @@ internal Parse_Number_Result parse_number(char *src, s32 count)
     return result;
 }
 
-internal Parse_Time_Result parse_date(Token token)
+internal Parse_Time_Result 
+parse_date(Program_State *state, Token token)
 {
     // NOTE: Supported format: 2020-12-31
-    
     Parse_Time_Result result = {};
-    if (token.text_length != (4 + 1 + 2 + 1 + 2)) return result;
     
-    char *text = token.text;
-    tm date = {};
-    
-    // year    
-    auto year = parse_number(text, 4);
-    date.tm_year = year.time - 1900;
-    
-    text += 4;
-    b32 dash1 = (*text++ == '-');
-    
-    // month
-    auto month = parse_number(text, 2);
-    date.tm_mon = month.time - 1;
-    
-    text += 2;
-    b32 dash2 = (*text++ == '-');
-    
-    // day
-    auto day = parse_number(text, 2);
-    date.tm_mday = day.time;
-    
-    
-    result.time = platform_tm_to_time(&date);
-    result.success = (year.success && month.success && day.success && dash1 && dash2);
-    return result;
-}
-
-internal Parse_Time_Result parse_time(Token token)
-{
-    // NOTE: Supported format: 10:32, 02:00, 2:0, 120...
-    
-    Parse_Time_Result result = {};
-    if (token.text_length == 0) return result;
-    
-    b32 had_first_colon = false;
-    u32 multiplier = 1;
-    for (s32 index = (s32)token.text_length - 1;
-         index >= 0;
-         --index)
+    if (token.text_length == (4 + 1 + 2 + 1 + 2))
     {
-        char c = token.text[index];
+        char *text = token.text;
+        tm date = {};
         
-        if (c >= '0' && c <= '9')
-        {
-            u32 digit_value = (c - '0') * multiplier * 60;
-            if (had_first_colon)
-            {
-                digit_value *= 60;
-            }
-            
-            result.time += digit_value;
-            multiplier *= 10;
-        }
-        else if (c == ':')
-        {
-            if (had_first_colon)
-            {
-                return result;
-            }
-            else
-            {
-                had_first_colon = true;
-                multiplier = 1;
-            }
-        }
+        // year    
+        auto year = parse_number(text, 4);
+        date.tm_year = year.time - 1900;
+        
+        text += 4;
+        b32 dash1 = (*text++ == '-');
+        
+        // month
+        auto month = parse_number(text, 2);
+        date.tm_mon = month.time - 1;
+        
+        text += 2;
+        b32 dash2 = (*text++ == '-');
+        
+        // day
+        auto day = parse_number(text, 2);
+        date.tm_mday = day.time;
+        
+        
+        result.time = platform_tm_to_time(&date);
+        result.success = (year.success && month.success && day.success && dash1 && dash2);
     }
     
-    result.success = true;
+    if (!result.success)
+    {
+        Print_Load_Error(state);
+        printf("Bad date format!");
+        print_line_with_token(token);
+        Print_Clear();
+        printf("\n");
+    }
+    
+    return result;
+}
+
+internal Parse_Time_Result 
+parse_time(Program_State *state, Token token)
+{
+    // NOTE: Supported format: 10:32, 02:00, 2:0, 120...
+    Parse_Time_Result result = {};
+    
+    if (token.text_length > 0)
+    {
+        b32 had_first_colon = false;
+        u32 multiplier = 1;
+        for (s32 index = (s32)token.text_length - 1;
+             index >= 0;
+             --index)
+        {
+            char c = token.text[index];
+            
+            if (c >= '0' && c <= '9')
+            {
+                u32 digit_value = (c - '0') * multiplier * 60;
+                if (had_first_colon)
+                {
+                    digit_value *= 60;
+                }
+                
+                result.time += digit_value;
+                multiplier *= 10;
+            }
+            else if (c == ':')
+            {
+                if (had_first_colon)
+                {
+                    return result;
+                }
+                else
+                {
+                    had_first_colon = true;
+                    multiplier = 1;
+                }
+            }
+        }
+        
+        result.success = true;
+    }
+    
+    if (!result.success)
+    {
+        Print_Load_Error(state);
+        printf("Bad time format!");
+        print_line_with_token(token);
+        Print_Clear();
+        printf("\n");
+    }
+    
     return result;
 }
 
 
-internal void calculate_day_sum_and_validate(Program_State *state, Day *day, 
-                                             b32 print, FILE *errors_to_file = NULL)
+
+
+internal void 
+calculate_day_sum_and_validate(Program_State *state, Day *day, b32 print, FILE *errors_to_file = NULL)
 {
     
 #define PRINT_ERROR(Message) \
@@ -326,7 +368,8 @@ print_days_from_range(Program_State *state, time_t *date_start, time_t *date_sto
 
 
 
-internal void archive_current_file(Program_State *state, b32 long_format = false)
+internal void 
+archive_current_file(Program_State *state, b32 long_format = false)
 {
     time_t now = get_current_time(state);
     
@@ -342,7 +385,8 @@ internal void archive_current_file(Program_State *state, b32 long_format = false
     if (long_format) printf("File archived as: %s\n", archive_filename);
 }
 
-internal void save_to_file(Program_State *state)
+internal void 
+save_to_file(Program_State *state)
 {
     archive_current_file(state);
     state->save_error_count = 0;
@@ -446,12 +490,16 @@ internal void save_to_file(Program_State *state)
 }
 
 
-internal void process_time_entry(Program_State *state, Time_Entry *entry, b32 reading_from_file)
+internal void 
+process_time_entry(Program_State *state, Time_Entry *entry, b32 reading_from_file)
 {
+    // TODO: This code shouldn't know about file/command mode
+    
+    
     // TODO: Implement insert sorting for start/stop/add/sub.                
     using namespace Global_Color;
     
-    if (!reading_from_file) 
+    if (!reading_from_file) // TODO: Pull out from here.
     {
         // NOTE: In terminal mode you don't need to specify date/hour.
         // Missing data is filled with current time.
@@ -574,16 +622,93 @@ inline b32 fill_time_slot(time_t *target, time_t *source)
 }
 
 
-internal void process_input(char *content, Program_State *state, b32 reading_from_file, b32 *main_loop_is_running = NULL)
+internal void
+process_offset_time_entry(Program_State *state, Tokenizer *tokenizer, Entry_Type type, b32 in_command_line)
 {
+    Assert(type == Entry_Add || type == Entry_Subtract);
+    
+    b32 success = true;
+    Token token = get_token(tokenizer);
+    Time_Entry time_entry = {};
+    time_entry.type = type;
+    
+    // argument 1 - optional - date
+    if (token.type == Token_Date) 
+    {
+        Parse_Time_Result parsed_date = parse_date(state, token);
+        if (parsed_date.success)
+        {
+            time_entry.date = parsed_date.time;
+            token = get_token(tokenizer);
+        }
+        else success = false;
+    }
+    else
+    {
+        if (in_command_line) time_entry.date = get_today(state);
+        else
+        {
+            Day *last_day = get_last_day(state);
+            if (last_day) time_entry.date = last_day->date_start;
+            else
+            {
+                success = false;
+                Print_Load_Error(state);
+                printf("First entry needs to specify date. ");
+                Print_Clear();
+            }
+        }
+    }
+    
+    
+    // argument 2 - required - time
+    if (success && (token.type == Token_Time))
+    {
+        Parse_Time_Result parsed_time = parse_time(state, token);
+        if (parsed_time.success)
+        {
+            time_entry.time = parsed_time.time;
+            
+            // argument 3 - optional - description
+            if (peek_token(tokenizer).type == Token_String)
+            {
+                token = get_token(tokenizer);
+                time_entry.description = create_description(&state->element_arena, token);
+            }
+        }
+        else success = false;
+    }
+    else success = false;
+    
+    
+    if (!success)
+    {
+        Print_Load_Error(state);
+        printf("Incorect command usage. Use: "
+               "(add/sub) [date] (time) [\"description\"]\n");
+        print_line_with_token(token);
+        Print_ClearN();
+        
+        if (token.type == Token_Identifier) rewind_tokenizer(tokenizer);
+    }
+    else
+    {
+        process_time_entry(state, &time_entry, !in_command_line);
+    }
+}
+
+
+internal void 
+process_input(char *content, Program_State *state, b32 reading_from_file, b32 *main_loop_is_running = NULL)
+{
+    state->reading_from_file = reading_from_file;
+    
     using namespace Global_Color;
-    
-    Tokenizer tokenizer = {};
-    tokenizer.at = content;
-    
+    Tokenizer tokenizer = create_tokenizer(content);
     Processing_Data buffer = {};
-    
     bool parsing = true;
+    
+    
     while (parsing)
     {
         Token token = get_token(&tokenizer);
@@ -618,12 +743,6 @@ token.text, b_reset); \
 continue; \
 }
             
-#define Print_Load_Error \
-if (reading_from_file) \
-{ \
-printf("%s[Load Error #%d] ", \
-b_error, state->load_error_count++); \
-}
             
             // end of macros
             
@@ -647,18 +766,12 @@ b_error, state->load_error_count++); \
                 }
                 else if (token_equals(token, "add"))
                 {
-                    Continue_If_Instruction_Already_Set;
-                    
-                    buffer.type = Entry_Add;
-                    buffer.instruction = Ins_Time_Entry;
+                    process_offset_time_entry(state, &tokenizer, Entry_Add, !reading_from_file);
                 }
                 else if (token_equals(token, "subtract") ||
                          token_equals(token, "sub"))
                 {
-                    Continue_If_Instruction_Already_Set;
-                    
-                    buffer.type = Entry_Subtract;
-                    buffer.instruction = Ins_Time_Entry;
+                    process_offset_time_entry(state, &tokenizer, Entry_Subtract, !reading_from_file);
                 }
                 else if (token_equals(token, "show"))
                 {
@@ -798,73 +911,76 @@ b_error, state->load_error_count++); \
                     }
                     else
                     {
-                        Print_Load_Error;
-                        printf("%sUnknown identifier: %.*s. (Try help)%s\n", 
-                               b_error, (s32)token.text_length, token.text, b_reset);
+                        Print_Load_Error(state);
+                        printf("Unknown identifier: %.*s. (Try help)", (s32)token.text_length, token.text);
+                        Print_ClearN();
                     }
                 } break;
                 
                 //~
+                
                 case Token_Date:
                 {
                     if (buffer.instruction == Ins_Time_Entry)
                     {
                         if (!buffer.date)
                         {
-                            auto parsed_date = parse_date(token);
+                            auto parsed_date = parse_date(state, token);
                             if (parsed_date.success)
                             {
                                 buffer.date = parsed_date.time;
                             }
-                            else
-                            {
-                                Print_Load_Error;
-                                printf("%sIncorrect date format: %.*s%s\n", 
-                                       b_error, (s32)token.text_length, token.text, b_reset);
-                                
-                                if (!reading_from_file) buffer.instruction = Ins_Unsupported;
-                            }
+                            else buffer.instruction = Ins_Unsupported;
                         }
                         else
                         {
-                            Print_Load_Error;
-                            printf("%sOnly one date per command is supported%s\n", b_error, b_reset);
+                            Print_Load_Error(state);
+                            printf("Only one date per command is supported.");
+                            Print_ClearN();
                         }
                     }
                     else if (buffer.instruction == Ins_Show)
                     {
-                        auto parsed_date = parse_date(token);
+                        auto parsed_date = parse_date(state, token);
                         if (parsed_date.success)
                         {
                             if (buffer.show_input == ShowInput_One_Day)
                             {
                                 if (!fill_time_slot(&buffer.date, &parsed_date.time))
                                 {
-                                    printf("%sCan't input two dates. Use \"from\" & \"to\"%s\n", b_error, b_reset);
+                                    Print_Load_Error(state);
+                                    printf("Can't input two dates. Use \"from\" & \"to\".");
+                                    Print_ClearN();
                                 }
                             }
                             else if (buffer.show_input == ShowInput_From)
                             {
                                 if (!fill_time_slot(&buffer.date_from, &parsed_date.time))
                                 {
-                                    printf("%sCan't input two \"from\" dates%s\n", b_error, b_reset);
+                                    Print_Load_Error(state);
+                                    printf("Can't input two \"from\" dates.");
+                                    Print_ClearN();
                                 }
                             }
                             else if (buffer.show_input == ShowInput_To)
                             {
                                 if (!fill_time_slot(&buffer.date_to, &parsed_date.time))
                                 {
-                                    printf("%sCan't input two \"to\" dates%s\n", b_error, b_reset);
+                                    Print_Load_Error(state);
+                                    printf("Can't input two \"to\" dates.");
+                                    Print_ClearN();
                                 }
                             }
                         }
                     }
                     else
                     {
-                        Print_Load_Error;
-                        printf("%sDate supported only for show & start/stop/add/sub%s\n", b_error, b_reset);
+                        Print_Load_Error(state);
+                        printf("Date supported only for show & start/stop/add/sub.");
+                        Print_ClearN();
                     }
                 } break;
+                
                 
                 //~
                 case Token_Time:
@@ -873,33 +989,29 @@ b_error, state->load_error_count++); \
                     {
                         if (!buffer.time)
                         {
-                            auto parsed_time = parse_time(token);
+                            auto parsed_time = parse_time(state, token);
                             if (parsed_time.success)
                             {
                                 buffer.time = parsed_time.time;
                             }
-                            else
-                            {
-                                Print_Load_Error;
-                                printf("%sIncorrect time format: %.*s\n%s", 
-                                       b_error, (s32)token.text_length, token.text, b_reset);
-                                
-                                if (!reading_from_file) buffer.instruction = Ins_Unsupported;
-                            }
+                            else buffer.instruction = Ins_Unsupported;
                         }
                         else
                         {
-                            Print_Load_Error;
-                            printf("%sOnly one time per command is supported%s\n", b_error, b_reset);
+                            Print_Load_Error(state);
+                            printf("Only one time per command is supported.");
+                            Print_ClearN();
                         }
                     }
                     else
                     {
-                        Print_Load_Error;
-                        printf("%sTime \"%.*s\" supported only for start/stop/add/sub%s\n", 
-                               b_error, (s32)token.text_length, token.text, b_reset);
+                        Print_Load_Error(state);
+                        printf("Time \"%.*s\" supported only for start/stop/add/sub.", 
+                               (s32)token.text_length, token.text);
+                        Print_ClearN();
                     }
                 } break;
+                
                 
                 //~
                 case Token_String:
@@ -912,14 +1024,16 @@ b_error, state->load_error_count++); \
                         }
                         else
                         {
-                            Print_Load_Error;
-                            printf("%sOnly one description per command is supported%s\n", b_error, b_reset);
+                            Print_Load_Error(state);
+                            printf("Only one description per command is supported");
+                            Print_ClearN();
                         }
                     }
                     else
                     {
-                        Print_Load_Error;
-                        printf("%sDescription supported only for start/stop/add/sub%s\n", b_error, b_reset);
+                        Print_Load_Error(state);
+                        printf("Description supported only for start/stop/add/sub");
+                        Print_ClearN();
                     }
                 } break;
                 
@@ -938,8 +1052,9 @@ b_error, state->load_error_count++); \
                     {
                         if (buffer.instruction != Ins_None)
                         {
-                            Print_Load_Error;
-                            printf("%sMissing semicolon at the end of the file%s\n", b_error, b_reset);
+                            Print_Load_Error(state);
+                            printf("Missing semicolon at the end of the file");
+                            Print_ClearN();
                         }
                         
                         break;
@@ -1054,6 +1169,9 @@ b_error, state->load_error_count++); \
             }
         }
     }
+    
+    
+    state->reading_from_file = false;
 }
 
 
