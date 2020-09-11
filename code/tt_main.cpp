@@ -288,7 +288,7 @@ b_reset); \
     
     if (start) // NOTE: Day ends with start - missing end entry.
     {
-        time_t now = get_current_time(state);
+        time_t now = get_current_timestamp(state);
         
         time_t start_time = start->date + start->time;
         
@@ -327,7 +327,7 @@ b_reset); \
 
 
 internal void 
-print_days_from_range(Program_State *state, time_t *date_start, time_t *date_stop, b32 alternative_colors = false)
+print_days_from_range(Program_State *state, time_t date_start, time_t date_stop, b32 alternative_colors = false)
 {
     for (u32 day_index = 0;
          day_index < state->day_arena.count;
@@ -335,8 +335,8 @@ print_days_from_range(Program_State *state, time_t *date_start, time_t *date_sto
     {
         Day *day = get_day(&state->day_arena, day_index);
         
-        if ((date_stop) && (day->date_start > *date_stop)) break;
-        if ((date_start) && (day->date_start < *date_start)) continue;
+        if ((date_stop) && (day->date_start > date_stop)) break;
+        if ((date_start) && (day->date_start < date_start)) continue;
         
         
         
@@ -371,7 +371,7 @@ print_days_from_range(Program_State *state, time_t *date_start, time_t *date_sto
 internal void 
 archive_current_file(Program_State *state, b32 long_format = false)
 {
-    time_t now = get_current_time(state);
+    time_t now = get_current_timestamp(state);
     
     char timestamp[MAX_PATH];
     get_timestamp_string_for_file(timestamp, sizeof(timestamp), now, long_format);
@@ -509,7 +509,7 @@ process_time_entry(Program_State *state, Time_Entry *entry, b32 reading_from_fil
         
         if (missing_date || missing_time)
         {
-            time_t now = get_current_time(state);
+            time_t now = get_current_timestamp(state);
             
             if (missing_date)
             {
@@ -623,29 +623,119 @@ inline b32 fill_time_slot(time_t *target, time_t *source)
 
 
 internal void
-process_offset_time_entry(Program_State *state, Tokenizer *tokenizer, Entry_Type type, b32 in_command_line)
+process_start_stop_identifier(Program_State *state, Tokenizer *tokenizer, Entry_Type type)
 {
-    Assert(type == Entry_Add || type == Entry_Subtract);
+    Assert(type == Entry_Start || type == Entry_Stop);
     
     b32 success = true;
-    Token token = get_token(tokenizer);
+    Forward_Token forward = create_forward_token(tokenizer);
+    
     Time_Entry time_entry = {};
     time_entry.type = type;
     
     // argument 1 - optional - date
-    if (token.type == Token_Date) 
+    if (forward.peek.type == Token_Date) 
     {
-        Parse_Time_Result parsed_date = parse_date(state, token);
+        advance_forward_token(&forward);
+        
+        Parse_Time_Result parsed_date = parse_date(state, forward.token);
         if (parsed_date.success)
         {
             time_entry.date = parsed_date.time;
-            token = get_token(tokenizer);
         }
         else success = false;
     }
     else
     {
-        if (in_command_line) time_entry.date = get_today(state);
+        if (!state->reading_from_file) time_entry.date = get_today(state);
+        else
+        {
+            Day *last_day = get_last_day(state);
+            if (last_day) time_entry.date = last_day->date_start;
+            else
+            {
+                success = false;
+                Print_Load_Error(state);
+                printf("First entry needs to specify date. ");
+                Print_Clear();
+            }
+        }
+    }
+    
+    
+    // argument 2 - optional(cmd) required(file) - time
+    if (success && (forward.peek.type == Token_Time))
+    {
+        advance_forward_token(&forward);
+        
+        Parse_Time_Result parsed_time = parse_time(state, forward.token);
+        if (parsed_time.success)
+        {
+            time_entry.time = parsed_time.time;
+        }
+        else success = false;
+    }
+    else 
+    {
+        if (!state->reading_from_file)
+        {
+            time_entry.time = get_time(state);
+        }
+        else success = false;
+    }
+    
+    
+    // argument 3 - optional - description
+    if (success && (forward.peek.type == Token_String))
+    {
+        advance_forward_token(&forward);
+        
+        time_entry.description = create_description(&state->element_arena, forward.token);
+    }
+    
+    
+    if (!success)
+    {
+        Print_Load_Error(state);
+        printf("Incorect command usage. Use: "
+               "(add/sub) [date] (time) [\"description\"]");
+        print_line_with_token(forward.token);
+        Print_ClearN();
+    }
+    else
+    {
+        process_time_entry(state, &time_entry, state->reading_from_file);
+    }
+}
+
+
+
+internal void
+process_add_sub_identifier(Program_State *state, Tokenizer *tokenizer, Entry_Type type)
+{
+    Assert(type == Entry_Add || type == Entry_Subtract);
+    
+    b32 success = true;
+    Forward_Token forward = create_forward_token(tokenizer);
+    
+    Time_Entry time_entry = {};
+    time_entry.type = type;
+    
+    // argument 1 - optional - date
+    if (forward.peek.type == Token_Date) 
+    {
+        advance_forward_token(&forward);
+        
+        Parse_Time_Result parsed_date = parse_date(state, forward.token);
+        if (parsed_date.success)
+        {
+            time_entry.date = parsed_date.time;
+        }
+        else success = false;
+    }
+    else
+    {
+        if (!state->reading_from_file) time_entry.date = get_today(state);
         else
         {
             Day *last_day = get_last_day(state);
@@ -662,18 +752,21 @@ process_offset_time_entry(Program_State *state, Tokenizer *tokenizer, Entry_Type
     
     
     // argument 2 - required - time
-    if (success && (token.type == Token_Time))
+    if (success && (forward.peek.type == Token_Time))
     {
-        Parse_Time_Result parsed_time = parse_time(state, token);
+        advance_forward_token(&forward);
+        
+        Parse_Time_Result parsed_time = parse_time(state, forward.token);
         if (parsed_time.success)
         {
             time_entry.time = parsed_time.time;
             
             // argument 3 - optional - description
-            if (peek_token(tokenizer).type == Token_String)
+            if (forward.peek.type == Token_String)
             {
-                token = get_token(tokenizer);
-                time_entry.description = create_description(&state->element_arena, token);
+                advance_forward_token(&forward);
+                
+                time_entry.description = create_description(&state->element_arena, forward.token);
             }
         }
         else success = false;
@@ -685,17 +778,65 @@ process_offset_time_entry(Program_State *state, Tokenizer *tokenizer, Entry_Type
     {
         Print_Load_Error(state);
         printf("Incorect command usage. Use: "
-               "(add/sub) [date] (time) [\"description\"]\n");
-        print_line_with_token(token);
+               "(add/sub) [date] (time) [\"description\"]");
+        print_line_with_token(forward.token);
         Print_ClearN();
-        
-        if (token.type == Token_Identifier) rewind_tokenizer(tokenizer);
     }
     else
     {
-        process_time_entry(state, &time_entry, !in_command_line);
+        process_time_entry(state, &time_entry, state->reading_from_file);
     }
 }
+
+
+internal void
+process_show_identifier(Program_State *state, Tokenizer *tokenizer)
+{
+    
+#if 0
+    b32 success = true;
+    Token token = {};
+    Token token_peek = peek_token(tokenizer);
+    
+    time_t date_from = 0;
+    time_t date_to = 0;
+    
+    // arg 1 - optional - "from"
+    if ((token_peek.type == Token_Identifier) &&
+        (token_equals(token_peek, "from")))
+    {
+        token = get_token(tokenizer);
+        token_peek = peek_token(tokenizer);
+        
+        // arg 1.2 - required - date
+        if (token_peek.type == Token_Date)
+        {
+            token = get_token(tokenizer);
+            token_peek = peek_token(tokenizer);
+            
+            Parse_Time_Result parsed_date = parse_date(state, token);
+            if (parsed_date.success)
+            {
+                date_from = parsed_date.time;
+            }
+            else success = false;
+        }
+        else if ((token_peek.type == Token_Identifier) && 
+                 token_equals(token_peek, "today"))
+        {
+            token = get_token(tokenizer);
+            token_peek = peek_token(tokenizer);
+            
+            date_from = get_today(state);
+        }
+        else success = false;
+    }
+#endif
+    
+    
+}
+
+
 
 
 internal void 
@@ -752,33 +893,25 @@ continue; \
             {
                 if (token_equals(token, "start")) 
                 {
-                    Continue_If_Instruction_Already_Set;
-                    
-                    buffer.type = Entry_Start;
-                    buffer.instruction = Ins_Time_Entry;
+                    process_start_stop_identifier(state, &tokenizer, Entry_Start);
                 }
                 else if (token_equals(token, "stop"))
                 {
-                    Continue_If_Instruction_Already_Set;
-                    
-                    buffer.type = Entry_Stop;
-                    buffer.instruction = Ins_Time_Entry;
+                    process_start_stop_identifier(state, &tokenizer, Entry_Stop);
                 }
                 else if (token_equals(token, "add"))
                 {
-                    process_offset_time_entry(state, &tokenizer, Entry_Add, !reading_from_file);
+                    process_add_sub_identifier(state, &tokenizer, Entry_Add);
                 }
                 else if (token_equals(token, "subtract") ||
                          token_equals(token, "sub"))
                 {
-                    process_offset_time_entry(state, &tokenizer, Entry_Subtract, !reading_from_file);
+                    process_add_sub_identifier(state, &tokenizer, Entry_Subtract);
                 }
                 else if (token_equals(token, "show"))
                 {
-                    Continue_If_Instruction_Already_Set;
-                    Program_Interface_Only;
-                    
-                    buffer.instruction = Ins_Show;
+                    if (!state->reading_from_file) process_show_identifier(state, &tokenizer);
+                    else                           Command_Line_Only_Message(state, token);
                 }
                 else if (token_equals(token, "exit"))
                 {
@@ -919,6 +1052,7 @@ continue; \
                 
                 //~
                 
+#if 0                
                 case Token_Date:
                 {
                     if (buffer.instruction == Ins_Time_Entry)
@@ -1036,6 +1170,7 @@ continue; \
                         Print_ClearN();
                     }
                 } break;
+#endif
                 
                 //~
                 case Token_Unknown:
@@ -1082,18 +1217,15 @@ continue; \
                     {
                         if (buffer.date)
                         {
-                            print_days_from_range(state, &buffer.date, &buffer.date);
+                            print_days_from_range(state, buffer.date, buffer.date);
                         }
                         else if (buffer.date_from || buffer.date_to)
                         {
-                            time_t *from = (buffer.date_from) ? &buffer.date_from : NULL;
-                            time_t *to = (buffer.date_to) ? &buffer.date_to : NULL;
-                            
-                            print_days_from_range(state, from, to);
+                            print_days_from_range(state, buffer.date_from, buffer.date_to);
                         }
                         else
                         {
-                            print_days_from_range(state, NULL, NULL);
+                            print_days_from_range(state, 0, 0);
                         }
                     }
                     else if (buffer.instruction == Ins_Exit)
@@ -1124,7 +1256,7 @@ continue; \
                     }
                     else if (buffer.instruction == Ins_Time)
                     {
-                        time_t now = get_current_time(state);
+                        time_t now = get_current_timestamp(state);
                         char now_str[MAX_TIMESTAMP_STRING_SIZE];
                         get_timestamp_string(now_str, sizeof(now_str), now);
                         printf("Current time: %s\n", now_str);
@@ -1384,7 +1516,7 @@ int main(int argument_count, char **arguments)
                 if (state.day_arena.count > 0)
                 {
                     time_t today = get_today(&state);
-                    print_days_from_range(&state, &today, &today, true);
+                    print_days_from_range(&state, today, today, true);
                 }
             }
             

@@ -16,7 +16,7 @@ truncate_to_time(time_t timestamp)
 
 
 internal time_t 
-get_current_time(Program_State *state)
+get_current_timestamp(Program_State *state)
 {
     time_t now;
     time(&now);
@@ -25,10 +25,18 @@ get_current_time(Program_State *state)
     return result;
 }
 
+internal time_t
+get_time(Program_State *state)
+{
+    time_t now = get_current_timestamp(state);
+    time_t time = truncate_to_time(now);
+    return time;
+}
+
 internal time_t 
 get_today(Program_State *state)
 {
-    time_t now = get_current_time(state);
+    time_t now = get_current_timestamp(state);
     time_t today = truncate_to_date(now);
     return today;
 }

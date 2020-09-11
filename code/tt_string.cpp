@@ -240,13 +240,16 @@ print_line_with_token(Token token)
 {
     u32 len = 0;
     char *str = token.line_start;
-    while (str[0] && !is_end_of_line(str[0]))
+    if (str)
     {
-        ++str;
-        ++len;
+        while (str[0] && !is_end_of_line(str[0]))
+        {
+            ++str;
+            ++len;
+        }
+        
+        printf("\nline [%lld]: %.*s", token.line_index, len, token.line_start);
     }
-    
-    printf("line [%lld]: %.*s", token.line_index, len, token.line_start);
 }
 
 

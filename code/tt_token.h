@@ -1,7 +1,6 @@
 struct Tokenizer
 {
     char *at;
-    char *rewind_at;
     
     size_t line_count;
     char *line_start;
@@ -32,3 +31,13 @@ struct Token
     size_t line_index;
     char *line_start;
 };
+
+struct Forward_Token
+{
+    Tokenizer *tokenizer_;
+    Tokenizer peek_tokenizer_;
+    Token token;
+    Token peek;
+};
+
+

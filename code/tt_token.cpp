@@ -113,24 +113,15 @@ create_tokenizer(char *input_text)
 {
     Tokenizer tokenizer = {};
     tokenizer.at = input_text;
-    tokenizer.rewind_at = input_text;
     tokenizer.line_start = input_text;
     
     return tokenizer;
-}
-
-internal void
-rewind_tokenizer(Tokenizer *tokenizer)
-{
-    tokenizer->at = tokenizer->rewind_at;
 }
 
 
 internal Token 
 get_token(Tokenizer *tokenizer)
 {
-    tokenizer->rewind_at = tokenizer->at;
-    
     eat_all_whitespace(tokenizer);
     
     Token token = {};
@@ -203,19 +194,6 @@ get_token(Tokenizer *tokenizer)
 }
 
 
-internal Token
-peek_token(Tokenizer *tokenizer)
-{
-    // TODO: Think about saving work from peek_token for the next get_token.
-    //       But itt may prevent/complicate new tokenizer features.
-    
-    Tokenizer tokenizer_copy = *tokenizer;
-    Token result = get_token(&tokenizer_copy);
-    
-    return result;
-}
-
-
 
 internal b32 
 token_equals(Token token, char *match)
@@ -234,3 +212,27 @@ token_equals(Token token, char *match)
     b32 result = (*match == 0);
     return result;
 }
+
+
+internal Forward_Token
+create_forward_token(Tokenizer *tokenizer)
+{
+    Forward_Token result = {};
+    result.tokenizer_ = tokenizer;
+    result.peek_tokenizer_ = *result.tokenizer_;
+    
+    result.peek = get_token(&result.peek_tokenizer_);
+    
+    return result;
+}
+
+inline void
+advance_forward_token(Forward_Token *forward)
+{
+    *forward->tokenizer_ = forward->peek_tokenizer_;
+    forward->token = forward->peek;
+    
+    forward->peek = get_token(&forward->peek_tokenizer_);
+}
+
+
