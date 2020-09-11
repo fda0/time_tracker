@@ -1196,7 +1196,7 @@ load_file(Program_State *state)
         process_input(file_content, state, true);
         
         state->loaded_input_mod_time = platform_get_file_mod_time(state->input_file_full_path);
-        printf("File reloaded\n");
+        printf("File loaded\n");
     }
     else
     {
@@ -1245,6 +1245,7 @@ int main(int argument_count, char **arguments)
     alocate_arena(&state.day_arena, raw_memory_block + Megabytes(512), Megabytes(512));
     clear_memory(&state);
     
+    b32 reformat_mode = false;
     
     { //~ SCOPE: Processing of command line arugments
         Cmd_Arugment_Type type = Cmd_None;
@@ -1276,6 +1277,10 @@ int main(int argument_count, char **arguments)
                     else if (arg[1] == 'm')
                     {
                         disable_colors = true;
+                    }
+                    else if (arg[1] == 'r')
+                    {
+                        reformat_mode = true;
                     }
                     else
                     {
@@ -1347,6 +1352,12 @@ int main(int argument_count, char **arguments)
         state.change_count = 0;
     }
     
+    if (reformat_mode)
+    {
+        if (state.load_error_count == 0) printf("File reformated. Exiting.\n");
+        else printf("Reformatting skipped due to errors. Exiting.\n");
+        exit(0);
+    }
     
     
     //~ NOTE: Initialize input thread.
