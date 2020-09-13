@@ -98,16 +98,16 @@ parse_date(Program_State *state, Token token)
         // year    
         auto year = parse_number(text, 4);
         date.tm_year = year.time - 1900;
-        
         text += 4;
-        b32 dash1 = (*text++ == '-');
+        
+        b32 dash1 = is_date_separator(*text++);
         
         // month
         auto month = parse_number(text, 2);
         date.tm_mon = month.time - 1;
-        
         text += 2;
-        b32 dash2 = (*text++ == '-');
+        
+        b32 dash2 = is_date_separator(*text++);
         
         // day
         auto day = parse_number(text, 2);
@@ -157,7 +157,7 @@ parse_time(Program_State *state, Token token)
                 result.time += digit_value;
                 multiplier *= 10;
             }
-            else if (c == ':')
+            else if (is_time_separator(c))
             {
                 if (had_first_colon)
                 {
@@ -697,8 +697,9 @@ process_start_stop_identifier(Program_State *state, Tokenizer *tokenizer, Entry_
     if (!success)
     {
         Print_Load_Error(state);
-        printf("Incorect command usage. Use: "
-               "(add/sub) [date] (time) [\"description\"]");
+        printf("Incorect command usage. Use:\n"
+               "%s [yyyy-MM-dd] (hh:mm) [\"description\"]",
+               (type == Entry_Add) ? "add" : "sub");
         print_line_with_token(forward.token);
         Print_ClearN();
     }
@@ -777,8 +778,9 @@ process_add_sub_identifier(Program_State *state, Tokenizer *tokenizer, Entry_Typ
     if (!success)
     {
         Print_Load_Error(state);
-        printf("Incorect command usage. Use: "
-               "(add/sub) [date] (time) [\"description\"]");
+        printf("Incorect command usage. Use:\n"
+               "%s [yyyy-MM-dd] (hh:mm) [\"description\"]",
+               (type == Entry_Add) ? "add" : "sub");
         print_line_with_token(forward.token);
         Print_ClearN();
     }
@@ -792,48 +794,84 @@ process_add_sub_identifier(Program_State *state, Tokenizer *tokenizer, Entry_Typ
 internal void
 process_show_identifier(Program_State *state, Tokenizer *tokenizer)
 {
-    
-#if 0
     b32 success = true;
-    Token token = {};
-    Token token_peek = peek_token(tokenizer);
+    Forward_Token forward = create_forward_token(tokenizer);
     
-    time_t date_from = 0;
-    time_t date_to = 0;
+    time_t date_ranges[2] = {};
+    char *date_range_identifiers[2] = {"from", "to"};
     
-    // arg 1 - optional - "from"
-    if ((token_peek.type == Token_Identifier) &&
-        (token_equals(token_peek, "from")))
+    // arg 1 (from), 2 (date), 3 (to), 4 (date)
+    for (s32 date_index = 0;
+         date_index < Array_Count(date_ranges);
+         ++date_index)
     {
-        token = get_token(tokenizer);
-        token_peek = peek_token(tokenizer);
+        time_t *date = date_ranges + date_index;
+        char *identifier = date_range_identifiers[date_index];
         
-        // arg 1.2 - required - date
-        if (token_peek.type == Token_Date)
+        // arg - optional - "from/to"
+        if (success &&
+            (forward.peek.type == Token_Identifier) &&
+            (token_equals(forward.peek, identifier)))
         {
-            token = get_token(tokenizer);
-            token_peek = peek_token(tokenizer);
+            advance_forward_token(&forward);
             
-            Parse_Time_Result parsed_date = parse_date(state, token);
-            if (parsed_date.success)
+            // arg - required - date/today
+            if (forward.peek.type == Token_Date)
             {
-                date_from = parsed_date.time;
+                advance_forward_token(&forward);
+                
+                Parse_Time_Result parsed_date = parse_date(state, forward.token);
+                if (parsed_date.success)
+                {
+                    *date = parsed_date.time;
+                }
+                else success = false;
+            }
+            else if ((forward.peek.type == Token_Identifier) && 
+                     token_equals(forward.peek, "today"))
+            {
+                advance_forward_token(&forward);
+                
+                *date = get_today(state);
             }
             else success = false;
         }
-        else if ((token_peek.type == Token_Identifier) && 
-                 token_equals(token_peek, "today"))
+    }
+    
+    
+    // arg - optional date
+    if (success &&
+        (!date_ranges[0] && !date_ranges[1]) &&
+        (forward.peek.type == Token_Date))
+    {
+        advance_forward_token(&forward);
+        
+        Parse_Time_Result parsed_date = parse_date(state, forward.token);
+        if (parsed_date.success)
         {
-            token = get_token(tokenizer);
-            token_peek = peek_token(tokenizer);
-            
-            date_from = get_today(state);
+            date_ranges[0] = parsed_date.time;
+            date_ranges[1] = parsed_date.time;
         }
         else success = false;
     }
-#endif
     
     
+    
+    if (!success)
+    {
+        Print_Load_Error(state);
+        printf("Incorect command usage. Use:\n"
+               "show\n"
+               "show [yyyy-MM-dd]\n"
+               "show [from yyyy-MM-dd] [to yyyy-MM-dd]\n"
+               );
+        print_line_with_token(forward.token);
+        Print_ClearN();
+    }
+    else
+    {
+        print_days_from_range(state, date_ranges[0], date_ranges[1]);
+    }
 }
 
 

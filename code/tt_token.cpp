@@ -70,6 +70,20 @@ is_number(char c)
     return result;
 }
 
+inline b32
+is_date_separator(char c)
+{
+    b32 result = ((c == '-') || (c == '.'));
+    return result;
+}
+
+inline b32
+is_time_separator(char c)
+{
+    b32 result = (c == ':');
+    return result;
+}
+
 internal void 
 eat_all_whitespace(Tokenizer *tokenizer)
 {
@@ -174,11 +188,14 @@ get_token(Tokenizer *tokenizer)
                 token.type = Token_Time;
                 
                 while (is_number(tokenizer->at[0]) ||
-                       tokenizer->at[0] == '-' ||
-                       tokenizer->at[0] == ':')
+                       is_date_separator(tokenizer->at[0]) ||
+                       is_time_separator(tokenizer->at[0]))
                 {
                     ++tokenizer->at;
-                    if (tokenizer->at[0] == '-') token.type = Token_Date;
+                    if (is_date_separator(tokenizer->at[0])) 
+                    {
+                        token.type = Token_Date;
+                    }
                 }
                 
                 token.text_length = tokenizer->at - token.text;
