@@ -167,6 +167,19 @@ get_token(Tokenizer *tokenizer)
             
         } break;
         
+        case '-':
+        case '+':
+        {
+            token.type = Token_Offset;
+            token.text = tokenizer->at;
+            do
+            {
+                ++tokenizer->at;
+            } while (tokenizer->at[0] && is_number(tokenizer->at[0]));
+            
+            token.text_length = tokenizer->at - token.text;
+        } break;
+        
         default:
         {
             if (is_alpha(c))
@@ -175,8 +188,7 @@ get_token(Tokenizer *tokenizer)
                 
                 while (is_alpha(tokenizer->at[0]) ||
                        is_number(tokenizer->at[0]) ||
-                       tokenizer->at[0] == '_' ||
-                       tokenizer->at[0] == '-')
+                       tokenizer->at[0] == '_')
                 {
                     ++tokenizer->at;
                 }

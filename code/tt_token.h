@@ -17,6 +17,7 @@ enum Token_Type
     Token_Identifier,
     Token_Date,
     Token_Time,
+    Token_Offset,
     
     Token_End_Of_Stream
 };

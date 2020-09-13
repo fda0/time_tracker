@@ -134,8 +134,8 @@ struct Program_State
     time_t timezone_offset;
     File_Time loaded_input_mod_time;
     
-    s32 save_error_count;
-    s32 load_error_count;
+    s32 logic_error_count;
+    s32 parse_error_count;
     s32 change_count;
     
     b32 reading_from_file;
@@ -151,56 +151,8 @@ struct Parse_Time_Result
 
 struct Parse_Number_Result
 {
-    s32 time;
+    s32 number;
     b32 success;
 };
-
-
-enum Instruction_Type
-{
-    Ins_None,
-    Ins_Unsupported,
-    
-    Ins_Time_Entry,
-    Ins_Show,
-    Ins_Save,
-    Ins_Archive,
-    Ins_Load,
-    Ins_Time,
-    Ins_Edit,
-    Ins_Clear,
-    Ins_Help,
-    
-    Ins_Exit
-};
-
-enum Instruction_Flag : u32
-{
-    Flag_No_Save = (1 << 0),
-};
-
-
-enum Show_Input
-{
-    ShowInput_One_Day,
-    ShowInput_From,
-    ShowInput_To
-};
-
-struct Processing_Data
-{
-    Instruction_Type instruction;
-    u32 flags;
-    Show_Input show_input;
-    
-    Entry_Type type;
-    time_t date;
-    time_t date_from;
-    time_t date_to;
-    time_t time;
-    char *description;
-    
-};
-
 
 
