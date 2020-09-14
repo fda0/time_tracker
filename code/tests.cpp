@@ -5,8 +5,6 @@
 
 int main()
 {
-    printf("~ ~ ~ ~ TESTS ~ ~ ~ ~\n");
-    
     char *output_dir = "output";
     CreateDirectoryA(output_dir, NULL);
     printf("deleted: ");
@@ -28,13 +26,15 @@ int main()
             } while (FindNextFile(file_handle, &file_data) != 0);
         } 
     }
-    printf("\n");
     
     
     char *ref_dir = "referece";
     CreateDirectoryA(ref_dir, NULL);
     char *input_dir = "input";
     CreateDirectoryA(input_dir, NULL);
+    
+    int file_counter = 0;
+    int success_counter = 0;
     
     {
         WIN32_FIND_DATAA file_data = {};
@@ -51,13 +51,14 @@ int main()
                     snprintf(output_path, sizeof(output_path), "%s\\%s", output_dir, file_data.cFileName);
                     
                     CopyFileA(input_path, output_path, false);
-                    printf("copy: \"%s\" > \"%s\"  ", input_path, output_path);
+                    //printf("copy: \"%s\" > \"%s\"  ", input_path, output_path);
                     
                     // NOTE: Run TimeTracker on output/
                     char command[1024];
                     snprintf(command, sizeof(command), 
                              "..\\build\\tt_main.exe -r -d \"%s\" > nul", output_path);
-                    printf("command: %s\n", command);
+                    //printf("command: %s\n", command);
+                    ++file_counter;
                     
                     system(command);
                     
@@ -94,7 +95,8 @@ int main()
                                 
                                 if ((ref_c == EOF) || (out_c == EOF)) 
                                 {
-                                    printf("[success] %s\n", file_data.cFileName);
+                                    printf("[success] %s", file_data.cFileName);
+                                    ++success_counter;
                                     break;
                                 }
                                 
@@ -123,6 +125,8 @@ int main()
         } 
     }
     
+    
+    printf("~ ~ ~    success rate:  %d  /  %d    ~ ~ ~\n", success_counter, file_counter);   
     
     return 0;
 }

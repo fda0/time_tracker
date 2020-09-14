@@ -60,8 +60,8 @@ get_date_string(char *output, u32 output_size, time_t timestamp)
 
 
 #define MAX_PROGRESS_BAR_SIZE sizeof("[++++ ++++ ++++ ++++ ++++ +++-> stop is missing!")
-internal s32 
-get_progress_bar_string(char *output, s32 output_size, time_t time, Missing_Type type)
+internal void 
+get_progress_bar_string(char *output, s32 output_size, time_t time, Missing_Ending_Type missing_ending)
 {
     // NOTE: Max output:
     Assert(output_size >= MAX_PROGRESS_BAR_SIZE);
@@ -70,47 +70,67 @@ get_progress_bar_string(char *output, s32 output_size, time_t time, Missing_Type
     s32 hours = (s32)(time / Hours(1) % (Days(1) / Hours(1)));
     s32 minutes = (s32)(time / Minutes(1)) % (Hours(1) / Minutes(1));
     
-    s32 i = 0;
-    s32 symbol_counter = 0;
-    output[i++] = '[';
-    while (hours + 1 > symbol_counter)
+    b32 print_open_bracket = true;
+    b32 print_minutes_bit = (minutes > 0);
+    
+    s32 signs_to_print = hours + (print_minutes_bit ? 1 : 0);
+    s32 signs_printed = 0;
+    b32 printed_separator_recently = true;
+    s32 print_align_spaces = (4 - (signs_to_print % 4)) % 4;
+    
+    char *close_bracket_string;
+    if (missing_ending == MissingEnding_None)         close_bracket_string = "]";
+    else if (missing_ending == MissingEnding_Assumed) close_bracket_string = ")";
+    else                                              close_bracket_string = "> stop is missing!";
+    
+    
+    for (s32 index = 0;
+         index < output_size;
+         ++index)
     {
-        if (symbol_counter > 0 && 
-            ((symbol_counter) % 4 == 0))
+        if (print_open_bracket)
         {
-            output[i++] = ' ';
+            output[index] = '[';
+            print_open_bracket = false;
         }
-        
-        if (hours == symbol_counter)
+        else if (signs_printed < signs_to_print)
         {
-            if (minutes > 0) output[i++] = '-';
-            else break;
+            if (!printed_separator_recently && 
+                (signs_printed % 4 == 0))
+            {
+                output[index] = ' ';
+                printed_separator_recently = true;
+            }
+            else
+            {
+                char sign;
+                if (print_minutes_bit && (signs_printed == (signs_to_print - 1))) sign = '-';
+                else                                                              sign = '+';
+                
+                
+                output[index] = sign;
+                ++signs_printed;
+                printed_separator_recently = false;
+            }
+        }
+        else if (print_align_spaces > 0)
+        {
+            output[index] = ' ';
+            --print_align_spaces;
+        }
+        else if (*close_bracket_string)
+        {
+            output[index] = *close_bracket_string;
+            ++close_bracket_string;
         }
         else
         {
-            output[i++] = '+';
+            output[index] = 0;
+            break;
         }
-        
-        ++symbol_counter;
     }
     
-    for (int space_index = 0;
-         space_index < (4 - (symbol_counter % 4)) % 4;
-         ++space_index)
-    {
-        output[i++] = ' ';
-    }
-    
-    if (type == Missing_None)          output[i++] = ']';
-    if (type == Missing_Assumed)       output[i++] = ')';
-    else if (type == Missing_Critical) 
-    { 
-        i += sprintf(&output[i], "> stop is missing!");
-    }
-    
-    output[i++] = 0;
-    Assert(i <= output_size);
-    return i;
+    output[output_size - 1] = 0;
 }
 
 #define MAX_SUM_AND_PROGRESS_BAR_STRING_SIZE (MAX_TIME_STRING_SIZE + MAX_PROGRESS_BAR_SIZE + 16)
@@ -123,7 +143,7 @@ get_sum_and_progress_bar_string(char *output, s32 output_size, Day *day)
     get_time_string(time_str, sizeof(time_str), day->sum);
     
     char bar_str[MAX_PROGRESS_BAR_SIZE];
-    get_progress_bar_string(bar_str, sizeof(bar_str), day->sum, day->missing);
+    get_progress_bar_string(bar_str, sizeof(bar_str), day->sum, day->missing_ending);
     
     snprintf(output, output_size, "sum: %s\t%s", time_str, bar_str);
 }

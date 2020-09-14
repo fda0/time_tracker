@@ -54,3 +54,34 @@ initialize_timezone_offset(Program_State *state)
     time_t offset = utc_test_time - test_time;
     state->timezone_offset = offset;
 }
+
+
+struct Boundries_Result
+{
+    time_t day_count;
+    
+    time_t begin;
+    time_t one_day_past_end;
+};
+
+internal Boundries_Result
+get_month_boundries(time_t timestamp)
+{
+    Boundries_Result result = {};
+    
+    tm *date = gmtime(&timestamp);
+    date->tm_sec = 0;
+    date->tm_min = 0;
+    date->tm_hour = 0;
+    date->tm_mday = 1;
+    
+    result.begin = platform_tm_to_time(date);
+    
+    date->tm_mon += 1;
+    result.one_day_past_end = platform_tm_to_time(date);
+    
+    result.day_count = ((result.one_day_past_end / Days(1)) - 
+                        (result.begin / Days(1)));
+    
+    return result;
+}

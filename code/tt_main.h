@@ -103,18 +103,21 @@ struct Time_Entry
     Time_Entry *next_in_day;
 };
 
-enum Missing_Type
+enum Missing_Ending_Type
 {
-    Missing_None,
-    Missing_Assumed,
-    Missing_Critical
+    MissingEnding_None,
+    MissingEnding_Assumed,
+    MissingEnding_Critical
 };
+
+
+#define EMPTY_SUM INT_MIN
 
 struct Day
 {
     time_t date_start;
     s32 sum;
-    Missing_Type missing;
+    Missing_Ending_Type missing_ending;
     Time_Entry first_time_entry;
 };
 
