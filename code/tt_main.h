@@ -81,6 +81,9 @@ struct Thread_Memory
 
 
 
+//~ NOTE: Project includes
+#include "tt_files.h"
+
 
 //~ NOTE: Data types
 
@@ -133,6 +136,7 @@ struct Program_State
     char input_file_full_path[MAX_PATH];
     char input_file_name[MAX_PATH];
     char archive_directory[MAX_PATH];
+    File_Path2 executable_path2;
     
     time_t timezone_offset;
     File_Time loaded_input_mod_time;

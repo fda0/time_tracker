@@ -70,11 +70,12 @@ internal void platform_open_in_default_editor(char *file_name)
     ShellExecuteA(NULL, "open", file_name, NULL, NULL, SW_SHOWNORMAL);
 }
 
-internal void platform_get_executable_path(char *output, u32 output_size)
+
+internal void 
+platform_get_executable_path(char *output, u32 output_size)
 {
     GetModuleFileNameA(0, output, output_size);
 }
-
 
 
 

@@ -171,37 +171,6 @@ get_day_of_the_week_string(char *output, s32 output_size, time_t timestamp)
 }
 
 
-internal char *
-get_after_last_slash_pointer(char *path)
-{
-    char *result = NULL;
-    s32 len = (s32)strlen(path);
-    
-    for (s32 index = len - 1; 
-         index >= 0; 
-         --index)
-    {
-        if (path[index] == '\\' || 
-            path[index] == '/')
-        {
-            result = path + index + 1;
-            break;
-        }
-    }
-    
-    return result;
-}
-
-internal void 
-terminate_string_after_last_slash(char *path)
-{
-    char *after = get_after_last_slash_pointer(path);
-    if (after)
-    {
-        *after = 0;
-    }
-}
-
 
 
 //~ NOTE: Print functions

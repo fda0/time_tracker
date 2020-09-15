@@ -5,33 +5,6 @@
 
 #include "tt_token.h"
 
-internal char *
-read_entire_file_and_null_terminate(Memory_Arena *arena, char *file_name)
-{
-    char *result = 0;
-    
-    FILE *file = fopen(file_name, "rb");
-    if(file)
-    {
-        fseek(file, 0, SEEK_END);
-        size_t file_size = ftell(file);
-        fseek(file, 0, SEEK_SET);
-        
-        result = Push_Array(arena, file_size + 1, char); 
-        fread(result, file_size, 1, file);
-        result[file_size] = 0;
-        
-        fclose(file);
-    }
-    else
-    {
-        printf("Failed to read from file: %s\n", file_name);
-        exit(1);
-    }
-    
-    return result;
-}
-
 
 
 inline b32 

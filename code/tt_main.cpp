@@ -16,6 +16,7 @@
 
 #include "tt_main.h"
 
+#include "tt_files.cpp"
 #include "tt_token.cpp"
 #include "tt_string.cpp"
 #include "tt_time.cpp"
@@ -1179,6 +1180,14 @@ process_input(char *content, Program_State *state, b32 reading_from_file,
                         platform_open_in_default_editor(state->input_file_full_path);
                     }
                 }
+                else if (token_equals(token, "dir"))
+                {
+                    if (state->reading_from_file) Command_Line_Only_Message(state, token);
+                    else
+                    {
+                        platform_open_in_default_editor(state->executable_path2.directory);
+                    }
+                }
                 else if (token_equals(token, "clear"))
                 {
                     if (state->reading_from_file) Command_Line_Only_Message(state, token);
@@ -1206,10 +1215,12 @@ process_input(char *content, Program_State *state, b32 reading_from_file,
                                "show\t\t\tshows current history\n"
                                "show from yyyy-MM-dd to yyyy-MM-dd\n"
                                "show yyyy-MM-dd\n"
+                               "summary [d/m/y]\n"
                                "time\t\t\tshows current time\n"
                                "clear\t\t\tclears the screen\n"
                                "edit\t\t\topens database file in your default editor\n"
                                "\t\t\tworks best if your editor supports hot-loading\n"
+                               "dir\t\topens directory with exe\n"
                                
                                "\nThese actions happen automatically:\n"
                                "save\t\t\tforces save\n"
@@ -1260,6 +1271,7 @@ clear_memory(Program_State *state)
     clear_arena(&state->day_arena);
     clear_arena(&state->element_arena);
 }
+
 
 
 internal void 
@@ -1389,37 +1401,62 @@ int main(int argument_count, char **arguments)
     initialize_timezone_offset(&state);
     
     
-    char executable_directory[MAX_PATH];
-    platform_get_executable_path(executable_directory, sizeof(executable_directory));
-    terminate_string_after_last_slash(executable_directory);
+    {    
+        char executable_path[MAX_PATH];
+        platform_get_executable_path(executable_path, sizeof(executable_path));
+        state.executable_path2 = get_file_path_divided(executable_path);
+    }
     
     
     if (!state.input_file_full_path[0])
     {
-        strncpy(state.input_file_name, "time_tracker.txt", Array_Count(state.input_file_name));
+        // NOTE: Default database name
+        copy_path_with_different_extension(state.input_file_name, sizeof(state.input_file_name), state.executable_path2.file_name, "txt");
+        
         snprintf(state.input_file_full_path, Array_Count(state.input_file_full_path), 
-                 "%s%s", executable_directory, state.input_file_name);
+                 "%s%s", 
+                 state.executable_path2.directory, state.input_file_name);
     }
     else
     {
-        char *file_name = get_after_last_slash_pointer(state.input_file_full_path);
-        if (file_name)
-        {
-            strncpy(state.input_file_name, file_name, Array_Count(state.input_file_name));
-        }
-        else
-        {
-            strncpy(state.input_file_name, state.input_file_full_path, Array_Count(state.input_file_name));
-        }
+        // NOTE: Custom database name
+        File_Path2 custom_path2 = get_file_path_divided(state.input_file_full_path);
+        strncpy(state.input_file_name, custom_path2.file_name, Array_Count(state.input_file_name));
     }
     
-    sprintf(state.archive_directory, "%sarchive", executable_directory);
+    sprintf(state.archive_directory, "%sarchive", state.executable_path2.directory);
     platform_add_ending_slash_to_path(state.archive_directory);
     platform_create_directory(state.archive_directory);
     
     
     
-    //~ NOTE(mautesz): Load file. Save with better formatting if there was no load errors.
+    //~ NOTE: Load file. Save with better formatting if there was no load errors.
+    
+    { // SCOPE: Create new database file if it doesn't exist
+        char *path = state.input_file_full_path;
+        FILE *file_read = fopen(path, "rb");
+        if (file_read)
+        {
+            fclose(file_read);
+        }
+        else
+        {
+            printf("No database with name: %s\n", path);
+            
+            FILE *file_write = fopen(path, "ab");
+            if (file_write)
+            {
+                printf("Created new file: %s\n", path);
+                fclose(file_write);
+            }
+            else
+            {
+                printf("Failed to create file: %s\n", path);
+                exit(1);
+            }
+        }
+    }
+    
     
     load_file(&state);
     b32 did_save_on_first_load = false;
