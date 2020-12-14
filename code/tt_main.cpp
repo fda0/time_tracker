@@ -24,42 +24,29 @@
 
 internal void load_file(Program_State *state);
 
-inline Day *
-get_day(Memory_Arena *day_arena, u32 day_index)
+
+internal Record *
+get_last_record(Program_State *state)
 {
-    Day *result = NULL;
-    if (day_index < day_arena->count)
+    Record *result = nullptr;
+    s64 count = state->records.count();
+    if (count)
     {
-        result = ((Day *)day_arena->base) + day_index;
+        result = state->records.at(count-1);
     }
-    
     return result;
 }
 
-internal Day *
-get_last_day(Program_State *state)
-{
-    Day *last_day = get_day(&state->day_arena, state->day_arena.count - 1);
-    return last_day;
-}
 
-
-internal char *
-create_description(Memory_Arena *arena, Token token)
+internal Description
+create_description(Token token)
 {
-    // TODO: Maybe descriptions should go through hash table to avoid duplication.
     Assert(token.type == Token_String);
     
-    char *result = Push_Array(arena, token.text_length + 1, char);
-    char *dest = result;
-    for (u32 index = 0;
-         index < token.text_length; 
-         ++index, ++dest)
-    {
-        *dest = token.text[index];
-    }
+    Description result;
+    result.length = (s32)token.text_length;
+    result.content = token.text;
     
-    *dest = 0;
     return result;
 }
 
@@ -81,15 +68,15 @@ parse_number(char *src, s32 count)
         result.number += to_add;
     }
     
-    result.success = true;
+    result.is_valid = true;
     return result;
 }
 
-internal Parse_Time_Result 
+internal Parse_Date_Result 
 parse_date(Program_State *state, Token token)
 {
     // NOTE: Supported format: 2020-12-31
-    Parse_Time_Result result = {};
+    Parse_Date_Result result = {};
     
     if (token.text_length == (4 + 1 + 2 + 1 + 2))
     {
@@ -115,11 +102,11 @@ parse_date(Program_State *state, Token token)
         date.tm_mday = day.number;
         
         
-        result.time = platform_tm_to_time(&date);
-        result.success = (year.success && month.success && day.success && dash1 && dash2);
+        result.date = platform_tm_to_time(&date);
+        result.is_valid = (year.is_valid && month.is_valid && day.is_valid && dash1 && dash2);
     }
     
-    if (!result.success)
+    if (!result.is_valid)
     {
         Print_Parse_Error(state);
         printf("Bad date format!");
@@ -172,10 +159,10 @@ parse_time(Program_State *state, Token token)
             }
         }
         
-        result.success = true;
+        result.is_valid = true;
     }
     
-    if (!result.success)
+    if (!result.is_valid)
     {
         Print_Parse_Error(state);
         printf("Bad time format!");
@@ -190,166 +177,221 @@ parse_time(Program_State *state, Token token)
 
 
 
-internal void 
-process_day(Program_State *state, Day *day, b32 print, FILE *current_file = NULL)
+
+inline b32
+are_in_same_day(Record *record_a, Record *record_b)
 {
-    Time_Entry *start = 0;
-    day->missing_ending = MissingEnding_None;
-    day->sum = 0;
-    s32 offset_sum = 0;
-    
-    for (Time_Entry *entry = &day->first_time_entry;
-         entry;
-         entry = entry->next_in_day)
-    {
-        if (entry->type == Entry_Add ||
-            entry->type == Entry_Subtract)
-        {
-            s32 value = (s32)entry->time;
-            if (entry->type == Entry_Subtract) value *= -1;
-            
-            day->sum += value;
-            
-            if (print && entry->description)
-            {
-                using namespace Global_Color;
-                print_offset(value);
-                printf(" \t%s\"%s\"%s\n", f_desc, entry->description, f_reset);
-            }
-            else
-            {
-                offset_sum += value;
-            }
-        }
-        else if (entry->type == Entry_Start)
-        {
-            if (start)
-            {
-                fprint_logic_error_message(state, current_file, "two start commands in a row - stop is missing");
-                return;
-            }
-            
-            start = entry;
-        }
-        else if (entry->type == Entry_Stop)
-        {
-            if (!start)
-            {
-                fprint_logic_error_message(state, current_file, "stop is missing its start");
-                return;
-            }
-            
-            
-            if (entry->date == 0) entry->date = start->date;
-            
-            time_t start_time = start->date + start->time;
-            time_t stop_time = entry->date + entry->time;
-            
-            if (stop_time < start_time)
-            {
-                if (stop_time + Days(1) > start_time)
-                {
-                    entry->date += Days(1);
-                    stop_time += Days(1);
-                }
-            }
-            
-            if (stop_time < start_time)
-            {
-                fprint_logic_error_message(state, current_file, "stop time is earlier than start time");
-                return;
-            }
-            
-            
-            day->sum += (s32)(stop_time - start_time);
-            
-            if (print) print_work_time_row(start, entry, offset_sum);
-            
-            start = NULL;
-            offset_sum = 0;
-        }
-    }
-    
-    
-    if (start) // NOTE: Day ends with start - missing end entry.
-    {
-        time_t now = get_current_timestamp(state);
-        
-        time_t start_time = start->date + start->time;
-        
-        if (now >= start_time &&
-            now - Days(1) <= start_time)
-        {
-            day->missing_ending = MissingEnding_Assumed;
-            day->sum += (s32)(now - start_time);
-            
-            if (print) 
-            {
-                print_work_time_row(start, NULL, offset_sum, "now");
-                offset_sum = 0;
-            }
-        }
-        else
-        {
-            day->missing_ending = MissingEnding_Critical;
-            
-            if (print) 
-            {
-                print_work_time_row(start, 0, offset_sum, "...");
-                offset_sum = 0;
-            }
-            
-            fprint_logic_error_message(state, current_file, "Missing last stop for a day");
-        }
-    }
-    
-    if (print && offset_sum != 0)
-    {
-        print_offset(offset_sum);
-        printf("\n");
-    }
+    b32 result = record_a->date == record_b->date;
+    return result;
 }
 
 
-internal void 
-print_days_from_range(Program_State *state, time_t date_begin, time_t date_end, 
-                      b32 alternative_colors = false)
+struct Day_Sum_Result
 {
-    for (u32 day_index = 0;
-         day_index < state->day_arena.count;
-         ++day_index)
+    time32 sum;
+    Missing_Ending missing_ending;
+};
+
+internal Day_Sum_Result
+calculate_sum_for_day(Program_State *state, s64 starting_index)
+{
+    date64 range_start = 0;
+    Day_Sum_Result result = {};
+    date64 day = state->records.at(starting_index)->date;
+    
+    s64 record_count = state->records.count();
+    for (s64 index = starting_index;
+         index < record_count;
+         ++index)
     {
-        Day *day = get_day(&state->day_arena, day_index);
+        Record *record = state->records.at(index);
         
-        if ((date_end) && (day->date_start > date_end)) break;
-        if ((date_begin) && (day->date_start < date_begin)) continue;
-        
-        
-        
-        char date_str[64];
-        get_date_string(date_str, sizeof(date_str), day->date_start);
-        
-        char day_of_week[32];
-        get_day_of_the_week_string(day_of_week, sizeof(day_of_week), day->date_start);
-        
-        using namespace Global_Color;
-        if (alternative_colors) 
+        if (day != record->date &&
+            range_start == 0) 
         {
-            printf("\n%s%s%s %s%s%s\n", f_black, b_date, date_str, day_of_week, f_reset, b_reset);
+            break;
+        }
+        
+        if (record->type == Record_TimeStop ||
+            record->type == Record_TimeStart)
+        {
+            if (range_start)
+            {
+                date64 range_end = record->date + record->value;
+                time32 delta = (time32)(range_end - range_start);
+                result.sum += delta;
+            }
+            
+            if (day != record->date)
+            {
+                range_start = 0;
+                break;
+            }
+        }
+        
+        if (record->type == Record_TimeStart)
+        {
+            range_start = record->date + record->value;
+        }
+        else if (record->type == Record_TimeStop)
+        {
+            range_start = 0;
+        }
+        else if (day == record->date)
+        {
+            if (record->type == Record_TimeAdd)
+            {
+                result.sum += record->value;
+            }
+            else if (record->type == Record_TimeSub)
+            {
+                result.sum -= record->value;
+            }
+        }
+    }
+    
+    
+    if (range_start == 0)
+    {
+        result.missing_ending = MissingEnding_None;
+    }
+    else
+    {
+        date64 now = get_current_timestamp(state);
+        date64 delta = now - range_start;
+        if (delta > Days(1))
+        {
+            result.missing_ending = MissingEnding_Critical;
         }
         else
         {
-            printf("\n%s%s %s%s\n", f_date, date_str, day_of_week, f_reset);
+            result.missing_ending = MissingEnding_Assumed;
+            result.sum += (time32)delta;
+        }
+    }
+    
+    return result;
+}
+
+
+inline b32
+compare_record_type_to_mask(Dynamic_Array<Record> *records, s64 index, s32 type_mask)
+{
+    b32 result = false;
+    if (records->count() > index && 0 < index)
+    {
+        Record *record = records->at(index);
+        result = record->type & type_mask;
+    }
+    
+    return result;
+}
+
+
+
+internal void 
+print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
+                      b32 alternative_colors = false)
+{
+    // TODO: Add/Sub descriptions contained in range should push their descriptions to transient_arena
+    // and maybe exclude them from sum... example:
+    // 16:30 -> 18:30  +00:30 "Working on X" -00:15 "Tea break"
+    
+    
+    using namespace Global_Color;
+    
+    s64 record_count = state->records.count();
+    
+    b32 is_new_day = true;
+    s64 active_day_index = 0;
+    b32 range_open = false;
+    time32 sum = 0;
+    
+    for (s64 record_index = 0;
+         record_index < record_count;
+         ++record_index)
+    {
+        Record *record = state->records.at(record_index);
+        
+        // skip if not in range
+        if ((date_end) && (record->date > date_end)) break;
+        if ((date_begin) && (record->date < date_begin)) continue;
+        
+        
+        // print day header
+        if (is_new_day)
+        {
+            Str32 date_str = get_date_string(record->date);
+            Str32 day_of_week = get_day_of_the_week_string(record->date);
+            
+            if (alternative_colors) {
+                printf("\n%s%s%s %s%s%s\n", 
+                       f_black, b_date, date_str.str, day_of_week.str, f_reset, b_reset);
+            } else {
+                printf("\n%s%s %s%s\n", 
+                       f_date, date_str.str, day_of_week.str, f_reset);
+            }
         }
         
         
-        process_day(state, day, true);
+        //~ print content
+        
+        Str32 time_str = get_time_string(record->value);
+        
+        if (record->type == Record_TimeStop) { 
+            printf(time_str.str);
+            range_open = false;
+        }
+        else if (record->type == Record_TimeAdd) { sum += record->value; }
+        else if (record->type == Record_TimeSub) { sum -= record->value; }
+        else if (range_open && record->type == Record_TimeStart) {
+            printf(time_str.str);
+            range_open = false;
+        }
+        
+        if (!range_open)
+        {
+            if (sum)
+            {
+                char sign = '+';
+                if (sum < 0)
+                {
+                    sign = '-';
+                    sum = -sum;
+                }
+                
+                
+                Str32 sum_str = get_time_string(sum);
+                
+                printf("\t%c%s", sign, sum_str.str);
+                sum = 0;
+            }
+            
+            printf("\n");
+            
+            
+            if (record->type == Record_TimeStart)
+            {
+                printf("%s -> ", time_str.str);
+                range_open = true;
+            }
+        }
         
         
-        char sum_bar_str[MAX_SUM_AND_PROGRESS_BAR_STRING_SIZE];
-        get_sum_and_progress_bar_string(sum_bar_str, sizeof(sum_bar_str), day);
+        // __prepare next iteration + get sum___
+        Record *next_record = record + 1;
+        is_new_day = ((record_index == record_count-1) || 
+                      !are_in_same_day(record, next_record));
         
-        printf("%s%s%s\n", f_sum, sum_bar_str, f_reset);
+        if (is_new_day)
+        {
+            Day_Sum_Result sum_result = calculate_sum_for_day(state, active_day_index);
+            
+            Str128 sum_bar = get_sum_and_progress_bar_string(sum_result.sum, sum_result.missing_ending);
+            printf("%s%s%s\n", f_sum, sum_bar.str, f_reset);
+            
+            active_day_index = record_index;
+        }
     }
 }
 
@@ -358,19 +400,19 @@ print_days_from_range(Program_State *state, time_t date_begin, time_t date_end,
 internal void 
 archive_current_file(Program_State *state, b32 long_format = false)
 {
-    time_t now = get_current_timestamp(state);
+    date64 now = get_current_timestamp(state);
     
-    char timestamp[MAX_PATH];
-    get_timestamp_string_for_file(timestamp, sizeof(timestamp), now, long_format);
+    Str128 timestamp = get_timestamp_string_for_file(now, long_format);
     
     char archive_file_name[MAX_PATH];
     snprintf(archive_file_name, sizeof(archive_file_name), "%s%s_%s.txt", 
-             state->archive_directory, state->input_file_name, timestamp);
+             state->archive_directory, state->input_file_name, timestamp.str);
     
     platform_copy_file(state->input_file_full_path, archive_file_name);
     
     if (long_format) printf("File archived as: %s\n", archive_file_name);
 }
+
 
 
 internal void 
@@ -383,72 +425,83 @@ save_to_file(Program_State *state)
     FILE *file = fopen(state->input_file_full_path, "w");
     if (file)
     {
-        for (u32 day_index = 0;
-             day_index < state->day_arena.count;
-             ++day_index)
+        s64 record_count = state->records.count();
+        b32 is_new_day = true;
+        s64 active_day_index = 0;
+        
+        for (s64 record_index = 0;
+             record_index < record_count;
+             ++record_index)
         {
-            Day *day = get_day(&state->day_arena, day_index);
-            process_day(state, day, false, file);
+            Record *record = state->records.at(record_index);
             
-            char day_of_week_str[16];
-            get_day_of_the_week_string(day_of_week_str, sizeof(day_of_week_str), day->date_start);
-            fprintf(file, "// %s\n", day_of_week_str);
-            
-            b32 first_entry = true;
-            
-            for (Time_Entry *entry = &day->first_time_entry;
-                 entry;
-                 entry = entry->next_in_day, first_entry = false)
+            // print day header comment
+            if (is_new_day)
             {
-                char *command = NULL;
-                if (entry->type == Entry_Start) command = "start";
-                else if (entry->type == Entry_Stop) command = "stop";
-                else if (entry->type == Entry_Add) command = "add";
-                else if (entry->type == Entry_Subtract) command = "sub";
-                else
-                {
-                    Invalid_Code_Path;
-                    continue;
-                }
-                
-                fprintf(file, "%s", command);
-                
-                
-                
-                if (first_entry || 
-                    (entry->date != day->date_start))
-                {
-                    char date_str[MAX_TIMESTAMP_STRING_SIZE];
-                    get_date_string(date_str, sizeof(date_str), entry->date);
-                    fprintf(file, " %s", date_str);
-                }
-                
-                
-                
-                char time_string[MAX_TIME_STRING_SIZE];
-                get_time_string(time_string, sizeof(time_string), entry->time);
-                fprintf(file, " %s", time_string);
-                
-                
-                
-                
-                if (entry->description)
-                {
-                    fprintf(file, " \t\"%s\"", entry->description);
-                }
-                
-                
-                
-                fprintf(file, ";\n");
+                Str32 day_of_week = get_day_of_the_week_string(record->date);
+                fprintf(file, "// %s\n", day_of_week.str);
             }
             
             
+            // print command
+            char *command = NULL;
+            if (record->type == Record_TimeStart) command = "start";
+            else if (record->type == Record_TimeStop) command = "stop";
+            else if (record->type == Record_TimeAdd) command = "add";
+            else if (record->type == Record_TimeSub) command = "sub";
+            else
+            {
+                Invalid_Code_Path;
+                continue;
+            }
             
-            char sum_bar_str[MAX_SUM_AND_PROGRESS_BAR_STRING_SIZE];
-            get_sum_and_progress_bar_string(sum_bar_str, sizeof(sum_bar_str), day);
-            fprintf(file, "// %s\n\n", sum_bar_str);
+            fprintf(file, "%s", command);
+            
+            
+            // print date
+            if (is_new_day)
+            {
+                Str32 date_str = get_date_string(record->date);
+                fprintf(file, " %s", date_str.str);
+            }
+            
+            
+            // print time
+            Str32 time_str = get_time_string(record->value);
+            fprintf(file, " %s", time_str.str);
+            
+            
+            // print description
+            if (record->description.length)
+            {
+                fprintf(file, " \t\"%.*s\"", record->description.length, record->description.content);
+            }
+            
+            // new line
+            fprintf(file, ";\n"); // TODO: delete ;
+            
+            
+            
+            // __prepare next iteration + get sum___
+            Record *next_record = record + 1;
+            is_new_day = ((record_index == record_count-1) || 
+                          !are_in_same_day(record, next_record));
+            
+            if (is_new_day)
+            {
+                Day_Sum_Result sum_result = calculate_sum_for_day(state, active_day_index);
+                
+                Str128 sum_bar = get_sum_and_progress_bar_string(sum_result.sum, 
+                                                                 sum_result.missing_ending);
+                fprintf(file, "// %s\n\n", sum_bar.str);
+                
+                active_day_index = record_index+1;
+            }
+            
         }
         
+        
+#if 0        
         using namespace Global_Color;
         
         if (state->parse_error_count > 0)
@@ -463,6 +516,7 @@ save_to_file(Program_State *state)
             fprintf(file, "// Logic Error count: %d\n", state->logic_error_count);
             printf("%sLogic Error count: %d%s\n", b_error, state->logic_error_count, b_reset);
         }
+#endif
         
         fclose(file);
         
@@ -475,6 +529,7 @@ save_to_file(Program_State *state)
     
     state->change_count = 0;
 }
+
 
 
 internal b32
@@ -518,242 +573,264 @@ automatic_save_to_file(Program_State *state)
 
 
 internal void 
-process_time_entry(Program_State *state, Time_Entry *entry)
+add_record(Program_State *state, Record *data)
 {
-    // TODO: Implement insert sorting for start/stop/add/sub.                
+    s64 candidate_index = state->records.count();
+    b32 replace = false;
     
-    
-    // NOTE: Select correct day slot.
-    Day *day = get_day(&state->day_arena, state->day_arena.count - 1);
-    
-    if (day == NULL ||
-        ((day->date_start < entry->date) && (entry->type != Entry_Stop)))
+    for (s64 index = candidate_index - 1;
+         index >= 0;
+         --index)
     {
-        if (entry->date == 0)
+        Record *old_space = state->records.at(index);
+        if (old_space->date < data->date)
         {
-            Print_Error();
-            printf("[Warning] First item can't have missing date! - 1970 assumed");
-            Print_ClearN();
-            
-            Invalid_Code_Path;
-            
-            entry->date += Days(1);
+            break;
         }
-        
-        // NOTE: Add new day
-        day = Push_Struct(&state->day_arena, Day);
-        *day = {};
-        day->date_start = entry->date;
-    }
-    else if (entry->date == 0)
-    {
-        entry->date = day->date_start;
-    }
-    else if ((entry->date > day->date_start) && (entry->type != Entry_Stop))
-    {
-        if (state->reading_from_file)
+        else if (old_space->date > data->date)
         {
-            Print_Logic_Error(state);
-            printf("Out of order item insertion not supported");
-            Print_ClearN();
-            
-            Invalid_Code_Path;
+            candidate_index = index;
         }
-        else
+        else if ((data->type == Record_TimeStart ||
+                  data->type == Record_TimeStop) &&
+                 (old_space->type == Record_TimeStart ||
+                  old_space->type == Record_TimeStop))
         {
-            Print_Error();
-            printf("Can't insert entry out of order");
-            Print_ClearN();
-            return;
-        }
-    }
-    
-    
-    day->sum = EMPTY_SUM; // NOTE: Invalidate previous sum calculations for a day.
-    
-    
-    // NOTE: Add Time_Entry to previously selected day slot.
-    Time_Entry *entry_dest = &day->first_time_entry;
-    while (entry_dest->type != Entry_None)
-    {
-        if (entry_dest->next_in_day == NULL)
-        {
-            entry_dest->next_in_day = Push_Struct(&state->element_arena, Time_Entry);
-            *entry_dest->next_in_day = {};
-        }
-        
-        entry_dest = entry_dest->next_in_day;
-    }
-    
-    ++state->change_count;
-    *entry_dest = *entry;
-}
-
-
-
-internal void
-prase_command_start_stop(Program_State *state, Tokenizer *tokenizer, Entry_Type type)
-{
-    Assert(type == Entry_Start || type == Entry_Stop);
-    
-    b32 success = true;
-    Forward_Token forward = create_forward_token(tokenizer);
-    
-    Time_Entry time_entry = {};
-    time_entry.type = type;
-    
-    // argument 1 - optional - date
-    if (forward.peek.type == Token_Date) 
-    {
-        advance_forward_token(&forward);
-        
-        Parse_Time_Result parsed_date = parse_date(state, forward.token);
-        if (parsed_date.success)
-        {
-            time_entry.date = parsed_date.time;
-        }
-        else success = false;
-    }
-    else
-    {
-        if (!state->reading_from_file) time_entry.date = get_today(state);
-        else
-        {
-            Day *last_day = get_last_day(state);
-            if (last_day) time_entry.date = last_day->date_start;
-            else
+            if (old_space->value > data->value) 
             {
-                success = false;
-                Print_Parse_Error(state);
-                printf("First entry needs to specify date. ");
-                Print_Clear();
+                candidate_index = index;
+            }
+            else if (old_space->type == Record_TimeStop &&
+                     old_space->value == data->value)
+            {
+                candidate_index = index;
+                replace = true;
+                break;
+            }
+            else 
+            {
+                break;
             }
         }
     }
     
     
-    // argument 2 - optional(cmd) required(file) - time
-    if (success && (forward.peek.type == Token_Time))
+    if (!replace)
     {
-        advance_forward_token(&forward);
-        
-        Parse_Time_Result parsed_time = parse_time(state, forward.token);
-        if (parsed_time.success)
+        b32 can_add = false;
+        if (data->type == Record_TimeStop)
         {
-            time_entry.time = parsed_time.time;
+            for (s64 index = candidate_index - 1;
+                 index >= 0;
+                 --index)
+            {
+                Record *old_space = state->records.at(index);
+                if (old_space->type == Record_TimeStart) {
+                    can_add = true;
+                    break;
+                }
+                else if (old_space->type == Record_TimeStop) { 
+                    break; 
+                }
+            }
         }
-        else success = false;
+        else { 
+            can_add = true; 
+        }
+        
+        if (can_add)
+        {
+            state->records.insert_at(data, candidate_index);
+        }
+        else
+        {
+            Print_Error();
+            printf("[Warning] stop is being skipped - it can be added only when start is active");
+            Print_ClearN();
+        }
+    }
+    else
+    {
+        *state->records.at(candidate_index) = *data;
+    }
+}
+
+internal b32
+fill_date_optional(Program_State *state, Forward_Token *forward, Record *record)
+{
+    b32 success = false;
+    
+    if (forward->peek.type == Token_Date) // TODO(mg): pull out!!
+    {
+        advance(forward);
+        
+        Parse_Date_Result parsed_date = parse_date(state, forward->token);
+        if (parsed_date.is_valid)
+        {
+            record->date = parsed_date.date;
+            success = true;
+        }
+    }
+    else
+    {
+        if (!state->reading_from_file) 
+        {
+            record->date = get_today(state);
+            success = true;
+        }
+        else
+        {
+            Record *last_record = get_last_record(state);
+            if (last_record) 
+            {
+                record->date = last_record->date;
+                success = true;
+            }
+            else
+            {
+                Print_Parse_Error(state);
+                printf("First record needs to specify date. ");
+                Print_Clear();
+            }
+        }
+    }
+    
+    return success;
+}
+
+internal b32
+fill_time_optional(Program_State *state, Forward_Token *forward, Record *record)
+{
+    b32 success = false;
+    
+    if ((forward->peek.type == Token_Time))
+    {
+        advance(forward);
+        
+        Parse_Time_Result parsed_time = parse_time(state, forward->token);
+        if (parsed_time.is_valid)
+        {
+            record->value = parsed_time.time;
+            success = true;
+        }
     }
     else 
     {
         if (!state->reading_from_file)
         {
-            time_entry.time = get_time(state);
+            record->value = get_time(state);
+            success = true;
         }
-        else success = false;
     }
     
+    return success;
+}
+
+
+internal b32
+fill_time_required(Program_State *state, Forward_Token *forward, Record *record)
+{
+    b32 success = false;
     
-    // argument 3 - optional - description
-    if (success && (forward.peek.type == Token_String))
+    if ((forward->peek.type == Token_Time))
     {
-        advance_forward_token(&forward);
+        advance(forward);
         
-        time_entry.description = create_description(&state->element_arena, forward.token);
+        Parse_Time_Result parsed_time = parse_time(state, forward->token);
+        if (parsed_time.is_valid)
+        {
+            record->value = parsed_time.time;
+            success = true;
+        }
     }
     
-    
-    if (success)
+    return success;
+}
+
+internal void
+fill_description_optional(Forward_Token *forward, Record *record)
+{
+    if ((forward->peek.type == Token_String))
     {
-        process_time_entry(state, &time_entry);
+        advance(forward);
+        
+        record->description = create_description(forward->token);
     }
-    else
-    {
+}
+
+
+internal void
+prase_command_start(Program_State *state, Tokenizer *tokenizer)
+{
+    Forward_Token forward = create_forward_token(tokenizer);
+    Record record = {};
+    record.type = Record_TimeStart;
+    
+    b32 success = fill_date_optional(state, &forward, &record);
+    
+    if (success) { success = fill_time_optional(state, &forward, &record); }
+    
+    if (success) { fill_description_optional(&forward, &record); }
+    
+    if (success) { 
+        add_record(state, &record); 
+    } else {
         Print_Parse_Error(state);
         printf("Incorect command usage. Use:\n"
-               "%s [yyyy-MM-dd] (hh:mm) [\"description\"]",
-               (type == Entry_Add) ? "add" : "sub");
+               "start [yyyy-MM-dd] (hh:mm) [\"description\"]");
         print_line_with_token(forward.token);
         Print_ClearN();
     }
 }
+
+
+internal void
+prase_command_stop(Program_State *state, Tokenizer *tokenizer)
+{
+    Forward_Token forward = create_forward_token(tokenizer);
+    Record record = {};
+    record.type = Record_TimeStop;
+    
+    b32 success = fill_date_optional(state, &forward, &record);
+    
+    if (success) { success = fill_time_optional(state, &forward, &record); }
+    
+    if (success) { 
+        add_record(state, &record); 
+    } else {
+        Print_Parse_Error(state);
+        printf("Incorect command usage. Use:\n"
+               "start [yyyy-MM-dd] (hh:mm)");
+        print_line_with_token(forward.token);
+        Print_ClearN();
+    }
+}
+
+
 
 
 
 internal void
-parse_command_add_sub(Program_State *state, Tokenizer *tokenizer, Entry_Type type)
+parse_command_add_sub(Program_State *state, Tokenizer *tokenizer, b32 is_add)
 {
-    Assert(type == Entry_Add || type == Entry_Subtract);
-    
-    b32 success = true;
     Forward_Token forward = create_forward_token(tokenizer);
     
-    Time_Entry time_entry = {};
-    time_entry.type = type;
+    Record record = {};
+    record.type = is_add ? Record_TimeAdd : Record_TimeSub;
     
-    // argument 1 - optional - date
-    if (forward.peek.type == Token_Date) 
-    {
-        advance_forward_token(&forward);
-        
-        Parse_Time_Result parsed_date = parse_date(state, forward.token);
-        if (parsed_date.success)
-        {
-            time_entry.date = parsed_date.time;
-        }
-        else success = false;
-    }
-    else
-    {
-        if (!state->reading_from_file) time_entry.date = get_today(state);
-        else
-        {
-            Day *last_day = get_last_day(state);
-            if (last_day) time_entry.date = last_day->date_start;
-            else
-            {
-                success = false;
-                Print_Parse_Error(state);
-                printf("First entry needs to specify date. ");
-                Print_Clear();
-            }
-        }
-    }
+    b32 success = fill_date_optional(state, &forward, &record);
     
+    if (success) { success = fill_time_required(state, &forward, &record); }
     
-    // argument 2 - required - time
-    if (success && (forward.peek.type == Token_Time))
-    {
-        advance_forward_token(&forward);
-        
-        Parse_Time_Result parsed_time = parse_time(state, forward.token);
-        if (parsed_time.success)
-        {
-            time_entry.time = parsed_time.time;
-            
-            // argument 3 - optional - description
-            if (forward.peek.type == Token_String)
-            {
-                advance_forward_token(&forward);
-                
-                time_entry.description = create_description(&state->element_arena, forward.token);
-            }
-        }
-        else success = false;
-    }
-    else success = false;
+    if (success) { fill_description_optional(&forward, &record); }
     
-    
-    if (success)
-    {
-        process_time_entry(state, &time_entry);
-    }
-    else
-    {
+    if (success) {
+        add_record(state, &record);
+    } else {
         Print_Parse_Error(state);
         printf("Incorect command usage. Use:\n"
                "%s [yyyy-MM-dd] (hh:mm) [\"description\"]",
-               (type == Entry_Add) ? "add" : "sub");
+               (is_add) ? "add" : "sub");
         print_line_with_token(forward.token);
         Print_ClearN();
     }
@@ -761,85 +838,103 @@ parse_command_add_sub(Program_State *state, Tokenizer *tokenizer, Entry_Type typ
 
 
 
-struct Time_Range_Result
-{
-    b32 is_valid;
-    union
-    {
-        time_t date_ranges[2];
-        struct
-        {
-            time_t begin;
-            time_t end; // NOTE: Inclusive end
-        };
-    };
-};
 
-internal Time_Range_Result
-parse_time_range(Program_State *state, Tokenizer *tokenizer)
+internal Parse_Date_Result
+parse_complex_date(Program_State *state, Token token)
 {
-    Time_Range_Result result = {};
+    // NOTE: Allows to use keywords like today, yesterday + normal date formats
+    // TODO: ^ today+1 yesterday-4
+    
+    Parse_Date_Result result = {};
+    if (token.type == Token_Date)
+    {
+        result = parse_date(state, token);
+    }
+    
+    return result;
+}
+
+
+internal Date_Range_Result
+get_max_date_range()
+{
+    Date_Range_Result result;
     result.is_valid = true;
+    result.begin = 1;
+    result.end = S64_MAX;
+    
+    return result;
+}
+
+internal Date_Range_Result
+get_date_range(Program_State *state, Tokenizer *tokenizer)
+{
+    Date_Range_Result result = {};
+    b32 success = true;
+    b32 has_range = false;
     
     Forward_Token forward = create_forward_token(tokenizer);
     
-    char *date_range_identifiers[2] = {"from", "to"};
     
-    // arg 1 (from), 2 (date), 3 (to), 4 (date)
-    for (s32 date_index = 0;
-         date_index < Array_Count(result.date_ranges);
-         ++date_index)
+    if (forward.peek.type == Token_Identifier &&
+        token_equals(forward.peek, "from"))
     {
-        time_t *date = result.date_ranges + date_index;
-        char *identifier = date_range_identifiers[date_index];
+        advance(&forward);
+        has_range = true;
         
-        // arg - optional - "from/to"
-        if (result.is_valid &&
-            (forward.peek.type == Token_Identifier) &&
-            (token_equals(forward.peek, identifier)))
+        Parse_Date_Result date = parse_complex_date(state, forward.peek);
+        success = date.is_valid;
+        if (success)
         {
-            advance_forward_token(&forward);
+            result.begin = date.date;
+            advance(&forward);
+        }
+    }
+    
+    
+    if (success)
+    {
+        if (forward.peek.type == Token_Identifier &&
+            token_equals(forward.peek, "to"))
+        {
+            advance(&forward);
+            has_range = true;
             
-            // arg - required - date/today
-            if (forward.peek.type == Token_Date)
+            Parse_Date_Result date = parse_complex_date(state, forward.peek);
+            success = date.is_valid;
+            if (success)
             {
-                advance_forward_token(&forward);
-                
-                Parse_Time_Result parsed_date = parse_date(state, forward.token);
-                if (parsed_date.success)
-                {
-                    *date = parsed_date.time;
-                }
-                else result.is_valid = false;
+                result.end = date.date;
+                advance(&forward);
             }
-            else if ((forward.peek.type == Token_Identifier) && 
-                     token_equals(forward.peek, "today"))
-            {
-                advance_forward_token(&forward);
-                
-                *date = get_today(state);
-            }
-            else result.is_valid = false;
         }
     }
     
     
-    // arg - optional date
-    if (result.is_valid &&
-        (!result.begin && !result.end) &&
-        (forward.peek.type == Token_Date))
+    if (success)
     {
-        advance_forward_token(&forward);
-        
-        Parse_Time_Result parsed_date = parse_date(state, forward.token);
-        if (parsed_date.success)
+        if (!has_range)
         {
-            result.begin = parsed_date.time;
-            result.end = parsed_date.time;
+            if (token_equals(forward.peek, "all"))
+            {
+                result = get_max_date_range();
+                advance(&forward);
+            }
+            else
+            {
+                Parse_Date_Result date = parse_complex_date(state, forward.peek);
+                success = date.is_valid;
+                if (success)
+                {
+                    result.begin = date.date;
+                    result.end = date.date;
+                    advance(&forward);
+                }
+            }
         }
-        else result.is_valid = false;
     }
     
+    result.is_valid = success;
     return result;
 }
 
@@ -850,7 +945,7 @@ parse_command_show(Program_State *state, Tokenizer *tokenizer)
 {
     Forward_Token forward = create_forward_token(tokenizer);
     
-    Time_Range_Result range = parse_time_range(state, tokenizer);
+    Date_Range_Result range = get_date_range(state, tokenizer);
     
     if (range.is_valid)
     {
@@ -882,12 +977,13 @@ enum Granularity // TODO: Support more granularities
 
 internal void
 process_and_print_summary(Program_State *state, Granularity granularity, 
-                          time_t date_begin, time_t date_end)
+                          date64 date_begin, date64 date_end)
 {
     // TODO: Support more granularities. Now this only supports Days.
     
+#if 0
     Boundries_Result boundries = {};
-    time_t time_sum = 0;
+    date64 time_sum = 0;
     
     for (u32 day_index = 0;
          day_index <= state->day_arena.count;
@@ -921,15 +1017,15 @@ process_and_print_summary(Program_State *state, Granularity granularity,
                 
                 char sum_bar_str[MAX_SUM_AND_PROGRESS_BAR_STRING_SIZE + MAX_TIME_STRING_SIZE + 5];
                 {
-                    time_t day_count = boundries.day_count;
+                    date64 day_count = boundries.day_count;
                     if (last_loop)
                     {
-                        time_t today = get_today(state);
+                        date64 today = get_today(state);
                         day_count = (today / (Days(1))) - (boundries.begin / (Days(1)));
                         if (day_count <= 0) day_count = 1;
                     }
                     
-                    time_t time_avg = time_sum / day_count;
+                    date64 time_avg = time_sum / day_count;
                     
                     char sum_str[MAX_TIME_STRING_SIZE];
                     get_time_string(sum_str, sizeof(sum_str), time_sum);
@@ -992,6 +1088,7 @@ process_and_print_summary(Program_State *state, Granularity granularity,
             time_sum += day->sum;
         }
     }
+#endif
 }
 
 
@@ -1003,39 +1100,42 @@ parse_command_summary(Program_State *state, Tokenizer *tokenizer)
     
     Granularity granularity = Granularity_Days;
     // arg - optional - granularity (days/months/years)
-    if (forward.peek.type == Token_Identifier)
+    if (forward.peek.type == Token_Identifier) // TODO: Pull out granularity check.
     {
         if (token_equals(forward.peek, "days") ||
             token_equals(forward.peek, "d"))
         {
-            advance_forward_token(&forward);
+            advance(&forward);
             granularity = Granularity_Days;
         }
         else if (token_equals(forward.peek, "months") ||
                  token_equals(forward.peek, "m"))
         {
-            advance_forward_token(&forward);
+            advance(&forward);
             granularity = Granularity_Months;
         }
 #if 0
         else if (token_equals(forward.peek, "years") ||
                  token_equals(forward.peek, "y"))
         {
-            advance_forward_token(&forward);
+            advance(&forward);
             granularity = Granularity_Years;
         }
 #endif
     }
     
     // arg - optional - time range
-    Time_Range_Result range = parse_time_range(state, tokenizer);
+    Date_Range_Result range = get_date_range(state, tokenizer);
     
-    
-    if (range.is_valid)
+    if (!range.is_valid)
     {
-        process_and_print_summary(state, granularity, range.begin, range.end);
+        range = get_max_date_range();
     }
-    else
+    
+    process_and_print_summary(state, granularity, range.begin, range.end);
+    
+    
+#if 0
     {
         Print_Parse_Error(state);
         printf("Incorect command usage. Use:\n"
@@ -1047,7 +1147,7 @@ parse_command_summary(Program_State *state, Tokenizer *tokenizer)
         print_line_with_token(forward.token);
         Print_ClearN();
     }
-    
+#endif
 }
 
 
@@ -1060,7 +1160,7 @@ parse_command_exit(Program_State *state, Tokenizer *tokenizer, b32 *main_loop_is
     if ((forward.peek.type == Token_Identifier) &&
         (token_equals(forward.peek, "no-save")))
     {
-        advance_forward_token(&forward);
+        advance(&forward);
         *main_loop_is_running = false;
     }
     else
@@ -1075,7 +1175,7 @@ parse_command_exit(Program_State *state, Tokenizer *tokenizer, b32 *main_loop_is
         else
         {
             Print_Error();
-            printf("To exit without saving use: exit no-save");
+            printf("Automatic save failed. To exit without saving use: exit no-save");
             Print_ClearN();
         }
     }
@@ -1103,20 +1203,20 @@ process_input(char *content, Program_State *state, b32 reading_from_file,
             {
                 if (token_equals(token, "start")) 
                 {
-                    prase_command_start_stop(state, &tokenizer, Entry_Start);
+                    prase_command_start(state, &tokenizer);
                 }
                 else if (token_equals(token, "stop"))
                 {
-                    prase_command_start_stop(state, &tokenizer, Entry_Stop);
+                    prase_command_stop(state, &tokenizer);
                 }
                 else if (token_equals(token, "add"))
                 {
-                    parse_command_add_sub(state, &tokenizer, Entry_Add);
+                    parse_command_add_sub(state, &tokenizer, true);
                 }
                 else if (token_equals(token, "subtract") ||
                          token_equals(token, "sub"))
                 {
-                    parse_command_add_sub(state, &tokenizer, Entry_Subtract);
+                    parse_command_add_sub(state, &tokenizer, false);
                 }
                 else if (token_equals(token, "show"))
                 {
@@ -1166,10 +1266,9 @@ process_input(char *content, Program_State *state, b32 reading_from_file,
                     if (state->reading_from_file) Command_Line_Only_Message(state, token);
                     else
                     {
-                        time_t now = get_current_timestamp(state);
-                        char now_str[MAX_TIMESTAMP_STRING_SIZE];
-                        get_timestamp_string(now_str, sizeof(now_str), now);
-                        printf("Current time: %s\n", now_str);
+                        date64 now = get_current_timestamp(state);
+                        Str128 now_str = get_timestamp_string(now);
+                        printf("Current time: %s\n", now_str.str);
                     }
                 }
                 else if (token_equals(token, "edit"))
@@ -1201,6 +1300,7 @@ process_input(char *content, Program_State *state, b32 reading_from_file,
                     if (state->reading_from_file) Command_Line_Only_Message(state, token);
                     else
                     {
+                        // TODO: Work on this help...
                         printf("Commands available everywhere:\n"
                                "start yyyy-MM-dd hh:mm\tstarts new timespan\n"
                                "stop yyyy-MM-dd hh:mm\tstops current timespan\n"
@@ -1268,8 +1368,8 @@ process_input(char *content, Program_State *state, b32 reading_from_file,
 internal void 
 clear_memory(Program_State *state)
 {
-    clear_arena(&state->day_arena);
-    clear_arena(&state->element_arena);
+    clear_arena(&state->mixed_arena);
+    clear_arena(&state->records.arena);
 }
 
 
@@ -1281,7 +1381,7 @@ load_file(Program_State *state)
     state->parse_error_count = 0;
     
     char *file_name = state->input_file_full_path;
-    char *file_content = read_entire_file_and_null_terminate(&state->element_arena, file_name);
+    char *file_content = read_entire_file(&state->mixed_arena, file_name);
     if (file_content)
     {
         process_input(file_content, state, true);
@@ -1332,9 +1432,13 @@ int main(int argument_count, char **arguments)
     Program_State state = {};
     
     // NOTE: Initialize arenas:
-    static u8 raw_memory_block[Gigabytes(1)];
-    alocate_arena(&state.element_arena, raw_memory_block, Megabytes(512));
-    alocate_arena(&state.day_arena, raw_memory_block + Megabytes(512), Megabytes(512));
+    const size_t total_size = Gigabytes(1);
+    const size_t mixed_arena_size = Megabytes(512);
+    const size_t record_arena_size = total_size - mixed_arena_size;
+    static u8 raw_memory_block[total_size];
+    
+    alocate_arena(&state.mixed_arena, raw_memory_block, mixed_arena_size);
+    alocate_arena(&state.records.arena, raw_memory_block + mixed_arena_size, record_arena_size);
     clear_memory(&state);
     
     b32 reformat_mode = false;
@@ -1500,10 +1604,10 @@ int main(int argument_count, char **arguments)
             process_input(thread_memory.input_buffer, &state, false, &is_running);
             if (state.change_count > 0)
             {
-                if (state.day_arena.count > 0)
+                if (state.records.count() > 0)
                 {
-                    Day *last_day = get_last_day(&state);
-                    print_days_from_range(&state, last_day->date_start, last_day->date_start, true);
+                    Record *last_record = get_last_record(&state);
+                    print_days_from_range(&state, last_record->date, last_record->date, true);
                 }
                 automatic_save_to_file(&state);
             }

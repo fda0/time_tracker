@@ -1,0 +1,72 @@
+// Wednesday
+add 2020-11-25 08:00 	"holidays";
+// sum: 08:00	[++++ ++++]
+
+// Thursday
+start 2020-11-26 08:19;
+start 10:00 	"meeting";
+start 10:25;
+start 10:30 	"daily";
+start 11:17;
+start 15:16 	"break";
+start 15:52;
+stop 16:30;
+sub 00:11;
+// sum: 08:00	[++++ ++++]
+
+// Friday
+start 2020-11-27 08:50;
+start 10:00 	"meeting";
+start 10:30 	"daily";
+start 11:22;
+stop 16:50;
+// sum: 08:00	[++++ ++++]
+
+// Monday
+start 2020-11-30 08:43;
+start 10:00 	"meeting";
+start 10:11;
+start 11:10 	"daily";
+start 12:13;
+start 12:50 	"example series ep 27";
+start 13:45 	"example series ep 28";
+start 15:17 	"example series ep 29 part 1";
+start 16:20 	"example series ep 29 part 2";
+stop 16:51;
+sub 00:08;
+// sum: 08:00	[++++ ++++]
+
+// Tuesday
+start 2020-12-01 08:53;
+start 09:30 	"daily";
+start 10:00;
+start 10:30 	"live course";
+start 10:59;
+start 11:30 	"example series ep 29 part 2 cont";
+start 11:48 	"example series ep 30 part 1";
+start 12:19 	"example series ep 30 part 2";
+start 12:53 	"example series ep 30 part 3";
+start 13:28 	"example series ep 31 part 1";
+start 14:10 	"example series ep 31 part 2";
+start 14:45 	"example series ep 32 part 1";
+start 15:20 	"example series ep 32 part 2";
+start 16:09 	"break";
+sub 00:07;
+stop 17:00;
+// sum: 08:00	[++++ ++++]
+
+// Wednesday
+start 2020-12-02 08:40 	"example series ep 33 part 1";
+start 09:35 	"example series ep 33 part 2";
+start 10:20 	"example series ep 34 part 1";
+start 10:30 	"daily";
+start 11:20;
+start 11:24 	"example series ep 34 part 1 cont";
+start 12:11 	"example series ep 34 part 2";
+start 12:39;
+start 12:59 	"example series ep 34 part 3";
+start 14:00 	"mandatory online training";
+start 16:30 	"noop";
+stop 16:40;
+// sum: 08:00	[++++ ++++]
+

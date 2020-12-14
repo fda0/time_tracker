@@ -229,7 +229,7 @@ create_forward_token(Tokenizer *tokenizer)
 }
 
 inline void
-advance_forward_token(Forward_Token *forward)
+advance(Forward_Token *forward)
 {
     *forward->tokenizer_ = forward->peek_tokenizer_;
     forward->token = forward->peek;

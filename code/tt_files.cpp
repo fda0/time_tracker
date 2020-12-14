@@ -92,7 +92,7 @@ copy_path_with_different_extension(char *output, size_t output_size, char *sourc
 //~ File IO
 
 internal char *
-read_entire_file_and_null_terminate(Memory_Arena *arena, char *file_name)
+read_entire_file(Memory_Arena *arena, char *file_name)
 {
     char *result = 0;
     

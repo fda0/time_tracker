@@ -3,7 +3,7 @@ struct Memory_Arena
     size_t size;
     u8* base;
     size_t used;
-    u32 count;
+    s64 count;
 };
 
 
@@ -48,10 +48,10 @@ get_aligment_offset(Memory_Arena *arena, size_t aligment)
 
 // NOTE: Gives back aligned pointer with size allocated for array of any type.
 #define Push_Array(Arena, Count, Type) \
-((Type *)push_size_aligned_(Arena, (Count) * sizeof(Type), alignof(Type), (u32)Count))
+((Type *)push_size_aligned_(Arena, (Count) * sizeof(Type), alignof(Type), (s64)Count))
 
 // NOTE: Internal raw allocation call.
-void *push_size_aligned_(Memory_Arena *arena, size_t size, u32 aligment, u32 count)
+void *push_size_aligned_(Memory_Arena *arena, size_t size, s64 aligment, s64 count)
 {
     arena->count += count;
     
@@ -74,3 +74,92 @@ void *push_size_aligned_(Memory_Arena *arena, size_t size, u32 aligment, u32 cou
     
     return result;
 }
+
+#define Array_At(Arena, Index, Type) (((Type *)(Arena)->base) + Index)
+
+
+template <typename T> 
+struct Dynamic_Array
+{
+    Memory_Arena arena;
+    
+    void initialize(u8 *memory_address, size_t size)
+    {
+        alocate_arena(&arena, memory_address, size);
+    }
+    
+    
+    //~ allocate
+    
+    T *push_struct()
+    {
+        T *result = Push_Struct(&arena, T);
+        return result;
+    }
+    
+    T *push_array(s64 count)
+    {
+        T *result = Push_Array(&arena, count, T);
+    }
+    
+    
+    
+    
+    //~ get
+    
+    s64 count()
+    {
+        s64 result = arena.count;
+        return result;
+    }
+    
+    T *at(s64 index)
+    {
+        T *result = ((T *)arena.base) + index;
+        
+#if BUILD_INTERNAL
+        if (!(index >= 0 && index < arena.count))
+        {
+            Invalid_Code_Path;
+        }
+#endif
+        
+        return result;
+    }
+    
+    
+    
+    //~ add
+    
+    T *add(T *element)
+    {
+        T *result = push_struct();
+        *result = *element;
+        return result;
+    }
+    
+    
+    T *insert_at(T *element, s64 index)
+    {
+        T *new_elem = push_struct();
+        
+        T *prev = new_elem;
+        
+        for (s64 data_index = arena.count-2;
+             data_index >= index;
+             --data_index)
+        {
+            T *old_data = at(data_index);
+            *prev = *old_data;
+            prev = old_data;
+        }
+        
+        *prev = *element;
+        return prev;
+    }
+    
+};
+
+
+
+

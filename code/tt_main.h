@@ -18,7 +18,9 @@ typedef int32_t s32;
 typedef int64_t s64;
 
 typedef s32 b32;
-typedef s32 b32x;
+
+typedef time_t date64;
+typedef s32 time32;
 
 typedef float f32;
 typedef double f64;
@@ -27,6 +29,8 @@ typedef double f64;
 #define global_variable static
 #define local_persist static
 
+
+#define S64_MAX LLONG_MAX
 
 
 
@@ -52,17 +56,15 @@ struct Thread_Memory
 
 //~ NOTE: Macros
 
+#define Macro_Wrap(Macro) do { Macro } while(0)
 
 #if BUILD_INTERNAL
-
-#define Assert(Expression) do {if(!(Expression)) {__debugbreak(); *(int*)0 = 1;}} while(0)
-
+#define Assert(Expression) Macro_Wrap( if(!(Expression)) {__debugbreak(); *(int*)0 = 1;} )
 #else
 #define Assert(Expression)
 #endif
 
 #define Invalid_Code_Path Assert(0)
-
 
 
 
@@ -87,26 +89,7 @@ struct Thread_Memory
 
 //~ NOTE: Data types
 
-enum Entry_Type
-{
-    Entry_None,
-    
-    Entry_Start,
-    Entry_Stop,
-    Entry_Subtract,
-    Entry_Add,
-};
-
-struct Time_Entry
-{
-    Entry_Type type;
-    time_t date;
-    time_t time;
-    char *description;
-    Time_Entry *next_in_day;
-};
-
-enum Missing_Ending_Type
+enum Missing_Ending
 {
     MissingEnding_None,
     MissingEnding_Assumed,
@@ -114,14 +97,30 @@ enum Missing_Ending_Type
 };
 
 
-#define EMPTY_SUM INT_MIN
-
-struct Day
+struct Description
 {
-    time_t date_start;
-    s32 sum;
-    Missing_Ending_Type missing_ending;
-    Time_Entry first_time_entry;
+    char *content;
+    s32 length;
+};
+
+enum Record_Type : s32
+{
+    Record_Empty,
+    Record_TimeStart,
+    Record_TimeStop,
+    Record_TimeAdd,
+    Record_TimeSub,
+    Record_CountDelta
+};
+
+struct Record
+{
+    date64 date;
+    
+    Record_Type type;
+    s32 value;
+    
+    Description description;
 };
 
 
@@ -130,15 +129,15 @@ struct Day
 
 struct Program_State
 {
-    Memory_Arena element_arena;
-    Memory_Arena day_arena;
+    Memory_Arena mixed_arena;
+    Dynamic_Array<Record> records;
     
     char input_file_full_path[MAX_PATH];
     char input_file_name[MAX_PATH];
     char archive_directory[MAX_PATH];
     File_Path2 executable_path2;
     
-    time_t timezone_offset;
+    date64 timezone_offset;
     File_Time loaded_input_mod_time;
     
     s32 logic_error_count;
@@ -149,17 +148,36 @@ struct Program_State
 };
 
 
+struct Parse_Date_Result
+{
+    date64 date;
+    b32 is_valid;
+};
 
 struct Parse_Time_Result
 {
-    time_t time;
-    b32 success;
+    s32 time;
+    b32 is_valid;
 };
 
 struct Parse_Number_Result
 {
     s32 number;
-    b32 success;
+    b32 is_valid;
 };
 
 
+
+struct Date_Range_Result
+{
+    union
+    {
+        date64 date_ranges[2];
+        struct
+        {
+            date64 begin;
+            date64 end; // NOTE: Inclusive end
+        };
+    };
+    b32 is_valid;
+};

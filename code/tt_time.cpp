@@ -1,43 +1,43 @@
 
 
-inline time_t 
-truncate_to_date(time_t timestamp)
+inline date64 
+truncate_to_date(date64 timestamp)
 {
-    time_t result = (timestamp / Days(1)) * Days(1);
+    date64 result = (timestamp / Days(1)) * Days(1);
     return result;
 }
 
-inline time_t 
-truncate_to_time(time_t timestamp)
+inline s32
+truncate_to_time(date64 timestamp)
 {
-    time_t result = timestamp % Days(1);
+    s32 result = timestamp % Days(1);
     return result;
 }
 
 
-internal time_t 
+internal date64 
 get_current_timestamp(Program_State *state)
 {
-    time_t now;
+    date64 now;
     time(&now);
     
-    time_t result = now + state->timezone_offset;
+    date64 result = now + state->timezone_offset;
     return result;
 }
 
-internal time_t
+internal s32
 get_time(Program_State *state)
 {
-    time_t now = get_current_timestamp(state);
-    time_t time = truncate_to_time(now);
+    date64 now = get_current_timestamp(state);
+    s32 time = truncate_to_time(now);
     return time;
 }
 
-internal time_t 
+internal date64 
 get_today(Program_State *state)
 {
-    time_t now = get_current_timestamp(state);
-    time_t today = truncate_to_date(now);
+    date64 now = get_current_timestamp(state);
+    date64 today = truncate_to_date(now);
     return today;
 }
 
@@ -45,27 +45,27 @@ get_today(Program_State *state)
 internal void 
 initialize_timezone_offset(Program_State *state)
 {
-    time_t test_time;
+    date64 test_time;
     time(&test_time);
     
     tm *local_date = localtime(&test_time);
-    time_t utc_test_time = platform_tm_to_time(local_date);
+    date64 utc_test_time = platform_tm_to_time(local_date);
     
-    time_t offset = utc_test_time - test_time;
+    date64 offset = utc_test_time - test_time;
     state->timezone_offset = offset;
 }
 
 
 struct Boundries_Result
 {
-    time_t day_count;
+    date64 day_count;
     
-    time_t begin;
-    time_t one_day_past_end;
+    date64 begin;
+    date64 one_day_past_end;
 };
 
 internal Boundries_Result
-get_month_boundries(time_t timestamp)
+get_month_boundries(date64 timestamp)
 {
     Boundries_Result result = {};
     

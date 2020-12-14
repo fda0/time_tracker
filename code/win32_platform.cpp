@@ -14,10 +14,10 @@ platform_copy_file(char *source, char *destination)
     CopyFileA(source, destination, TRUE);
 }
 
-inline time_t 
+inline date64
 platform_tm_to_time(tm *date)
 {
-    time_t result = _mkgmtime(date);
+    date64 result = _mkgmtime(date);
     return result;
 }
 
