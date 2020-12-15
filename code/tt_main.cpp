@@ -28,7 +28,7 @@ internal Record *
 get_last_record(Program_State *state)
 {
     Record *result = nullptr;
-    s64 count = state->records.count();
+    s64 count = state->records.count;
     if (count)
     {
         result = state->records.at(count-1);
@@ -200,9 +200,8 @@ calculate_sum_for_day(Program_State *state, s64 starting_index)
     Day_Sum_Result result = {};
     date64 day = state->records.at(starting_index)->date;
     
-    s64 record_count = state->records.count();
     for (s64 index = starting_index;
-         index < record_count;
+         index < state->records.count;
          ++index)
     {
         Record *record = state->records.at(index);
@@ -240,13 +239,9 @@ calculate_sum_for_day(Program_State *state, s64 starting_index)
         }
         else if (day == record->date)
         {
-            if (record->type == Record_TimeAdd)
+            if (record->type == Record_TimeDelta)
             {
                 result.sum += record->value;
-            }
-            else if (record->type == Record_TimeSub)
-            {
-                result.sum -= record->value;
             }
         }
     }
@@ -279,7 +274,7 @@ inline b32
 compare_record_type_to_mask(Dynamic_Array<Record> *records, s64 index, s32 type_mask)
 {
     b32 result = false;
-    if (records->count() > index && 0 < index)
+    if (records->count > index && 0 < index)
     {
         Record *record = records->at(index);
         result = record->type & type_mask;
@@ -289,6 +284,16 @@ compare_record_type_to_mask(Dynamic_Array<Record> *records, s64 index, s32 type_
 }
 
 
+inline char
+get_sign_char_and_abs_value(s32 *value)
+{
+    char result = '+';
+    if (*value < 0) {
+        result = '-';
+        *value = -(*value);
+    }
+    return result;
+}
 
 internal void 
 print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
@@ -297,11 +302,9 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
     // TODO: Add/Sub descriptions contained in range should push their descriptions to transient_arena
     // and maybe exclude them from sum... example:
     // 16:30 -> 18:30  +00:30 "Working on X" -00:15 "Tea break"
-    
-    
     using namespace Global_Color;
     
-    s64 record_count = state->records.count();
+    state->defered_descs.clear();
     
     b32 is_new_day = true;
     s64 active_day_index = 0;
@@ -309,7 +312,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
     time32 sum = 0;
     
     for (s64 record_index = 0;
-         record_index < record_count;
+         record_index < state->records.count;
          ++record_index)
     {
         Record *record = state->records.at(record_index);
@@ -339,49 +342,84 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
         
         Str32 time_str = get_time_string(record->value);
         
-        if (record->type == Record_TimeStop) { 
+        if (record->type == Record_TimeStop) 
+        { 
             printf(time_str.str);
             range_open = false;
         }
-        else if (record->type == Record_TimeAdd) { sum += record->value; }
-        else if (record->type == Record_TimeSub) { sum -= record->value; }
-        else if (range_open && record->type == Record_TimeStart) {
+        else if (record->type == Record_TimeDelta) 
+        { 
+            if (!record->description.length)
+            {
+                sum += record->value; 
+            }
+            else
+            {
+                Defered_Description defered = {
+                    record->description,
+                    record->value
+                };
+                state->defered_descs.add(&defered);
+            }
+        }
+        else if (range_open && record->type == Record_TimeStart) 
+        {
             printf(time_str.str);
             range_open = false;
         }
         
         if (!range_open)
         {
+            printf("  ");
+            
             if (sum)
             {
-                char sign = '+';
-                if (sum < 0)
-                {
-                    sign = '-';
-                    sum = -sum;
-                }
-                
-                
+                char sign = get_sign_char_and_abs_value(&sum);
                 Str32 sum_str = get_time_string(sum);
-                
-                printf("\t%c%s", sign, sum_str.str);
+                printf("  %c%s", sign, sum_str.str);
                 sum = 0;
             }
             
+            for (s64 def_index = 0;
+                 def_index < state->defered_descs.count;
+                 ++def_index)
+            {
+                Defered_Description *def = state->defered_descs.at(def_index);
+                
+                if (def->value)
+                {
+                    char sign = get_sign_char_and_abs_value(&def->value);
+                    Str32 val_str = get_time_string(def->value);
+                    printf("  %c%s", sign, val_str.str);
+                }
+                
+                printf(" %s\"%.*s\"%s", 
+                       (def->value ? f_desc_delta : f_desc), 
+                       def->description.length, def->description.content,
+                       f_reset);
+            }
+            
             printf("\n");
+            state->defered_descs.clear();
+            
             
             
             if (record->type == Record_TimeStart)
             {
                 printf("%s -> ", time_str.str);
                 range_open = true;
+                
+                Defered_Description defered = {
+                    record->description
+                };
+                state->defered_descs.add(&defered);
             }
         }
         
         
         // __prepare next iteration + get sum___
         Record *next_record = record + 1;
-        is_new_day = ((record_index == record_count-1) || 
+        is_new_day = ((record_index == state->records.count-1) || 
                       !are_in_same_day(record, next_record));
         
         if (is_new_day)
@@ -426,12 +464,11 @@ save_to_file(Program_State *state)
     FILE *file = fopen(state->input_file_full_path, "w");
     if (file)
     {
-        s64 record_count = state->records.count();
         b32 is_new_day = true;
         s64 active_day_index = 0;
         
         for (s64 record_index = 0;
-             record_index < record_count;
+             record_index < state->records.count;
              ++record_index)
         {
             Record *record = state->records.at(record_index);
@@ -448,10 +485,11 @@ save_to_file(Program_State *state)
             char *command = NULL;
             if (record->type == Record_TimeStart) command = "start";
             else if (record->type == Record_TimeStop) command = "stop";
-            else if (record->type == Record_TimeAdd) command = "add";
-            else if (record->type == Record_TimeSub) command = "sub";
-            else
-            {
+            else if (record->type == Record_TimeDelta) {
+                if (record->value < 0) { command = "sub"; }
+                else { command = "add"; }
+            }
+            else {
                 Invalid_Code_Path;
                 continue;
             }
@@ -485,7 +523,7 @@ save_to_file(Program_State *state)
             
             // __prepare next iteration + get sum___
             Record *next_record = record + 1;
-            is_new_day = ((record_index == record_count-1) || 
+            is_new_day = ((record_index == state->records.count-1) || 
                           !are_in_same_day(record, next_record));
             
             if (is_new_day)
@@ -576,7 +614,7 @@ automatic_save_to_file(Program_State *state)
 internal void 
 add_record(Program_State *state, Record *data)
 {
-    s64 candidate_index = state->records.count();
+    s64 candidate_index = state->records.count;
     b32 replace = false;
     
     for (s64 index = candidate_index - 1;
@@ -819,11 +857,23 @@ parse_command_add_sub(Program_State *state, Tokenizer *tokenizer, b32 is_add)
     Forward_Token forward = create_forward_token(tokenizer);
     
     Record record = {};
-    record.type = is_add ? Record_TimeAdd : Record_TimeSub;
+    record.type = Record_TimeDelta;
     
     b32 success = fill_date_optional(state, &forward, &record);
     
-    if (success) { success = fill_time_required(state, &forward, &record); }
+    if (success) { 
+        success = fill_time_required(state, &forward, &record); 
+        if (!is_add) record.value *= -1;
+        
+        if (success && record.value == 0)
+        {
+            Print_Parse_Error(state);
+            printf("[Warning] Time equal to zero! Record not added.");
+            print_line_with_token(forward.token);
+            Print_ClearN();
+            return;
+        }
+    }
     
     if (success) { fill_description_optional(&forward, &record); }
     
@@ -1392,8 +1442,9 @@ process_input(char *content, Program_State *state, b32 reading_from_file,
 internal void 
 clear_memory(Program_State *state)
 {
+    state->defered_descs.clear();
     clear_arena(&state->mixed_arena);
-    clear_arena(&state->records.arena);
+    state->records.clear();
 }
 
 
@@ -1485,16 +1536,16 @@ int main(int argument_count, char **arguments)
         total_res.size = total_size;
         total_res.address = raw_memory_block;
         
-        Alloc_Resources temp_res = plan_alloc(&total_res, Megabytes(16));
+        Alloc_Resources defered_desc_res = plan_alloc(&total_res, Megabytes(16));
         Alloc_Resources mixed_res = plan_alloc(&total_res, Megabytes(512));
         Alloc_Resources record_res = plan_alloc(&total_res, total_res.size);
         
         Assert(total_res.size == 0);
         Assert((total_res.address - raw_memory_block) == total_size);
         
-        alocate_arena(&state.defered_descs.arena, temp_res.address, temp_res.size);
+        alocate_arena(&state.defered_descs.arena_, defered_desc_res.address, defered_desc_res.size);
         alocate_arena(&state.mixed_arena, mixed_res.address, mixed_res.size);
-        alocate_arena(&state.records.arena, record_res.address, record_res.size);
+        alocate_arena(&state.records.arena_, record_res.address, record_res.size);
     }
     
     clear_memory(&state);
@@ -1662,7 +1713,7 @@ int main(int argument_count, char **arguments)
             process_input(thread_memory.input_buffer, &state, false, &is_running);
             if (state.change_count > 0)
             {
-                if (state.records.count() > 0)
+                if (state.records.count > 0)
                 {
                     Record *last_record = get_last_record(&state);
                     print_days_from_range(&state, last_record->date, last_record->date, true);

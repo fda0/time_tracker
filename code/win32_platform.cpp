@@ -85,6 +85,7 @@ namespace Global_Color
     global_variable char *f_date = "\033[33m";
     global_variable char *f_sum = "\033[32m";
     global_variable char *f_desc = "\033[36m";
+    global_variable char *f_desc_delta = "\033[96m";
     global_variable char *f_reset = "\033[39m";
     
     global_variable char *b_error = "\033[41m";
@@ -122,6 +123,7 @@ initialize_colors(bool turn_off_colors)
         f_date = "";
         f_sum = "";
         f_desc = "";
+        f_desc_delta = "";
         f_reset = "";
         
         b_error = "";

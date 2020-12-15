@@ -114,8 +114,7 @@ enum Record_Type : s32
     Record_Empty,
     Record_TimeStart,
     Record_TimeStop,
-    Record_TimeAdd,
-    Record_TimeSub,
+    Record_TimeDelta,
     Record_CountDelta
 };
 

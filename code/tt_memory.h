@@ -3,14 +3,12 @@ struct Memory_Arena
     size_t size;
     u8* base;
     size_t used;
-    s64 count;
 };
 
 
 inline void clear_arena(Memory_Arena *arena)
 {
     arena->used = 0;
-    arena->count = 0;
 }
 
 internal void alocate_arena(Memory_Arena *arena, u8 *memory_address, size_t size)
@@ -44,17 +42,15 @@ get_aligment_offset(Memory_Arena *arena, size_t aligment)
 
 // NOTE: Gives back aligned pointer with size allocated for any type.
 #define Push_Struct(Arena, Type) \
-((Type *)push_size_aligned_(Arena, sizeof(Type), alignof(Type), 1))
+((Type *)push_size_aligned_(Arena, sizeof(Type), alignof(Type)))
 
 // NOTE: Gives back aligned pointer with size allocated for array of any type.
 #define Push_Array(Arena, Count, Type) \
-((Type *)push_size_aligned_(Arena, (Count) * sizeof(Type), alignof(Type), (s64)Count))
+((Type *)push_size_aligned_(Arena, (Count) * sizeof(Type), alignof(Type)))
 
 // NOTE: Internal raw allocation call.
-void *push_size_aligned_(Memory_Arena *arena, size_t size, s64 aligment, s64 count)
+void *push_size_aligned_(Memory_Arena *arena, size_t size, s64 aligment)
 {
-    arena->count += count;
-    
     size_t needed_size = (arena->used + size);
     if (needed_size > arena->size)
     {
@@ -81,11 +77,18 @@ void *push_size_aligned_(Memory_Arena *arena, size_t size, s64 aligment, s64 cou
 template <typename T> 
 struct Dynamic_Array
 {
-    Memory_Arena arena;
+    Memory_Arena arena_;
+    s64 count;
     
     void initialize(u8 *memory_address, size_t size)
     {
         alocate_arena(&arena, memory_address, size);
+    }
+    
+    void clear()
+    {
+        clear_arena(&arena_);
+        count = 0;
     }
     
     
@@ -93,13 +96,18 @@ struct Dynamic_Array
     
     T *push_struct()
     {
-        T *result = Push_Struct(&arena, T);
+        T *result = Push_Struct(&arena_, T);
+        ++count;
+        
         return result;
     }
     
-    T *push_array(s64 count)
+    T *push_array(s64 element_count)
     {
-        T *result = Push_Array(&arena, count, T);
+        T *result = Push_Array(&arena_, element_count, T);
+        count += element_count;
+        
+        return result;
     }
     
     
@@ -107,18 +115,12 @@ struct Dynamic_Array
     
     //~ get
     
-    s64 count()
-    {
-        s64 result = arena.count;
-        return result;
-    }
-    
     T *at(s64 index)
     {
-        T *result = ((T *)arena.base) + index;
+        T *result = ((T *)arena_.base) + index;
         
 #if BUILD_INTERNAL
-        if (!(index >= 0 && index < arena.count))
+        if (!(index >= 0 && index < count))
         {
             Invalid_Code_Path;
         }
@@ -145,7 +147,7 @@ struct Dynamic_Array
         
         T *prev = new_elem;
         
-        for (s64 data_index = arena.count-2;
+        for (s64 data_index = count-2;
              data_index >= index;
              --data_index)
         {
