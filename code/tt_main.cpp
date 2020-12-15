@@ -38,13 +38,20 @@ get_last_record(Program_State *state)
 
 
 internal Description
-create_description(Token token)
+create_description(Program_State *state, Token token)
 {
     Assert(token.type == Token_String);
     
     Description result;
     result.length = (s32)token.text_length;
-    result.content = token.text;
+    result.content = Push_Array(&state->mixed_arena, result.length, char);
+    
+    for (s64 i = 0;
+         i < result.length;
+         ++i)
+    {
+        result.content[i] = token.text[i];
+    }
     
     return result;
 }
@@ -340,8 +347,7 @@ internal void
 print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
                       b32 alternative_colors = false)
 {
-    enum Range_State
-    {
+    enum Range_State {
         Range_Open,
         Range_Closed_PrePrint,
         Range_Closed_PostPrint
@@ -369,11 +375,14 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
         Record *record = state->records.at(record_index);
         
         // skip if not in range
-        if ((date_end) && (record->date > date_end)) break;
+        if ((date_end) && (record->date > date_end)) { break; }
+        
         if ((date_begin) && (record->date < date_begin)) { 
             active_day_index = record_index+1;
             continue; 
         }
+        
+        
         
         
         // print day header
@@ -410,8 +419,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
         { 
             if (!record->description.length) {
                 sum += record->value; 
-            }
-            else {
+            } else {
                 Defered_Description defered = {
                     record->description,
                     record->value
@@ -844,13 +852,13 @@ fill_time_required(Program_State *state, Forward_Token *forward, Record *record)
 }
 
 internal void
-fill_description_optional(Forward_Token *forward, Record *record)
+fill_description_optional(Program_State *state, Forward_Token *forward, Record *record)
 {
     if ((forward->peek.type == Token_String))
     {
         advance(forward);
         
-        record->description = create_description(forward->token);
+        record->description = create_description(state, forward->token);
     }
 }
 
@@ -866,7 +874,7 @@ prase_command_start(Program_State *state, Tokenizer *tokenizer)
     
     if (success) { success = fill_time_optional(state, &forward, &record); }
     
-    if (success) { fill_description_optional(&forward, &record); }
+    if (success) { fill_description_optional(state, &forward, &record); }
     
     if (success) { 
         add_record(state, &record); 
@@ -930,7 +938,7 @@ parse_command_add_sub(Program_State *state, Tokenizer *tokenizer, b32 is_add)
         }
     }
     
-    if (success) { fill_description_optional(&forward, &record); }
+    if (success) { fill_description_optional(state, &forward, &record); }
     
     if (success) {
         add_record(state, &record);
