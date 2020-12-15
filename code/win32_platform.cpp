@@ -136,19 +136,43 @@ initialize_colors(bool turn_off_colors)
 internal void 
 platform_clear_screen()
 {
-    s32 columns_to_clear = 30;
+    // NOTE: Example 2 from https://docs.microsoft.com/en-us/windows/console/clearing-the-screen
     
-    HANDLE screen = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_SCREEN_BUFFER_INFO buffer;
-    if (GetConsoleScreenBufferInfo(screen, &buffer))
+    HANDLE console_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    SMALL_RECT scrollRect;
+    COORD scrollTarget;
+    CHAR_INFO fill;
+    
+    // Get the number of character cells in the current buffer.
+    if (!GetConsoleScreenBufferInfo(console_handle, &csbi))
     {
-        columns_to_clear = buffer.dwMaximumWindowSize.Y;
+        return;
     }
     
-    for (int i = 0; i < columns_to_clear; ++i)
-    {
-        printf("\n");
-    }
+    // Scroll the rectangle of the entire buffer.
+    scrollRect.Left = 0;
+    scrollRect.Top = 0;
+    scrollRect.Right = csbi.dwSize.X;
+    scrollRect.Bottom = csbi.dwSize.Y;
+    
+    // Scroll it upwards off the top of the buffer with a magnitude of the entire height.
+    scrollTarget.X = 0;
+    scrollTarget.Y = (SHORT)(0 - csbi.dwSize.Y);
+    
+    // Fill with empty spaces with the buffer's default text attribute.
+    fill.Char.UnicodeChar = TEXT(' ');
+    fill.Attributes = csbi.wAttributes;
+    
+    // Do the scroll
+    ScrollConsoleScreenBuffer(console_handle, &scrollRect, NULL, scrollTarget, &fill);
+    
+    // Move the cursor to the top left corner too.
+    csbi.dwCursorPosition.X = 0;
+    csbi.dwCursorPosition.Y = 0;
+    
+    SetConsoleCursorPosition(console_handle, csbi.dwCursorPosition);
 }
 
 

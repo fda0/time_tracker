@@ -295,6 +295,47 @@ get_sign_char_and_abs_value(s32 *value)
     return result;
 }
 
+internal void
+print_record_tail(Program_State *state, s32 *sum)
+{
+    using namespace Global_Color;
+    
+    printf("  ");
+    
+    if (*sum)
+    {
+        char sign = get_sign_char_and_abs_value(sum);
+        Str32 sum_str = get_time_string(*sum);
+        printf("  %c%s", sign, sum_str.str);
+        *sum = 0;
+    }
+    
+    for (s64 def_index = 0;
+         def_index < state->defered_descs.count;
+         ++def_index)
+    {
+        Defered_Description *def = state->defered_descs.at(def_index);
+        
+        if (def->value)
+        {
+            char sign = get_sign_char_and_abs_value(&def->value);
+            Str32 val_str = get_time_string(def->value);
+            printf("  %c%s", sign, val_str.str);
+        }
+        
+        if (def->description.length)
+        {
+            printf(" %s\"%.*s\"%s", 
+                   (def->value ? f_desc_delta : f_desc), 
+                   def->description.length, def->description.content,
+                   f_reset);
+        }
+    }
+    
+    printf("\n");
+    state->defered_descs.clear();
+}
+
 internal void 
 print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
                       b32 alternative_colors = false)
@@ -319,7 +360,10 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
         
         // skip if not in range
         if ((date_end) && (record->date > date_end)) break;
-        if ((date_begin) && (record->date < date_begin)) continue;
+        if ((date_begin) && (record->date < date_begin)) { 
+            active_day_index = record_index+1;
+            continue; 
+        }
         
         
         // print day header
@@ -370,39 +414,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
         
         if (!range_open)
         {
-            printf("  ");
-            
-            if (sum)
-            {
-                char sign = get_sign_char_and_abs_value(&sum);
-                Str32 sum_str = get_time_string(sum);
-                printf("  %c%s", sign, sum_str.str);
-                sum = 0;
-            }
-            
-            for (s64 def_index = 0;
-                 def_index < state->defered_descs.count;
-                 ++def_index)
-            {
-                Defered_Description *def = state->defered_descs.at(def_index);
-                
-                if (def->value)
-                {
-                    char sign = get_sign_char_and_abs_value(&def->value);
-                    Str32 val_str = get_time_string(def->value);
-                    printf("  %c%s", sign, val_str.str);
-                }
-                
-                printf(" %s\"%.*s\"%s", 
-                       (def->value ? f_desc_delta : f_desc), 
-                       def->description.length, def->description.content,
-                       f_reset);
-            }
-            
-            printf("\n");
-            state->defered_descs.clear();
-            
-            
+            print_record_tail(state, &sum);
             
             if (record->type == Record_TimeStart)
             {
@@ -425,8 +437,14 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
         if (is_new_day)
         {
             Day_Sum_Result sum_result = calculate_sum_for_day(state, active_day_index);
-            
             Str128 sum_bar = get_sum_and_progress_bar_string(sum_result.sum, sum_result.missing_ending);
+            
+            if (sum_result.missing_ending != MissingEnding_None) 
+            {
+                printf("     ");
+                print_record_tail(state, &sum);
+            }
+            
             printf("%s%s%s\n", f_sum, sum_bar.str, f_reset);
             
             active_day_index = record_index+1;
@@ -1002,6 +1020,21 @@ get_date_range(Program_State *state, Tokenizer *tokenizer)
 }
 
 
+internal Date_Range_Result
+get_recent_month_range(Program_State *state)
+{
+    date64 today = get_today(state);
+    Record *last_record = get_last_record(state);
+    if (last_record && last_record->date != today)
+    {
+        today = last_record->date;
+    }
+    date64 month_ago = today - Days(31);
+    
+    Date_Range_Result result = { month_ago, today, Con_IsValid };
+    return result;
+}
+
 
 internal void
 parse_command_show(Program_State *state, Tokenizer *tokenizer)
@@ -1016,15 +1049,8 @@ parse_command_show(Program_State *state, Tokenizer *tokenizer)
     }
     else if (range.condition == Con_NoMatchigTokens)
     {
-        date64 today = get_today(state);
-        Record *last_record = get_last_record(state);
-        if (last_record && last_record->date != today)
-        {
-            today = last_record->date;
-        }
-        date64 month_ago = today - Days(31);
-        
-        print_days_from_range(state, month_ago, today);
+        Date_Range_Result recent = get_recent_month_range(state);
+        print_days_from_range(state, recent.begin, recent.end);
     }
     else
     {
@@ -1675,7 +1701,8 @@ int main(int argument_count, char **arguments)
     b32 did_save_on_first_load = false;
     if (state.parse_error_count == 0)
     {
-        print_days_from_range(&state, 0, 0);
+        Date_Range_Result range = get_recent_month_range(&state);
+        print_days_from_range(&state, range.begin, range.end);
         save_to_file(&state);
         did_save_on_first_load = true;
     }
