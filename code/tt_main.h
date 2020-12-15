@@ -103,6 +103,12 @@ struct Description
     s32 length;
 };
 
+struct Defered_Description
+{
+    Description description;
+    s32 value;
+};
+
 enum Record_Type : s32
 {
     Record_Empty,
@@ -129,6 +135,7 @@ struct Record
 
 struct Program_State
 {
+    Dynamic_Array<Defered_Description> defered_descs;
     Memory_Arena mixed_arena;
     Dynamic_Array<Record> records;
     

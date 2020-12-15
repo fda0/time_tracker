@@ -1,28 +1,28 @@
 // Sunday
-start 2019-03-10 09:45;
-add 02:00;
-stop 11:20;
-start 17:59;
-sub 01:23;
-stop 18:00;
+start 2019-03-10 09:45
+add 02:00
+stop 11:20
+start 17:59
+sub 01:23
+stop 18:00
 // sum: 02:13	[++- ]
 
 // Wednesday
-start 2019-04-10 09:55;
+start 2019-04-10 09:55
 // sum: 20:01	[++++ ++++ ++++ ++++ ++++ -   ]
 
 // Thursday
-add 2019-04-11 00:10;
-stop 05:56;
-sub 00:15;
+add 2019-04-11 00:10
+stop 05:56
+sub 00:15
 // sum: -00:05	[]
 
 // Wednesday
-start 2020-01-01 23:00 	"meh";
+start 2020-01-01 23:00 "meh"
 // sum: 04:00	[++++]
 
 // Thursday
-start 2020-01-02 03:00 	"hah";
-stop 04:00;
+start 2020-01-02 03:00 "hah"
+stop 04:00
 // sum: 01:00	[+   ]
 

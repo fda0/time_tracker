@@ -2,7 +2,7 @@
 #include <windows.h>
 
 
-// TODO: Don't compare when one file is out of range...
+// TODO: Don't compare results when one file is out of range...
 
 
 int main()
@@ -12,13 +12,13 @@ int main()
     //~ NOTE: Delete old files from output/
     printf("deleted: ");
     {
-        // NOTE(mg): Construct search string to find old files
+        // NOTE: Construct search string to find old files
         WIN32_FIND_DATAA file_data = {};
         char search_str[MAX_PATH];
         snprintf(search_str, sizeof(search_str), "%s\\*", output_dir);
         HANDLE file_handle = FindFirstFileA(search_str, &file_data);
         
-        // NOTE(mg): Iterate over these files and delete them
+        // NOTE: Iterate over these files and delete them
         if (file_handle != INVALID_HANDLE_VALUE) {
             do {
                 if (!(file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
@@ -33,7 +33,7 @@ int main()
     }
     
     
-    // NOTE(mg): Ensure reference and input directories exist
+    // NOTE: Ensure reference and input directories exist
     char *ref_dir = "referece";
     CreateDirectoryA(ref_dir, NULL);
     char *input_dir = "input";
@@ -45,7 +45,7 @@ int main()
     int success_counter = 0;
     
     {
-        // NOTE(mg): Create search string to find all files inside input/
+        // NOTE: Create search string to find all files inside input/
         WIN32_FIND_DATAA file_data = {};
         char search_str[MAX_PATH];
         snprintf(search_str, sizeof(search_str), "%s\\*", input_dir);

@@ -1,6 +1,5 @@
 /*
     TODO:
-    * Allow to specify input filenames/paths from input arguments.
     * Config file?
 * Clean up error printing code.
     * Convert to use Unicode?
@@ -299,8 +298,6 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
     // and maybe exclude them from sum... example:
     // 16:30 -> 18:30  +00:30 "Working on X" -00:15 "Tea break"
     
-    // TODO: show <one_day_date> bug! sum always shows 06:40...
-    
     
     using namespace Global_Color;
     
@@ -478,11 +475,11 @@ save_to_file(Program_State *state)
             // print description
             if (record->description.length)
             {
-                fprintf(file, " \t\"%.*s\"", record->description.length, record->description.content);
+                fprintf(file, " \"%.*s\"", record->description.length, record->description.content);
             }
             
             // new line
-            fprintf(file, ";\n"); // TODO: delete ;
+            fprintf(file, "\n");
             
             
             
@@ -666,7 +663,7 @@ fill_date_optional(Program_State *state, Forward_Token *forward, Record *record)
 {
     b32 success = false;
     
-    if (forward->peek.type == Token_Date) // TODO(mg): pull out!!
+    if (forward->peek.type == Token_Date)
     {
         advance(forward);
         
@@ -1445,6 +1442,27 @@ read_from_keyboard(Thread_Memory *thread_memory)
 
 
 
+struct Alloc_Resources
+{
+    size_t size;
+    u8 *address;
+};
+
+inline Alloc_Resources
+plan_alloc(Alloc_Resources *total_res, size_t size_to_alloc)
+{
+    Alloc_Resources result = {};
+    result.size = size_to_alloc;
+    result.address = total_res->address;
+    
+    total_res->size -= size_to_alloc;
+    total_res->address += size_to_alloc;
+    
+    Assert(total_res->size >= 0);
+    
+    return result;
+}
+
 
 enum Cmd_Arugment_Type
 {
@@ -1460,12 +1478,25 @@ int main(int argument_count, char **arguments)
     
     // NOTE: Initialize arenas:
     const size_t total_size = Gigabytes(1);
-    const size_t mixed_arena_size = Megabytes(512);
-    const size_t record_arena_size = total_size - mixed_arena_size;
-    static u8 raw_memory_block[total_size];
+    static u8 raw_memory_block[total_size]; // TODO: Move to VirtualAlloc
     
-    alocate_arena(&state.mixed_arena, raw_memory_block, mixed_arena_size);
-    alocate_arena(&state.records.arena, raw_memory_block + mixed_arena_size, record_arena_size);
+    { // SCOPE: Memory partitioning
+        Alloc_Resources total_res = {};
+        total_res.size = total_size;
+        total_res.address = raw_memory_block;
+        
+        Alloc_Resources temp_res = plan_alloc(&total_res, Megabytes(16));
+        Alloc_Resources mixed_res = plan_alloc(&total_res, Megabytes(512));
+        Alloc_Resources record_res = plan_alloc(&total_res, total_res.size);
+        
+        Assert(total_res.size == 0);
+        Assert((total_res.address - raw_memory_block) == total_size);
+        
+        alocate_arena(&state.defered_descs.arena, temp_res.address, temp_res.size);
+        alocate_arena(&state.mixed_arena, mixed_res.address, mixed_res.size);
+        alocate_arena(&state.records.arena, record_res.address, record_res.size);
+    }
+    
     clear_memory(&state);
     
     b32 reformat_mode = false;

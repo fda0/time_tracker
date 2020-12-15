@@ -1,19 +1,19 @@
-start 2019-03-10 09:45;
-add 120;
-stop 11:20;
-start 17:59;
-sub 1:23;
-stop 18:00;
+start 2019-03-10 09:45
+add 120
+stop 11:20
+start 17:59
+sub 1:23
+stop 18:00
 
-start 2019-04-10 09:55;
+start 2019-04-10 09:55
 
 // should include "add & sub" for 04-11 (it ignores overeaching time range rule)
-add 2019-04-11 10;
-stop 05:56;
-sub 15;
+add 2019-04-11 10
+stop 05:56
+sub 15
 
 
-start 2020-01-01 23:00 "meh";
+start 2020-01-01 23:00 "meh"
 
-start 2020-01-02 03:00 "hah";
-stop 04:00;
+start 2020-01-02 03:00 "hah"
+stop 04:00
