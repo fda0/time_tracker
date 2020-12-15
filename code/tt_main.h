@@ -148,10 +148,30 @@ struct Program_State
 };
 
 
+enum Condition
+{
+    Con_NoMatchigTokens,
+    Con_HasErrors,
+    Con_IsValid,
+};
+
+inline b32
+is_condition_valid(Condition condition)
+{
+    b32 result = (condition == Con_IsValid);
+    return result;
+}
+
 struct Parse_Date_Result
 {
     date64 date;
     b32 is_valid;
+};
+
+struct Parse_Complex_Date_Result
+{
+    date64 date;
+    Condition condition;
 };
 
 struct Parse_Time_Result
@@ -179,5 +199,5 @@ struct Date_Range_Result
             date64 end; // NOTE: Inclusive end
         };
     };
-    b32 is_valid;
+    Condition condition;
 };

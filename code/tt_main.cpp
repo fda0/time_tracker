@@ -75,6 +75,8 @@ parse_number(char *src, s32 count)
 internal Parse_Date_Result 
 parse_date(Program_State *state, Token token)
 {
+    Assert(token.type == Token_Date);
+    
     // NOTE: Supported format: 2020-12-31
     Parse_Date_Result result = {};
     
@@ -297,6 +299,8 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
     // and maybe exclude them from sum... example:
     // 16:30 -> 18:30  +00:30 "Working on X" -00:15 "Tea break"
     
+    // TODO: show <one_day_date> bug! sum always shows 06:40...
+    
     
     using namespace Global_Color;
     
@@ -390,7 +394,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
             Str128 sum_bar = get_sum_and_progress_bar_string(sum_result.sum, sum_result.missing_ending);
             printf("%s%s%s\n", f_sum, sum_bar.str, f_reset);
             
-            active_day_index = record_index;
+            active_day_index = record_index+1;
         }
     }
 }
@@ -641,6 +645,7 @@ add_record(Program_State *state, Record *data)
         if (can_add)
         {
             state->records.insert_at(data, candidate_index);
+            ++state->change_count;
         }
         else
         {
@@ -652,6 +657,7 @@ add_record(Program_State *state, Record *data)
     else
     {
         *state->records.at(candidate_index) = *data;
+        ++state->change_count;
     }
 }
 
@@ -839,16 +845,19 @@ parse_command_add_sub(Program_State *state, Tokenizer *tokenizer, b32 is_add)
 
 
 
-internal Parse_Date_Result
+internal Parse_Complex_Date_Result
 parse_complex_date(Program_State *state, Token token)
 {
     // NOTE: Allows to use keywords like today, yesterday + normal date formats
     // TODO: ^ today+1 yesterday-4
     
-    Parse_Date_Result result = {};
+    Parse_Complex_Date_Result result = {};
+    
     if (token.type == Token_Date)
     {
-        result = parse_date(state, token);
+        Parse_Date_Result parse = parse_date(state, token);
+        result.date = parse.date;
+        result.condition = (parse.is_valid) ? Con_IsValid : Con_HasErrors;
     }
     
     return result;
@@ -859,7 +868,7 @@ internal Date_Range_Result
 get_max_date_range()
 {
     Date_Range_Result result;
-    result.is_valid = true;
+    result.condition = Con_IsValid;
     result.begin = 1;
     result.end = S64_MAX;
     
@@ -871,7 +880,7 @@ get_date_range(Program_State *state, Tokenizer *tokenizer)
 {
     Date_Range_Result result = {};
     b32 success = true;
-    b32 has_range = false;
+    b32 has_matching_token = false;
     
     Forward_Token forward = create_forward_token(tokenizer);
     
@@ -880,10 +889,10 @@ get_date_range(Program_State *state, Tokenizer *tokenizer)
         token_equals(forward.peek, "from"))
     {
         advance(&forward);
-        has_range = true;
+        has_matching_token = true;
         
-        Parse_Date_Result date = parse_complex_date(state, forward.peek);
-        success = date.is_valid;
+        Parse_Complex_Date_Result date = parse_complex_date(state, forward.peek);
+        success = is_condition_valid(date.condition);
         if (success)
         {
             result.begin = date.date;
@@ -898,10 +907,10 @@ get_date_range(Program_State *state, Tokenizer *tokenizer)
             token_equals(forward.peek, "to"))
         {
             advance(&forward);
-            has_range = true;
+            has_matching_token = true;
             
-            Parse_Date_Result date = parse_complex_date(state, forward.peek);
-            success = date.is_valid;
+            Parse_Complex_Date_Result date = parse_complex_date(state, forward.peek);
+            success = is_condition_valid(date.condition);
             if (success)
             {
                 result.end = date.date;
@@ -913,18 +922,19 @@ get_date_range(Program_State *state, Tokenizer *tokenizer)
     
     if (success)
     {
-        if (!has_range)
+        if (!has_matching_token)
         {
             if (token_equals(forward.peek, "all"))
             {
+                has_matching_token = true;
                 result = get_max_date_range();
                 advance(&forward);
             }
             else
             {
-                Parse_Date_Result date = parse_complex_date(state, forward.peek);
-                success = date.is_valid;
-                if (success)
+                Parse_Complex_Date_Result date = parse_complex_date(state, forward.peek);
+                result.condition = date.condition;
+                if (is_condition_valid(result.condition))
                 {
                     result.begin = date.date;
                     result.end = date.date;
@@ -932,9 +942,15 @@ get_date_range(Program_State *state, Tokenizer *tokenizer)
                 }
             }
         }
+        else {
+            result.condition = Con_IsValid;
+        }
+    }
+    else {
+        result.condition = Con_HasErrors;
     }
     
-    result.is_valid = success;
+    
     return result;
 }
 
@@ -947,9 +963,21 @@ parse_command_show(Program_State *state, Tokenizer *tokenizer)
     
     Date_Range_Result range = get_date_range(state, tokenizer);
     
-    if (range.is_valid)
+    if (range.condition == Con_IsValid)
     {
         print_days_from_range(state, range.begin, range.end);
+    }
+    else if (range.condition == Con_NoMatchigTokens)
+    {
+        date64 today = get_today(state);
+        Record *last_record = get_last_record(state);
+        if (last_record && last_record->date != today)
+        {
+            today = last_record->date;
+        }
+        date64 month_ago = today - Days(31);
+        
+        print_days_from_range(state, month_ago, today);
     }
     else
     {
@@ -1127,7 +1155,7 @@ parse_command_summary(Program_State *state, Tokenizer *tokenizer)
     // arg - optional - time range
     Date_Range_Result range = get_date_range(state, tokenizer);
     
-    if (!range.is_valid)
+    if (range.condition == Con_NoMatchigTokens)
     {
         range = get_max_date_range();
     }
@@ -1135,7 +1163,7 @@ parse_command_summary(Program_State *state, Tokenizer *tokenizer)
     process_and_print_summary(state, granularity, range.begin, range.end);
     
     
-#if 0
+    if (range.condition == Con_HasErrors)
     {
         Print_Parse_Error(state);
         printf("Incorect command usage. Use:\n"
@@ -1147,7 +1175,6 @@ parse_command_summary(Program_State *state, Tokenizer *tokenizer)
         print_line_with_token(forward.token);
         Print_ClearN();
     }
-#endif
 }
 
 
