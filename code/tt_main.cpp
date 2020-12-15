@@ -472,7 +472,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
             
             if (sum_result.missing_ending != MissingEnding_None) 
             {
-                printf(".,.  ");
+                printf(" ->  ... ");
                 print_record_tail(state, &sum);
             }
             else if (range_state == Range_Open)
