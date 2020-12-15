@@ -1,9 +1,17 @@
 # Time Tracker
 
-This program was designed to work with text files that are easy to edit manually.
-It reads the file, validates it, calculates sums and updates it with new formatting and comments.
+This is a simple time tracking command line program.
+It was designed to fit my needs.
+Feedback is welcome but keep in mind I'm trying to minimize complexity of this tool.
 
-Changes are saved and archived automatically. If decide to edit the file directly changes will get automatically loaded.
+Time Tracker was designed to work with text files that are easy to edit manually.
+It reads the file, validates it and reformats it with added comments.
+
+Changes are saved and archived automatically. 
+You can edit the file in external editor and state of the program should get automatically refreshed
+Using text editor with hot file reloading is recommended.
+
+Icon was created using this image: https://www.freepik.com/free-vector/hand-drawn-retro-pocket-watch_2783059.htm
 
 
 ### TODOs
@@ -17,42 +25,67 @@ Changes are saved and archived automatically. If decide to edit the file directl
 ### Example time_tracker.txt
 Raw:
 ```
-start 2020-07-21 11:10 "Optional description";
-sub 01:15 "Procrastinating";
-stop 14:00;
-start 19:21;
-stop 21:32;
+start 2020-07-22 11:10 "optional description"
+sub 01:15 "eating break"
+stop 14:00
 
-start 2020-07-22 10:34;
-sub 120;
-stop 14:22;
-add 4:30;
 
-start 2020-07-23 22:49 "TT";
-stop 2020-07-24 01:16;
+start 2020-07-23 19:21 "programming TimeTracker"
 
+// you can create new range without without using stop command
+start 20:00 "playing games break" 
+stop 21:37
+start 22:49 "programming at night"
+sub 10
+add 25
+
+
+// ranges that go over midnight will get counted to previous day's sum
+stop 2020-07-24 01:16
+start 10:00 "programming PingStats"
+
+
+// this stop will get overridden with start below
+stop 11:00 
+start 11:00
+start 11:30
+sub 10 "distracted"
+stop 13:00
+
+
+add 2020-07-30 5:30
 ```
+
+
 After running the program:
 ```
-// Tuesday
-start 2020-07-21 11:10 "Optional description";
-sub 01:15 "Procrastinating";
-stop 14:00;
-start 2020-07-21 19:21;
-stop 21:32;
-// sum: 03:46   [+++-]
-
 // Wednesday
-start 2020-07-22 10:34;
-sub 02:00;
-stop 14:22;
-add 04:30;
-// sum: 06:18   [++++ ++- ]
+start 2020-07-22 11:10 "optional description"
+sub 01:15 "eating break"
+stop 14:00
+// sum: 01:35       [+-  ]
 
 // Thursday
-start 2020-07-23 22:49 "TT";
-stop 2020-07-24 01:16;
-// sum: 02:27   [++- ]
+start 2020-07-23 19:21 "programming TimeTracker"
+start 20:00 "playing games break"
+stop 21:37
+start 22:49 "programming at night"
+sub 00:10
+add 00:25
+// sum: 04:58       [++++ -   ]
+
+// Friday
+stop 2020-07-24 01:16
+start 10:00 "programming PingStats"
+start 11:00
+start 11:30
+sub 00:10 "distracted"
+stop 13:00
+// sum: 02:50       [++- ]
+
+// Thursday
+add 2020-07-30 05:30
+// sum: 05:30       [++++ +-  ]
 ```
 
 

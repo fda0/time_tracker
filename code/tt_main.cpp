@@ -340,6 +340,14 @@ internal void
 print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
                       b32 alternative_colors = false)
 {
+    enum Range_State
+    {
+        Range_Open,
+        Range_Closed_PrePrint,
+        Range_Closed_PostPrint
+    };
+    
+    
     // TODO: Add/Sub descriptions contained in range should push their descriptions to transient_arena
     // and maybe exclude them from sum... example:
     // 16:30 -> 18:30  +00:30 "Working on X" -00:15 "Tea break"
@@ -349,8 +357,10 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
     
     b32 is_new_day = true;
     s64 active_day_index = 0;
-    b32 range_open = false;
     time32 sum = 0;
+    
+    Range_State range_state = Range_Closed_PostPrint;
+    b32 overnight_carry = false;
     
     for (s64 record_index = 0;
          record_index < state->records.count;
@@ -387,46 +397,67 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
         Str32 time_str = get_time_string(record->value);
         
         if (record->type == Record_TimeStop) 
-        { 
-            printf(time_str.str);
-            range_open = false;
+        {
+            if (overnight_carry) {
+                printf(" ... ");
+                overnight_carry = false;
+            }
+            
+            printf(" -> %s", time_str.str);
+            range_state = Range_Closed_PrePrint;
         }
         else if (record->type == Record_TimeDelta) 
         { 
-            if (!record->description.length)
-            {
+            if (!record->description.length) {
                 sum += record->value; 
             }
-            else
-            {
+            else {
                 Defered_Description defered = {
                     record->description,
                     record->value
                 };
                 state->defered_descs.add(&defered);
             }
-        }
-        else if (range_open && record->type == Record_TimeStart) 
+            
+            if (range_state == Range_Closed_PostPrint) {
+                range_state = Range_Closed_PrePrint;
+            }
+        } 
+        else if (range_state == Range_Open && 
+                 record->type == Record_TimeStart) 
         {
-            printf(time_str.str);
-            range_open = false;
+            if (overnight_carry) {
+                printf(" ... ");
+                overnight_carry = false;
+            }
+            
+            printf("%s -> %s%s", f_dimmed, time_str.str, f_reset);
+            range_state = Range_Closed_PrePrint;
         }
         
-        if (!range_open)
+        
+        
+        
+        if (range_state == Range_Closed_PrePrint)
         {
             print_record_tail(state, &sum);
-            
-            if (record->type == Record_TimeStart)
-            {
-                printf("%s -> ", time_str.str);
-                range_open = true;
-                
-                Defered_Description defered = {
-                    record->description
-                };
-                state->defered_descs.add(&defered);
-            }
+            range_state = Range_Closed_PostPrint;
         }
+        
+        
+        if (range_state == Range_Closed_PostPrint &&
+            (record->type == Record_TimeStart))
+        {
+            printf("%s", time_str.str);
+            range_state = Range_Open;
+            
+            Defered_Description defered = {
+                record->description
+            };
+            state->defered_descs.add(&defered);
+        }
+        
+        
         
         
         // __prepare next iteration + get sum___
@@ -441,8 +472,14 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
             
             if (sum_result.missing_ending != MissingEnding_None) 
             {
-                printf("     ");
+                printf(".,.  ");
                 print_record_tail(state, &sum);
+            }
+            else if (range_state == Range_Open)
+            {
+                printf(" ->  ... ");
+                print_record_tail(state, &sum);
+                overnight_carry = true;
             }
             
             printf("%s%s%s\n", f_sum, sum_bar.str, f_reset);

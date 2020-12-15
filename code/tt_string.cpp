@@ -167,7 +167,7 @@ get_sum_and_progress_bar_string(time32 sum, Missing_Ending missing_ending)
     
     char *minus = (sum < 0) ? "-" : "";
     Str128 result;
-    snprintf(result.str, sizeof(result.str), "sum: %s%s\t%s", minus, time.str, bar.str);
+    snprintf(result.str, sizeof(result.str), "sum: %s%s       %s", minus, time.str, bar.str);
     return result;
 }
 

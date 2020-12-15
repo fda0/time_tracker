@@ -44,4 +44,6 @@ cl %opts% %Mode% %WinSourcePath% %link_opts%
 popd
 
 
+if "%1" == "release" (call update_icon.bat)
+
 
