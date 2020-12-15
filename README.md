@@ -11,19 +11,25 @@ Changes are saved and archived automatically.
 You can edit the file in external editor and state of the program should get automatically refreshed
 Using text editor with hot file reloading is recommended.
 
-Icon was created using this image: https://www.freepik.com/free-vector/hand-drawn-retro-pocket-watch_2783059.htm
+Icon based on this image: https://www.freepik.com/free-vector/hand-drawn-retro-pocket-watch_2783059.htm
 
 
 ### TODOs
-- [ ] Support for advanced queries - selecting from data ranges and/or searching in description.
-- [ ] Linux version.
+- [ ] Filtering by matching text in description
+- [ ] Even more filtering options
+- [ ] Count system (kind of unrelated to time)
+- [ ] Linux version
+- [x] Filtering based on data ranges
+
 
 ### In action
 ![Screenshot](screenshot_01.png)
 
 
 ### Example time_tracker.txt
+
 Raw:
+
 ```
 start 2020-07-22 11:10 "optional description"
 sub 01:15 "eating break"
@@ -57,7 +63,9 @@ add 2020-07-30 5:30
 ```
 
 
+
 After running the program:
+
 ```
 // Wednesday
 start 2020-07-22 11:10 "optional description"
@@ -90,6 +98,7 @@ add 2020-07-30 05:30
 
 
 ### Output from 'help' command:
+
 ```
 Commands available everywhere:
 start 2025-12-31 11:20; starts new timespan

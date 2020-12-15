@@ -10,6 +10,8 @@
         // ~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=
 */
 
+// TODO: Input sorting testing!
+
 
 // NOTE: This program ignores concept of timezones to simplify usage.
 
@@ -1110,6 +1112,22 @@ parse_command_show(Program_State *state, Tokenizer *tokenizer)
 }
 
 
+inline b32
+increase_index_to_next_day(Dynamic_Array<Record> *records, s64 *index)
+{
+    date64 start_date = records->at(*index)->date;
+    
+    for (;
+         *index < records->count;
+         ++(*index))
+    {
+        Record *record = records->at(*index);
+        if (record->date > start_date) { return true; }
+    }
+    
+    return false;
+}
+
 
 enum Granularity // TODO: Support more granularities
 {
@@ -1125,116 +1143,107 @@ internal void
 process_and_print_summary(Program_State *state, Granularity granularity, 
                           date64 date_begin, date64 date_end)
 {
-    // TODO: Support more granularities. Now this only supports Days.
+    s64 record_index = 0;
     
-#if 0
-    Boundries_Result boundries = {};
-    date64 time_sum = 0;
-    
-    for (u32 day_index = 0;
-         day_index <= state->day_arena.count;
-         ++day_index)
+    // NOTE: Skip record before date_begin
+    for (;
+         record_index < state->records.count;
+         ++record_index)
     {
-        b32 last_loop = day_index == state->day_arena.count;
-        Day *day = get_day(&state->day_arena, day_index);
-        Assert(last_loop || day);
+        Record *record = state->records.at(record_index);
+        if (date_begin <= record->date) { break; }
+    }
+    
+    
+    time32 sum = 0;
+    Boundries_Result boundries = {};
+    b32 loop = true;
+    Record *record = state->records.at(record_index);
+    
+    while (loop)
+    {
+        loop = increase_index_to_next_day(&state->records, &record_index);
         
-        if (!last_loop)
-        {
-            if ((date_end) && (day->date_start > date_end))
-            {
-                day_index = state->day_arena.count;
-                last_loop = true;
-            }
-            if ((date_begin) && (day->date_start < date_begin))
-            {
-                continue;
-            }
+        if (loop) {
+            record = state->records.at(record_index);
+            if (date_end < record->date) { loop = false; }
         }
         
         
-        if (last_loop ||
-            (day->date_start >= boundries.one_day_past_end))
-        {
-            if (boundries.day_count > 0)
-            {
-                char date_str[64];
-                get_date_string(date_str, sizeof(date_str), boundries.begin);
+        
+        b32 past_boundary = loop && (record->date >= boundries.one_day_past_end);
+        
+        
+        // NOTE: Print line
+        if (!loop || past_boundary) {
+            
+            s32 day_count = (s32)boundries.day_count;
+            if (day_count > 0) {
                 
-                char sum_bar_str[MAX_SUM_AND_PROGRESS_BAR_STRING_SIZE + MAX_TIME_STRING_SIZE + 5];
-                {
-                    date64 day_count = boundries.day_count;
-                    if (last_loop)
-                    {
-                        date64 today = get_today(state);
-                        day_count = (today / (Days(1))) - (boundries.begin / (Days(1)));
-                        if (day_count <= 0) day_count = 1;
+                Str32 date_str = get_date_string(boundries.begin);
+                
+                
+                date64 today = get_today(state);
+                if (today < boundries.one_day_past_end &&
+                    today >= boundries.begin) {
+                    
+                    day_count = (s32)(today / (Days(1))) - (s32)(boundries.begin / (Days(1)));
+                    
+                    if (day_count <= 0) { 
+                        day_count = 1; 
                     }
+                }
+                
+                time32 time_avg = sum / day_count;
+                
+                Str32 sum_str = get_time_string(sum);
+                Str128 avg_bar = get_progress_bar_string(time_avg, MissingEnding_None);
+                
+                Str128 sum_bar;
+                if (day_count >= 2) {
+                    Str32 avg_str = get_time_string(time_avg);
                     
-                    date64 time_avg = time_sum / day_count;
-                    
-                    char sum_str[MAX_TIME_STRING_SIZE];
-                    get_time_string(sum_str, sizeof(sum_str), time_sum);
-                    
-                    char bar_str[MAX_PROGRESS_BAR_SIZE];
-                    get_progress_bar_string(bar_str, sizeof(bar_str), time_avg, MissingEnding_None);
-                    
-                    if (day_count > 1)
-                    {
-                        char avg_str[MAX_TIME_STRING_SIZE];
-                        get_time_string(avg_str, sizeof(avg_str), time_avg);
-                        
-                        snprintf(sum_bar_str, sizeof(sum_bar_str), 
-                                 "sum: %s\tavg(/%llud): %s\t%s", 
-                                 sum_str, day_count, avg_str, bar_str);
-                    }
-                    else
-                    {
-                        snprintf(sum_bar_str, sizeof(sum_bar_str), "sum: %s\t%s", 
-                                 sum_str, bar_str);
-                    }
+                    snprintf(sum_bar.str, sizeof(sum_bar.str), 
+                             "sum: %s\tavg(/%d): %s\t%s", 
+                             sum_str.str, day_count, avg_str.str, avg_bar.str);
+                } else {
+                    snprintf(sum_bar.str, sizeof(sum_bar.str), 
+                             "sum: %s\t%s", sum_str.str, avg_bar.str);
                 }
                 
                 using namespace Global_Color;
-                printf("%s%s\t%s%s%s\n", f_date, date_str, f_sum, sum_bar_str, f_reset);
+                printf("%s%s\t%s%s%s\n", f_date, date_str.str, f_sum, sum_bar.str, f_reset);
             }
             
-            time_sum = 0;
-            
-            if (!last_loop)
-            {
-                switch (granularity)
-                {
-                    case Granularity_Months:
-                    {
-                        boundries = get_month_boundries(day->date_start);
-                    } break;
-                    
-                    
-                    default: Invalid_Code_Path;
-                    case Granularity_Days:
-                    {
-                        boundries.day_count = 1;
-                        boundries.begin = day->date_start;
-                        boundries.one_day_past_end = day->date_start + Days(1);
-                    } break;
-                }
-            }
+            // NOTE: Clear sum
+            sum = 0;
         }
         
         
-        
-        if (!last_loop)
-        {
-            if (day->sum == EMPTY_SUM)
-            {
-                process_day(state, day, false);
-            }
-            
-            time_sum += day->sum;
+        // NOTE: Summing
+        if (loop) {
+            Day_Sum_Result day_sum = calculate_sum_for_day(state, record_index);
+            sum += day_sum.sum;
         }
+        
+        
+        // NOTE: Update boundary
+        if (loop && past_boundary) {
+            
+            switch (granularity) {
+                case Granularity_Months: { boundries = get_month_boundries(record->date); } break;
+                
+                default: Invalid_Code_Path;
+                case Granularity_Days: {
+                    boundries.day_count = 1;
+                    boundries.begin = record->date;
+                    boundries.one_day_past_end = record->date + Days(1);
+                } break;
+            }
+        }
+        
     }
-#endif
+    
 }
 
 
