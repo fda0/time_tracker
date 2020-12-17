@@ -34,7 +34,7 @@ int main()
     
     
     // NOTE: Ensure reference and input directories exist
-    char *ref_dir = "referece";
+    char *ref_dir = "reference";
     CreateDirectoryA(ref_dir, NULL);
     char *input_dir = "input";
     CreateDirectoryA(input_dir, NULL);

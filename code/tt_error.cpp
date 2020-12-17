@@ -7,14 +7,6 @@ else { printf("%s", Global_Color::b_error); } \
 } while(0)
 
 
-#define Print_Logic_Error(State) \
-do { \
-if (State->reading_from_file) \
-{ printf("%s[Logic Error #%d] ", Global_Color::b_error, state->logic_error_count++); } \
-else { printf("%s", Global_Color::b_error); } \
-} while(0)
-
-
 #define Print_Error() do { printf("%s", Global_Color::b_error); } while(0)
 
 
@@ -27,20 +19,4 @@ do { Print_Parse_Error(STATE); \
 printf("%.*s - command supported only in command line", (s32)TOKEN.text_length, TOKEN.text); \
 print_line_with_token(token); \
 Print_ClearN(); } while(0)
-
-
-inline void
-fprint_logic_error_message(Program_State *state, FILE *file_output, char *message)
-{
-    if (file_output) 
-    {
-        fprintf(file_output, "// [Logic Error %d] %s\n", 
-                state->logic_error_count++, message);
-    }
-    else
-    {
-        printf("%s[Logic Error %d] %s%s\n", 
-               Global_Color::b_error, state->logic_error_count++, message, Global_Color::b_reset); 
-    }
-}
 

@@ -198,17 +198,24 @@ get_token(Tokenizer *tokenizer)
 
 
 internal b32 
-token_equals(Token token, char *match)
+token_equals(Token token, char *match, b32 case_sensitive = false)
 {
+    char delta = 'a' - 'A';
+    
     for (u32 index = 0;
          index < token.text_length;
          ++index, ++match)
     {
-        if (*match == 0 ||
-            token.text[index] != *match)
-        {
-            return false;
+        char t = token.text[index];
+        char m = *match;
+        if (m == 0) { return false; }
+        
+        if (!case_sensitive) {
+            if (m >= 'A' && m <= 'Z') { m += delta; }
+            if (t >= 'A' && t <= 'Z') { t += delta; }
         }
+        
+        if (t != m) { return false; }
     }
     
     b32 result = (*match == 0);

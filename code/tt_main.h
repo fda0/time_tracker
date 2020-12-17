@@ -82,12 +82,15 @@ struct Thread_Memory
 #define Minutes(Value) (Value * 60)
 
 
-
-//~ NOTE: Project includes
-#include "tt_files.h"
-
-
 //~ NOTE: Data types
+
+struct File_Path2
+{
+    char file_name[MAX_PATH];
+    char directory[MAX_PATH];
+};
+
+
 
 enum Missing_Ending
 {
@@ -130,7 +133,12 @@ struct Record
 
 
 
+
 #include "tt_memory.h"
+
+
+
+
 
 struct Program_State
 {
@@ -146,7 +154,6 @@ struct Program_State
     date64 timezone_offset;
     File_Time loaded_input_mod_time;
     
-    s32 logic_error_count;
     s32 parse_error_count;
     s32 change_count;
     
