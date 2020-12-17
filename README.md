@@ -1,6 +1,7 @@
 # Time Tracker
 
-This is a simple time tracking command line program.
+This is a simple time tracking command line program. 
+Currently only there is only 64bit Windows available.
 It was designed to fit my needs.
 Feedback is welcome but keep in mind I'm trying to minimize complexity of this tool.
 
@@ -100,23 +101,5 @@ add 2020-07-30 05:30
 ### Output from 'help' command:
 
 ```
-Commands available everywhere:
-start 2025-12-31 11:20; starts new timespan
-stop 2025-12-31 14:12;  stops current timespan
-add 01:00;              adds time to current day
-                        can also work like: add 2026-01-01 03:00;
-sub 01:00;              subtracts time from current day
-
-Commands available only in console:
-start & stop assumes current time when unspecified in console
-show;                   shows current history
-time;                   shows current time...
-clear;                  clears the screen
-edit;                   opens database file in your default editor
-                        works best if your editor supports hot-loading
-
-These actions happen automatically:
-save;                   forces save
-archive;                forces backup
-load;                   forces load from file
+...
 ```
