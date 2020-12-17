@@ -1,16 +1,16 @@
 # Time Tracker
 
 This is a simple time tracking command line program. 
-Currently only there is only 64bit Windows available.
-It was designed to fit my needs.
-Feedback is welcome but keep in mind I'm trying to minimize complexity of this tool.
+Currently only 64-bit Windows version is available.
 
-Time Tracker was designed to work with text files that are easy to edit manually.
+Time Tracker was designed to work with text files that are readable and easy to edit manually.
 It reads the file, validates it and reformats it with added comments.
 
 Changes are saved and archived automatically. 
-You can edit the file in external editor and state of the program should get automatically refreshed
+You can edit the file in external editor and state of the program should get automatically refreshed.
 Using text editor with hot file reloading is recommended.
+
+Feedback is welcomed but keep in mind I'm trying to minimize complexity of this tool.
 
 Icon based on this image: https://www.freepik.com/free-vector/hand-drawn-retro-pocket-watch_2783059.htm
 
@@ -98,8 +98,5 @@ add 2020-07-30 05:30
 ```
 
 
-### Output from 'help' command:
-
-```
-...
-```
+### Help
+![Help command](screenshot_02.png)

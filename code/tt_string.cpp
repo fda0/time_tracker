@@ -222,10 +222,29 @@ print_line_with_token(Token token)
     }
 }
 
+internal void
+print_help_item(char *command, char *args, char *help)
+{
+    using namespace Color;
+    printf("%s%s\t", f_sum, command);
+    if (args) { printf("%s%s\t", f_desc, args); }
+    printf("%s%s\n", f_reset, help);
+}
+
+internal void
+print_help_header(char *text)
+{
+    using namespace Color;
+    printf("%s%s%s%s%s\n", b_help_header, f_white, text, b_reset, f_reset);
+}
 
 
-
-
+internal void
+print_help_desc(char *text)
+{
+    using namespace Color;
+    printf("%s%s%s\n", f_dimmed, text, f_reset);
+}
 
 
 

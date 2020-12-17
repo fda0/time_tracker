@@ -26,10 +26,11 @@ platform_get_file_mod_time(char *file_name)
 {
     FILETIME lastWriteTime = {};
     WIN32_FILE_ATTRIBUTE_DATA data;
-    if (GetFileAttributesEx(file_name, GetFileExInfoStandard, &data))
-    {
+    
+    if (GetFileAttributesEx(file_name, GetFileExInfoStandard, &data)) {
         lastWriteTime = data.ftLastWriteTime;
     }
+    
     return lastWriteTime;
 }
 
@@ -79,57 +80,60 @@ platform_get_executable_path(char *output, u32 output_size)
 
 
 
-namespace Global_Color
+namespace Color
 {
     global_variable char *f_black = "\033[30m";
+    global_variable char *f_white = "\033[97m";
     global_variable char *f_date = "\033[33m";
     global_variable char *f_sum = "\033[32m";
     global_variable char *f_desc = "\033[36m";
-    global_variable char *f_desc_delta = "\033[96m";
     global_variable char *f_dimmed = "\033[90m";
-    global_variable char *f_reset = "\033[39m";
+    global_variable char *f_desc_delta = "\033[96m";
     
     global_variable char *b_error = "\033[41m";
     global_variable char *b_date = "\033[43m";
+    global_variable char *b_help_header = "\033[100m";
+    
+    global_variable char *f_reset = "\033[39m";
     global_variable char *b_reset = "\033[49m";
 };
 
 internal void 
 initialize_colors(bool turn_off_colors)
 {
-    if (!turn_off_colors)
-    {
+    if (!turn_off_colors) {
         turn_off_colors = true;
         
         // Set output mode to handle virtual terminal sequences
         HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-        if (hOut != INVALID_HANDLE_VALUE)
-        {
+        if (hOut != INVALID_HANDLE_VALUE) {
             DWORD dwMode = 0;
-            if (GetConsoleMode(hOut, &dwMode))
-            {
+            
+            if (GetConsoleMode(hOut, &dwMode)) {
                 dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-                if (SetConsoleMode(hOut, dwMode))
-                {
+                
+                if (SetConsoleMode(hOut, dwMode)) {
                     turn_off_colors = false;
                 }                
             }
         }
     }
     
-    if (turn_off_colors)
-    {
-        using namespace Global_Color;
+    if (turn_off_colors){
+        using namespace Color;
         f_black = "",
+        f_white = "";
         f_date = "";
         f_sum = "";
         f_desc = "";
-        f_desc_delta = "";
         f_dimmed = "";
-        f_reset = "";
+        f_desc_delta = "";
         
         b_error = "";
         b_date = "";
+        b_help_header = "";
+        
+        f_reset = "";
         b_reset = "";
     }
 }

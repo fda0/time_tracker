@@ -294,7 +294,7 @@ get_sign_char_and_abs_value(s32 *value)
 internal void
 print_record_tail(Program_State *state, s32 *sum)
 {
-    using namespace Global_Color;
+    using namespace Color;
     
     printf("  ");
     
@@ -343,7 +343,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
     // TODO: Add/Sub descriptions contained in range should push their descriptions to transient_arena
     // and maybe exclude them from sum... example:
     // 16:30 -> 18:30  +00:30 "Working on X" -00:15 "Tea break"
-    using namespace Global_Color;
+    using namespace Color;
     
     state->defered_descs.clear();
     
@@ -578,7 +578,7 @@ save_to_file(Program_State *state)
         
         
 #if 0        
-        using namespace Global_Color;
+        using namespace Color;
         
         if (state->parse_error_count > 0) {
             fprintf(file, "// Parse Error count: %d\n", state->parse_error_count);
@@ -1145,7 +1145,7 @@ process_and_print_summary(Program_State *state, Granularity granularity,
                              "sum: %s\t%s", sum_str.str, avg_bar.str);
                 }
                 
-                using namespace Global_Color;
+                using namespace Color;
                 printf("%s%s\t%s%s%s\n", f_date, date_str.str, f_sum, sum_bar.str, f_reset);
             }
             
@@ -1270,7 +1270,7 @@ process_input(char *content, Program_State *state, b32 reading_from_file,
 {
     state->reading_from_file = reading_from_file;
     
-    using namespace Global_Color;
+    using namespace Color;
     Tokenizer tokenizer = create_tokenizer(content);
     b32 parsing = true;
     b32 allow_sorting = false;
@@ -1348,33 +1348,42 @@ process_input(char *content, Program_State *state, b32 reading_from_file,
                 } else if (token_equals(token, "help")) {
                     if (state->reading_from_file) { Command_Line_Only_Message(state, token); }
                     else {
-                        // TODO: Work on this help...
-                        printf("Commands available everywhere:\n"
-                               "start yyyy-MM-dd hh:mm\tstarts new timespan\n"
-                               "stop yyyy-MM-dd hh:mm\tstops current timespan\n"
-                               "add hh:mm\t\tadds time to current day\n"
-                               "add yyyy-MM-dd hh:mm\n"
-                               "sub hh:mm\t\tsubtracts time from current day\n"
-                               "sub yyyy-MM-dd hh:mm\n"
-                               
-                               "\nCommands available only in console:\n"
-                               "start\t\t\tassumes current time when unspecified\n"
-                               "stop\n"
-                               "show\t\t\tshows current history\n"
-                               "show from yyyy-MM-dd to yyyy-MM-dd\n"
-                               "show yyyy-MM-dd\n"
-                               "summary [d/m/y]\n"
-                               "time\t\t\tshows current time\n"
-                               "clear\t\t\tclears the screen\n"
-                               "edit\t\t\topens database file in your default editor\n"
-                               "\t\t\tworks best if your editor supports hot-loading\n"
-                               "dir\t\topens directory with exe\n"
-                               
-                               "\nThese actions happen automatically:\n"
-                               "save\t\t\tforces save\n"
-                               "archive\t\t\tforces backup\n"
-                               "load\t\t\tforces load from file\n"
-                               );
+                        print_help_desc("[...] - optional, (...) - required\n");
+                        print_help_header("Commands available everywhere");
+                        print_help_item("start", "[yyyy-MM-dd] (hh:mm) [\"description\"]", 
+                                        "starts new timespan");
+                        print_help_item("stop", "[yyyy-MM-dd] (hh:mm) [\"description\"]", 
+                                        "stops current timespan");
+                        
+                        print_help_item("add", "[yyyy-MM-dd] (hh:mm) [\"description\"]", 
+                                        "adds arbitrary amount of time");
+                        print_help_item("sub", "[yyyy-MM-dd] (hh:mm) [\"description\"]", 
+                                        "subtracts arbitrary amount of time");
+                        
+                        print_help_desc("add/sub commands support inputs formatted as minutes (125) or hours (2:05)");
+                        
+                        
+                        printf("\n");
+                        print_help_header("Console only commands");
+                        print_help_desc("When using commands from above in console you can skip (hh:mm) requirement");
+                        
+                        print_help_item("show", "[yyyy-MM-dd]", "\t\t\tshows current history");
+                        print_help_item("show", "[from yyyy-MM-dd] [to yyyy-MM-dd]", "");
+                        print_help_item("summary", "[d/m] [from yyyy-MM-dd] [to yyyy-MM-dd]", 
+                                        "sums hours for day/month");
+                        
+                        printf("\n");
+                        print_help_item("edit", nullptr, "opens database file in your default editor"
+                                        "\n\tworks best if your editor supports hot-loading");
+                        //printf("\n");
+                        print_help_item("dir", nullptr, "opens directory with exe");
+                        print_help_item("clear", nullptr, "clears the screen");
+                        print_help_item("time", nullptr, "shows current time");
+                        
+                        print_help_desc("\nFollowing commands execute automatically but can be also called manually");
+                        print_help_item("save", nullptr, "forces save");
+                        print_help_item("archive", nullptr, "forces backup");
+                        print_help_item("load", nullptr, "forces load from file");
                     }
                     
                 } else {
