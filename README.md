@@ -1,7 +1,7 @@
 # Time Tracker
 
-This is a simple time tracking command line program. 
-Currently only 64-bit Windows version is available.
+Simple time tracking command line program. 
+Currently available only on 64-bit Windows.
 
 Time Tracker was designed to work with text files that are readable and easy to edit manually.
 It reads the file, validates it and reformats it with added comments.
