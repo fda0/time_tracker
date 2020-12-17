@@ -138,7 +138,7 @@ struct Record
 
 
 
-
+// TODO: Pull out char[MAX_PATH] to StrMaxPath?
 
 struct Program_State
 {
@@ -146,13 +146,13 @@ struct Program_State
     Memory_Arena mixed_arena;
     Dynamic_Array<Record> records;
     
-    char input_file_full_path[MAX_PATH];
-    char input_file_name[MAX_PATH];
     char archive_directory[MAX_PATH];
     File_Path2 executable_path2;
+    char input_file_name[MAX_PATH];
+    char input_file_full_path[MAX_PATH]; // TODO: Collapse to File_Path2
     
+    File_Time input_file_mod_time;
     date64 timezone_offset;
-    File_Time loaded_input_mod_time;
     
     s32 parse_error_count;
     s32 change_count;

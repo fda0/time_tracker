@@ -1,5 +1,4 @@
 
-
 struct Str32
 {
     char str[32];
@@ -9,6 +8,11 @@ struct Str32
 struct Str128
 {
     char str[128];
+};
+
+struct StrMaxPath
+{
+    char str[MAX_PATH];
 };
 
 

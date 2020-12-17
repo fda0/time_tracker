@@ -593,7 +593,7 @@ save_to_file(Program_State *state)
         
         fclose(file);
         
-        state->loaded_input_mod_time = platform_get_file_mod_time(state->input_file_full_path);
+        state->input_file_mod_time = platform_get_file_mod_time(state->input_file_full_path);
         
     } else {
         printf("Failed to write to file: %s\n", state->input_file_full_path);
@@ -1429,7 +1429,7 @@ load_file(Program_State *state)
     
     if (file_content) {
         process_input(file_content, state, true);
-        state->loaded_input_mod_time = platform_get_file_mod_time(state->input_file_full_path);
+        state->input_file_mod_time = platform_get_file_mod_time(state->input_file_full_path);
         printf("File loaded\n");
         
     } else {
@@ -1450,6 +1450,13 @@ read_from_keyboard(Thread_Memory *thread_memory)
         } else {
             printf(thread_memory->cursor);
             fgets(thread_memory->input_buffer, sizeof(thread_memory->input_buffer), stdin);
+            
+            s64 len = strlen(thread_memory->input_buffer);
+            char *last_char = thread_memory->input_buffer + (len-1);
+            if (*last_char == '\n') {
+                *last_char = 0;
+            }
+            
             thread_memory->new_data = true;
         }
     }
@@ -1666,9 +1673,8 @@ int main(int argument_count, char **arguments)
         
         
         
-        auto current_input_mod_time = platform_get_file_mod_time(state.input_file_full_path);
-        b32 source_file_changed =  (platform_compare_file_time(
-                                                               state.loaded_input_mod_time, current_input_mod_time) != 0);
+        File_Time mod_time = platform_get_file_mod_time(state.input_file_full_path);
+        b32 source_file_changed = platform_compare_file_time(state.input_file_mod_time, mod_time) != 0;
         
         if (source_file_changed) {
             load_file(&state);

@@ -21,7 +21,7 @@ platform_tm_to_time(tm *date)
     return result;
 }
 
-internal File_Time 
+internal File_Time
 platform_get_file_mod_time(char *file_name)
 {
     FILETIME lastWriteTime = {};
