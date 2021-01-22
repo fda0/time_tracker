@@ -1,17 +1,19 @@
 struct Memory_Arena
 {
     size_t size;
-    u8* base;
+    u8 *base;
     size_t used;
 };
 
 
-inline void clear_arena(Memory_Arena *arena)
+inline void
+clear_arena(Memory_Arena *arena)
 {
     arena->used = 0;
 }
 
-internal void alocate_arena(Memory_Arena *arena, u8 *memory_address, size_t size)
+internal void
+alocate_arena(Memory_Arena *arena, u8 *memory_address, size_t size)
 {
     arena->base = memory_address;
     if (arena->base == NULL)
@@ -41,15 +43,14 @@ get_aligment_offset(Memory_Arena *arena, size_t aligment)
 }
 
 // NOTE: Gives back aligned pointer with size allocated for any type.
-#define Push_Struct(Arena, Type) \
-((Type *)push_size_aligned_(Arena, sizeof(Type), alignof(Type)))
+#define Push_Struct(Arena, Type) ((Type *)push_size_aligned_(Arena, sizeof(Type), alignof(Type)))
 
 // NOTE: Gives back aligned pointer with size allocated for array of any type.
-#define Push_Array(Arena, Count, Type) \
-((Type *)push_size_aligned_(Arena, (Count) * sizeof(Type), alignof(Type)))
+#define Push_Array(Arena, Count, Type) ((Type *)push_size_aligned_(Arena, (Count) * sizeof(Type), alignof(Type)))
 
 // NOTE: Internal raw allocation call.
-void *push_size_aligned_(Memory_Arena *arena, size_t size, s64 aligment)
+void *
+push_size_aligned_(Memory_Arena *arena, size_t size, s64 aligment)
 {
     size_t needed_size = (arena->used + size);
     if (needed_size > arena->size)
@@ -71,11 +72,8 @@ void *push_size_aligned_(Memory_Arena *arena, size_t size, s64 aligment)
     return result;
 }
 
-#define Array_At(Arena, Index, Type) (((Type *)(Arena)->base) + Index)
 
-
-template <typename T> 
-struct Dynamic_Array
+template <typename T> struct Dynamic_Array
 {
     Memory_Arena arena_;
     s64 count;
@@ -109,7 +107,6 @@ struct Dynamic_Array
         
         return result;
     }
-    
     
     
     
@@ -147,9 +144,7 @@ struct Dynamic_Array
         
         T *prev = new_elem;
         
-        for (s64 data_index = count-2;
-             data_index >= index;
-             --data_index)
+        for (s64 data_index = count - 2; data_index >= index; --data_index)
         {
             T *old_data = at(data_index);
             *prev = *old_data;
@@ -159,9 +154,4 @@ struct Dynamic_Array
         *prev = *element;
         return prev;
     }
-    
 };
-
-
-
-

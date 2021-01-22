@@ -1,3 +1,4 @@
+
 struct Tokenizer
 {
     char *at;
@@ -40,5 +41,3 @@ struct Forward_Token
     Token token;
     Token peek;
 };
-
-

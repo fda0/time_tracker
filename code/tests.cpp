@@ -19,9 +19,12 @@ int main()
         HANDLE file_handle = FindFirstFileA(search_str, &file_data);
         
         // NOTE: Iterate over these files and delete them
-        if (file_handle != INVALID_HANDLE_VALUE) {
-            do {
-                if (!(file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        if (file_handle != INVALID_HANDLE_VALUE)
+        {
+            do
+            {
+                if (!(file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+                {
                     char full_path[MAX_PATH];
                     snprintf(full_path, sizeof(full_path), "%s\\%s", output_dir, file_data.cFileName);
                     
@@ -29,7 +32,7 @@ int main()
                     printf(" %s,", full_path);
                 }
             } while (FindNextFile(file_handle, &file_data) != 0);
-        } 
+        }
     }
     
     
@@ -53,9 +56,12 @@ int main()
         
         
         
-        if (file_handle != INVALID_HANDLE_VALUE) {
-            do {
-                if (!(file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        if (file_handle != INVALID_HANDLE_VALUE)
+        {
+            do
+            {
+                if (!(file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+                {
                     
                     // NOTE: Copy new files from input/ to output/
                     char input_path[MAX_PATH];
@@ -64,15 +70,14 @@ int main()
                     snprintf(output_path, sizeof(output_path), "%s\\%s", output_dir, file_data.cFileName);
                     
                     CopyFileA(input_path, output_path, false);
-                    //printf("copy: \"%s\" > \"%s\"  ", input_path, output_path);
+                    // printf("copy: \"%s\" > \"%s\"  ", input_path, output_path);
                     
                     
                     
                     // NOTE: Run TimeTracker on output/
                     char command[1024];
-                    snprintf(command, sizeof(command), 
-                             "..\\build\\tt_main.exe -r -d \"%s\" > nul", output_path);
-                    //printf("command: %s\n", command);
+                    snprintf(command, sizeof(command), "..\\build\\tt_main.exe -r -d \"%s\" > nul", output_path);
+                    // printf("command: %s\n", command);
                     ++file_counter;
                     
                     system(command);
@@ -102,14 +107,12 @@ int main()
                                     printf("[match error] FILE: \"%s\",\t"
                                            "'%c'(%02hhx) != '%c'(%02hhx),\t"
                                            "line: %d, column: %d\n",
-                                           file_data.cFileName, 
-                                           ref_c, ref_c, out_c, out_c, 
-                                           row, column);
+                                           file_data.cFileName, ref_c, ref_c, out_c, out_c, row, column);
                                     
                                     break;
                                 }
                                 
-                                if ((ref_c == EOF) || (out_c == EOF)) 
+                                if ((ref_c == EOF) || (out_c == EOF))
                                 {
                                     printf("[success] %s", file_data.cFileName);
                                     ++success_counter;
@@ -123,7 +126,6 @@ int main()
                                     ++row;
                                 }
                             }
-                            
                         }
                         else
                         {
@@ -138,12 +140,12 @@ int main()
                 
                 printf("\n");
             } while (FindNextFile(file_handle, &file_data) != 0);
-        } 
+        }
     }
     
     
     
-    printf("~ ~ ~    success rate:  %d  /  %d    ~ ~ ~\n", success_counter, file_counter);   
+    printf("~ ~ ~    success rate:  %d  /  %d    ~ ~ ~\n", success_counter, file_counter);
     
     
     

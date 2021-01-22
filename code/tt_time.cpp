@@ -1,6 +1,5 @@
 
-
-inline date64 
+inline date64
 truncate_to_date(date64 timestamp)
 {
     date64 result = (timestamp / Days(1)) * Days(1);
@@ -15,7 +14,7 @@ truncate_to_time(date64 timestamp)
 }
 
 
-internal date64 
+internal date64
 get_current_timestamp(Program_State *state)
 {
     date64 now;
@@ -33,7 +32,7 @@ get_time(Program_State *state)
     return time;
 }
 
-internal date64 
+internal date64
 get_today(Program_State *state)
 {
     date64 now = get_current_timestamp(state);
@@ -42,7 +41,7 @@ get_today(Program_State *state)
 }
 
 
-internal void 
+internal void
 initialize_timezone_offset(Program_State *state)
 {
     date64 test_time;
@@ -80,8 +79,7 @@ get_month_boundries(date64 timestamp)
     date->tm_mon += 1;
     result.one_day_past_end = platform_tm_to_time(date);
     
-    result.day_count = ((result.one_day_past_end / Days(1)) - 
-                        (result.begin / Days(1)));
+    result.day_count = ((result.one_day_past_end / Days(1)) - (result.begin / Days(1)));
     
     return result;
 }

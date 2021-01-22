@@ -1,7 +1,7 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
 #include <time.h>
 
 
@@ -25,7 +25,7 @@ typedef s32 time32;
 typedef float f32;
 typedef double f64;
 
-#define internal static 
+#define internal static
 #define global_variable static
 #define local_persist static
 
@@ -43,7 +43,6 @@ struct Thread_Memory
 
 
 
-
 //~ NOTE: Platforms and compilers
 
 
@@ -53,13 +52,20 @@ struct Thread_Memory
 
 
 
-
 //~ NOTE: Macros
 
-#define Macro_Wrap(Macro) do { Macro } while(0)
+#define Macro_Wrap(Macro) \
+    do                    \
+    {                     \
+        Macro             \
+    } while (0)
 
 #if BUILD_INTERNAL
-#define Assert(Expression) Macro_Wrap( if(!(Expression)) {__debugbreak(); *(int*)0 = 1;} )
+#define Assert(Expression)          \
+    Macro_Wrap(if (!(Expression)) { \
+        __debugbreak();             \
+        *(int *)0 = 1;              \
+    })
 #else
 #define Assert(Expression)
 #endif
@@ -72,7 +78,7 @@ struct Thread_Memory
 
 #define Minimum(A, B) (A > B ? B : A)
 
-#define Kilobytes(Value) ((Value) * 1024ULL)
+#define Kilobytes(Value) ((Value)*1024ULL)
 #define Megabytes(Value) (Kilobytes(Value) * 1024ULL)
 #define Gigabytes(Value) (Megabytes(Value) * (u64)1024ULL)
 #define Terabytes(Value) (Gigabytes(Value) * (u64)1024ULL)
@@ -124,13 +130,12 @@ enum Record_Type : s32
 struct Record
 {
     date64 date;
-    
+
     Record_Type type;
     s32 value;
-    
+
     Description description;
 };
-
 
 
 
@@ -145,18 +150,18 @@ struct Program_State
     Dynamic_Array<Defered_Description> defered_descs;
     Memory_Arena mixed_arena;
     Dynamic_Array<Record> records;
-    
+
     char archive_directory[MAX_PATH];
     File_Path2 executable_path2;
     char input_file_name[MAX_PATH];
     char input_file_full_path[MAX_PATH]; // TODO: Collapse to File_Path2
-    
+
     File_Time input_file_mod_time;
     date64 timezone_offset;
-    
+
     s32 parse_error_count;
     s32 change_count;
-    
+
     b32 reading_from_file;
 };
 
@@ -203,8 +208,7 @@ struct Parse_Number_Result
 
 struct Date_Range_Result
 {
-    union
-    {
+    union {
         date64 date_ranges[2];
         struct
         {
