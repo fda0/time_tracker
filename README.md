@@ -18,13 +18,13 @@ Icon based on this image: https://www.freepik.com/free-vector/hand-drawn-retro-p
 ### TODOs
 - [ ] Filtering by matching text in description
 - [ ] Even more filtering options
-- [ ] Count system (kind of unrelated to time)
+- [ ] Count command for integer quantities (parallel to time tracking)
 - [ ] Linux version
 - [x] Filtering based on data ranges
 
 
 ### In action
-![Screenshot](screenshot_01.png)
+![Screenshot](images/screenshot.png)
 
 
 ### Example time_tracker.txt
@@ -99,4 +99,4 @@ add 2020-07-30 05:30
 
 
 ### Help
-![Help command](screenshot_02.png)
+![Help command](images/screenshot_help.png)

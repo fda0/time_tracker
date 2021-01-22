@@ -1,1 +1,1 @@
-rcedit "build/tt_main.exe" --set-icon "icon.ico"
+rcedit "build/tt_main.exe" --set-icon "images/icon.ico"
