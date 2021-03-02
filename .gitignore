@@ -1,8 +1,9 @@
 build/
-test_build/
-old_code/
-*.sublime-workspace
+release/
+data/
+tools/
+__local*
+*.4coder
 *.rdbg
-data/archive/
-icon.psd
-icon.png
+*.exe
+*.psd
