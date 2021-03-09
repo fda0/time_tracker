@@ -1,153 +1,68 @@
-#include <stdio.h>
-#include <windows.h>
+#include "stf0.h"
 
 
-// TODO: Don't compare results when one file is out of range...
-
-
-int main()
+s32 main()
 {
-    char *output_dir = "output";
-    CreateDirectoryA(output_dir, NULL);
-    //~ NOTE: Delete old files from output/
-    printf("deleted: ");
+    Arena arena_ = create_virtual_arena();
+    Arena *arena = &arena_;
+    
+    Directory cw_dir = push_current_working_directory(arena);
+    Directory out_dir = push_directory_append(arena, cw_dir, l2s("output"));
+    directory_delete_all_files(arena, out_dir);
+    
+    Directory ref_dir = push_directory_append(arena, cw_dir, l2s("reference"));
+    Directory input_dir = push_directory_append(arena, cw_dir, l2s("input"));
+    
+    b32 errors = false;
+    Path_List input_list = push_find_path_list_in_directory(arena, input_dir);
+    
+    for_linked_list(input_node, input_list)
     {
-        // NOTE: Construct search string to find old files
-        WIN32_FIND_DATAA file_data = {};
-        char search_str[MAX_PATH];
-        snprintf(search_str, sizeof(search_str), "%s\\*", output_dir);
-        HANDLE file_handle = FindFirstFileA(search_str, &file_data);
+        memory_scope(arena);
         
-        // NOTE: Iterate over these files and delete them
-        if (file_handle != INVALID_HANDLE_VALUE)
+        Path *input_path = &input_node->item;
+        Path out_path = {
+            out_dir,
+            input_path->file_name
+        };
+            
+        file_copy(arena, input_path, &out_path, true);
+        
+        char *out_path_cstr = push_cstr_from_path(arena, &out_path);
+        char *command = push_cstrf(arena, "..\\build\\main.exe -r -d \"%s\" > nul", out_path_cstr);
+        Pipe_Handle pipe = pipe_open_read(command);
+        s32 close_code = pipe_close(&pipe);
+        
+        if (no_errors(&pipe))
         {
-            do
+            Path ref_path = {
+                ref_dir,
+                input_path->file_name
+            };
+            
+            String ref_content = push_read_entire_file(arena, &ref_path);
+            String out_content = push_read_entire_file(arena, &out_path);
+            
+            // TODO(f0): compare that counts lines and position
+            Compare_Line_Pos compare = string_compare_with_line_column(ref_content, out_content);
+            if (compare.is_equal)
             {
-                if (!(file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-                {
-                    char full_path[MAX_PATH];
-                    snprintf(full_path, sizeof(full_path), "%s\\%s", output_dir, file_data.cFileName);
-                    
-                    DeleteFileA(full_path);
-                    printf(" %s,", full_path);
-                }
-            } while (FindNextFile(file_handle, &file_data) != 0);
+                printf("[Ok] %.*s; ", string_expand(out_path.file_name));
+            }
+            else
+            {
+                printf("[Not equal!] %.*s at line(%u), column(%u); ",
+                       string_expand(out_path.file_name), compare.line, compare.column);
+                errors = true;
+            }
+        }
+        else
+        {
+            printf("[Pipe error] %s; ", out_path_cstr);
+            errors = true;
         }
     }
     
-    
-    // NOTE: Ensure reference and input directories exist
-    char *ref_dir = "reference";
-    CreateDirectoryA(ref_dir, NULL);
-    char *input_dir = "input";
-    CreateDirectoryA(input_dir, NULL);
-    
-    
-    
-    int file_counter = 0;
-    int success_counter = 0;
-    
-    {
-        // NOTE: Create search string to find all files inside input/
-        WIN32_FIND_DATAA file_data = {};
-        char search_str[MAX_PATH];
-        snprintf(search_str, sizeof(search_str), "%s\\*", input_dir);
-        HANDLE file_handle = FindFirstFileA(search_str, &file_data);
-        
-        
-        
-        if (file_handle != INVALID_HANDLE_VALUE)
-        {
-            do
-            {
-                if (!(file_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-                {
-                    
-                    // NOTE: Copy new files from input/ to output/
-                    char input_path[MAX_PATH];
-                    snprintf(input_path, sizeof(input_path), "%s\\%s", input_dir, file_data.cFileName);
-                    char output_path[MAX_PATH];
-                    snprintf(output_path, sizeof(output_path), "%s\\%s", output_dir, file_data.cFileName);
-                    
-                    CopyFileA(input_path, output_path, false);
-                    // printf("copy: \"%s\" > \"%s\"  ", input_path, output_path);
-                    
-                    
-                    
-                    // NOTE: Run TimeTracker on output/
-                    char command[1024];
-                    snprintf(command, sizeof(command), "..\\build\\tt_main.exe -r -d \"%s\" > nul", output_path);
-                    // printf("command: %s\n", command);
-                    ++file_counter;
-                    
-                    system(command);
-                    
-                    
-                    
-                    // NOTE: Compare output/ to reference/
-                    FILE *output_handle = fopen(output_path, "rb");
-                    if (output_handle)
-                    {
-                        char ref_path[MAX_PATH];
-                        snprintf(ref_path, sizeof(ref_path), "%s\\%s", ref_dir, file_data.cFileName);
-                        
-                        FILE *ref_handle = fopen(ref_path, "rb");
-                        if (ref_handle)
-                        {
-                            int row = 1;
-                            int column = 1;
-                            
-                            for (;;)
-                            {
-                                int ref_c = getc(ref_handle);
-                                int out_c = getc(output_handle);
-                                
-                                if (ref_c != out_c)
-                                {
-                                    printf("[match error] FILE: \"%s\",\t"
-                                           "'%c'(%02hhx) != '%c'(%02hhx),\t"
-                                           "line: %d, column: %d\n",
-                                           file_data.cFileName, ref_c, ref_c, out_c, out_c, row, column);
-                                    
-                                    break;
-                                }
-                                
-                                if ((ref_c == EOF) || (out_c == EOF))
-                                {
-                                    printf("[success] %s", file_data.cFileName);
-                                    ++success_counter;
-                                    break;
-                                }
-                                
-                                ++column;
-                                if (ref_c == '\n')
-                                {
-                                    column = 1;
-                                    ++row;
-                                }
-                            }
-                        }
-                        else
-                        {
-                            printf("[IO error] Can't open %s\n", ref_path);
-                        }
-                    }
-                    else
-                    {
-                        printf("[IO error] Can't open %s\n", output_path);
-                    }
-                }
-                
-                printf("\n");
-            } while (FindNextFile(file_handle, &file_data) != 0);
-        }
-    }
-    
-    
-    
-    printf("~ ~ ~    success rate:  %d  /  %d    ~ ~ ~\n", success_counter, file_counter);
-    
-    
-    
-    return 0;
+    return (errors ? 1 : 0);
 }
+

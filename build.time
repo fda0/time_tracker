@@ -2,3 +2,7 @@
 #icon icon.ico
 
 #build main.cpp -output tt.exe
+
+@tests
+#build tests.cpp
+#run "cd tests && ..\build\tests" -print_output
