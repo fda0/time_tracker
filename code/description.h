@@ -2,12 +2,11 @@
 struct Description
 {
     u64 hash;
-    
     u8 *str;
     u32 size;
-    
     b32 is_marked;
 };
+
 
 struct Description_Table
 {

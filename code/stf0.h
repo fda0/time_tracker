@@ -130,7 +130,6 @@ manual but may be guessed if not specified:
 
 #if Stf0_Level >= 30 // Memory
 #    include <Windows.h>
-#    include <shlwapi.h> // TODO(f0): used only for PathFileExistsA... maybe get rid of it?
 #    undef small
 #endif
 
@@ -2372,7 +2371,9 @@ internal b32
 file_exists(cstr_lit path)
 {
 #if Def_Windows
-    b32 result = PathFileExistsA(path);
+    DWORD attributes = GetFileAttributesA(path);
+    b32 result = ((attributes != INVALID_FILE_ATTRIBUTES) &&
+                  ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0));
 #else
 #error "not impl"
 #endif

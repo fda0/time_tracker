@@ -22,7 +22,7 @@
 #include "description.cpp"
 
 #include "error.cpp"
-#include "token.cpp"
+#include "lexer.cpp"
 #include "string.cpp"
 #include "time.cpp"
 
@@ -291,7 +291,7 @@ get_sign_char_and_abs_value(s32 *value)
     return result;
 }
 
-#if 0
+#if 1
 internal void
 print_record_tail(Program_State *state, s32 *sum)
 {
@@ -306,7 +306,8 @@ print_record_tail(Program_State *state, s32 *sum)
         printf("  %c%s", sign, sum_str.str);
         *sum = 0;
     }
-    
+
+#if 0    
     for (s64 def_index = 0; def_index < state->defered_descs.count; ++def_index)
     {
         Defered_Description *def = state->defered_descs.at(def_index);
@@ -324,13 +325,14 @@ print_record_tail(Program_State *state, s32 *sum)
                    def->description.content, f_reset);
         }
     }
-    
+    #endif
+
     printf("\n");
-    state->defered_descs.clear();
+    //state->defered_descs.clear();
 }
 #endif
 
-#if 0
+
 internal void
 print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, b32 alternative_colors = false)
 {
@@ -407,14 +409,16 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
         }
         else if (record->type == Record_TimeDelta)
         {
-            if (!record->description.length)
+            Description *desc = get_description(&state->desc_table, record->desc_hash);
+            if (!desc->size)
             {
                 sum += record->value;
             }
             else
             {
-                Defered_Description defered = {record->description, record->value};
-                state->defered_descs.add(&defered);
+                // TODO(f0): Solve this better
+                //Defered_Description defered = {record->description, record->value};
+                //state->defered_descs.add(&defered);
             }
             
             if (range_state == Range_Closed_PostPrint)
@@ -448,8 +452,8 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
             printf("%s", time_str.str);
             range_state = Range_Open;
             
-            Defered_Description defered = {record->description};
-            state->defered_descs.add(&defered);
+            //Defered_Description defered = {record->description};
+            //state->defered_descs.add(&defered);
         }
         
         
@@ -481,7 +485,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
         }
     }
 }
-#endif
+
 
 
 
@@ -589,7 +593,7 @@ save_to_file(Program_State *state)
             if (desc->size)
             {
                 add(l2s(" \""));
-                add(string_from_desc(desc));
+                add(string_from_description(desc));
                 add(l2s("\""));
             }
             
@@ -622,11 +626,7 @@ save_to_file(Program_State *state)
         file_write_string(&file, output_string);
         file_close(&file);
         
-        {
-            // TODO(f0): pull get file mod time to stf0
-            char *input_path_cstr = push_cstr_from_path(&state->arena, &state->input_path);
-            state->input_file_mod_time = platform_get_file_mod_time(input_path_cstr);
-        }
+        state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
     }
     else
     {
@@ -670,7 +670,7 @@ automatic_save_to_file(Program_State *state)
 internal void
 add_record(Program_State *state, Record *data, b32 allow_sorting)
 {
-    s64 candidate_index = state->records.count;
+    u64 candidate_index = state->records.count;
     b32 replace = false;
     
     for (s64 index = candidate_index - 1; index >= 0; --index)
@@ -705,6 +705,9 @@ add_record(Program_State *state, Record *data, b32 allow_sorting)
             }
         }
     }
+    
+    
+    allow_sorting = false; // TODO(f0): delete sorting
     
     
     // NOTE: Reject sorting
@@ -755,7 +758,7 @@ add_record(Program_State *state, Record *data, b32 allow_sorting)
         
         if (can_add)
         {
-            state->records.insert_at(data, candidate_index);
+            *state->records.grow() = *data;
             ++state->change_count;
         }
         else
@@ -870,7 +873,7 @@ fill_description_optional(Program_State *state, Forward_Token *forward, Record *
     if ((forward->peek.type == Token_String))
     {
         advance(forward);
-        record->description = create_description(state, forward->token);
+        record->desc_hash = add_description(&state->desc_table, forward->token);
     }
 }
 
@@ -1012,7 +1015,7 @@ get_max_date_range()
     Date_Range_Result result;
     result.condition = Con_IsValid;
     result.begin = 1;
-    result.end = S64_MAX;
+    result.end = S64_Max;
     
     return result;
 }
@@ -1162,7 +1165,7 @@ parse_command_show(Program_State *state, Tokenizer *tokenizer)
 
 
 inline b32
-increase_index_to_next_day(Dynamic_Array<Record> *records, s64 *index)
+increase_index_to_next_day(Virtual_Array<Record> *records, u64 *index)
 {
     date64 start_date = records->at(*index)->date;
     
@@ -1194,7 +1197,7 @@ enum Granularity // TODO: Support more granularities
 internal void
 process_and_print_summary(Program_State *state, Granularity granularity, date64 date_begin, date64 date_end)
 {
-    s64 record_index = 0;
+    u64 record_index = 0;
     
     // NOTE: Skip record before date_begin
     for (;
@@ -1529,7 +1532,9 @@ process_input(char *content, Program_State *state, b32 reading_from_file, b32 *m
                     }
                     else
                     {
-                        platform_open_in_default_editor(state->input_file_full_path);
+                        // TODO(f0): should work with Path
+                        char *input_cstr = push_cstr_from_path(&state->arena, &state->input_path);
+                        platform_open_in_default_editor(input_cstr);
                     }
                 }
                 else if (token_equals(token, "dir"))
@@ -1540,7 +1545,8 @@ process_input(char *content, Program_State *state, b32 reading_from_file, b32 *m
                     }
                     else
                     {
-                        platform_open_in_default_editor(state->executable_path2.directory);
+                        char *dir_cstr = push_cstr_from_directory(&state->arena, state->exe_path.directory);
+                        platform_open_in_default_editor(dir_cstr);
                     }
                 }
                 else if (token_equals(token, "clear"))
@@ -1635,9 +1641,11 @@ process_input(char *content, Program_State *state, b32 reading_from_file, b32 *m
 internal void
 clear_memory(Program_State *state)
 {
-    state->defered_descs.clear();
-    clear_arena(&state->mixed_arena);
-    state->records.clear();
+    // TODO(f0): Don't leak memory!
+    
+    //state->defered_descs.clear();
+    //clear_arena(&state->mixed_arena);
+    //state->records.clear();
 }
 
 
@@ -1648,18 +1656,19 @@ load_file(Program_State *state)
     clear_memory(state);
     state->parse_error_count = 0;
     
-    char *file_name = state->input_file_full_path;
-    char *file_content = read_entire_file(&state->mixed_arena, file_name);
+    char *file_content = push_read_entire_file_and_zero_terminate(&state->arena, &state->input_path);
     
     if (file_content)
     {
         process_input(file_content, state, true);
-        state->input_file_mod_time = platform_get_file_mod_time(state->input_file_full_path);
+        state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
         printf("File loaded\n");
     }
     else
     {
-        printf("[Parse Error #%d] Failed to open the file: %s\n", state->parse_error_count++, file_name);
+        memory_scope(&state->arena);
+        char *file_name = push_cstr_from_path(&state->arena, &state->input_path);
+        printf("[Parse Error #%d] Failed to load from file: %s\n", state->parse_error_count++, file_name);
     }
 }
 
@@ -1894,7 +1903,7 @@ main(int argument_count, char **arguments)
         
         
         
-        File_Time mod_time = platform_get_file_mod_time(state.input_file_full_path);
+        File_Time mod_time = platform_get_file_mod_time(&state.arena, &state.input_path);
         b32 source_file_changed = platform_compare_file_time(state.input_file_mod_time, mod_time) != 0;
         
         if (source_file_changed)

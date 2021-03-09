@@ -24,8 +24,11 @@ platform_tm_to_time(tm *date)
 }
 
 internal File_Time
-platform_get_file_mod_time(char *file_name)
+platform_get_file_mod_time(Arena *arena, Path *path)
 {
+    memory_scope(arena);
+    char *file_name = push_cstr_from_path(arena, path);
+    
     FILETIME lastWriteTime = {};
     WIN32_FILE_ATTRIBUTE_DATA data;
 

@@ -4,24 +4,25 @@
 
 
 inline u64
-get_description_hash(Description *desc)
+get_string_hash(String string)
 {
-    assert(desc); // TODO(f0): real hash function...
-    u64 hash = 12354145 * desc->size;
-    for_u32(i, desc->size)
+    // TODO(f0): real hash function...
+    
+    u64 hash = 12354145 * string.size;
+    for_u32(i, string.size)
     {
         hash <<= 5;
-        hash ^= (hash + desc->str[i]);
+        hash ^= (hash + string.str[i]);
     }
     return hash;
 }
 
 
 
-inline void
-insert_element_(Description_Table *table, Description *desc)
+inline u64
+insert_description_(Description_Table *table, String content)
 {
-    u64 hash = get_description_hash(desc);
+    u64 hash = get_string_hash(content);
     u64 mask = (table->capacity_count - 1);
     u64 key = hash & mask;
     
@@ -31,6 +32,11 @@ insert_element_(Description_Table *table, Description *desc)
     {
         if (candidate->hash == 0)
         {
+            candidate->hash = hash;
+            candidate->str = content.str;
+            candidate->size = safe_truncate_to_u32(content.size);
+            candidate->is_marked = false;
+            
             table->element_count += 1;
             break;
         }
@@ -38,8 +44,7 @@ insert_element_(Description_Table *table, Description *desc)
         {
 #if Def_Slow
             String table_str = string(candidate->str, candidate->size);
-            String desc_str = string(desc->str, desc->size);
-            assert(string_equal(table_str, desc_str));
+            assert(string_equal(table_str, content));
 #endif
             break;
         }
@@ -47,11 +52,13 @@ insert_element_(Description_Table *table, Description *desc)
         key = (key + 1) & mask;
         candidate = table->array + key;
     }
+    
+    return hash;
 }
 
 
 inline String
-string_from_desc(Description *desc)
+string_from_description(Description *desc)
 {
     String result = {desc->str, desc->size};
     return result;
@@ -115,7 +122,7 @@ description_table_expand(Description_Table *old_table)
             Description *desc = old_table->array + element_index;
             if (desc->hash != 0)
             {
-                insert_element_(&new_table, desc);
+                insert_description_(&new_table, string(desc->str, desc->size));
             }
         }
         
@@ -129,13 +136,29 @@ description_table_expand(Description_Table *old_table)
 }
 
 
-inline void
-add_element(Description_Table *table, Description *desc)
+inline u64
+add_description(Description_Table *table, String content)
 {
-    insert_element_(table, desc);
+    u64 hash = insert_description_(table, content);
     
-    if (table->element_count > table->max_element_count)
-    {
+    if (table->element_count > table->max_element_count) {
         description_table_expand(table);
     }
+    
+    return hash;
 }
+
+
+inline u64
+add_description(Description_Table *table, Token token)
+{
+    assert(token.type == Token_String);
+    u64 hash = add_description(table, string(token.text, token.text_length));
+    return hash;
+}
+    
+    
+    
+    
+    
+    
