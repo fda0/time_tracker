@@ -523,7 +523,7 @@ save_to_file(Program_State *state)
     File_Handle file = file_open_write(&state->arena, &state->input_path);
     if (no_errors(&file))
     {
-        String_Builder builder = {};
+        Simple_String_Builder builder = {};
         auto add = [&](String string) {
             builder_add(&state->arena, &builder, string);
         };
@@ -540,7 +540,7 @@ save_to_file(Program_State *state)
             {
                 Str32 day_of_week = get_day_of_the_week_string(record->date);
                 add(l2s("// "));
-                add(string(day_of_week.str));
+                add(push_string_copy(&state->arena, string(day_of_week.str)));
                 add(l2s("\n"));
             }
             
@@ -573,19 +573,20 @@ save_to_file(Program_State *state)
             }
             
             add(string(command));
-            
+            add(l2s(" "));
             
             // print date
             if (is_new_day)
             {
                 Str32 date_str = get_date_string(record->date);
-                add(string(date_str.str));
+                add(push_string_copy(&state->arena, string(date_str.str)));
+                add(l2s(" "));
             }
             
             
             // print time
             Str32 time_str = get_time_string(record->value);
-            add(string(time_str.str));
+            add(push_string_copy(&state->arena, string(time_str.str)));
             
             
             // print description
@@ -615,7 +616,7 @@ save_to_file(Program_State *state)
                 Str128 sum_bar = get_sum_and_progress_bar_string(sum_result.sum, sum_result.missing_ending);
                 
                 add(l2s("// "));
-                add(string(sum_bar.str));
+                add(push_string_copy(&state->arena, string(sum_bar.str)));
                 add(l2s("\n\n"));
                 active_day_index = record_index + 1;
             }
@@ -1736,9 +1737,10 @@ main(int argument_count, char **arguments)
     //~ NOTE: Initialization
     Program_State state = {};
     state.arena = create_virtual_arena();
-    Arena *arena = &state.arena;
+    state.records = create_virtual_array<Record>();
     state.desc_table = create_description_table(4096);
     //clear_memory(&state);
+    Arena *arena = &state.arena;
     
     
     

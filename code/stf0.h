@@ -867,6 +867,20 @@ cstr_length_trim_white_from_right(char *cstr)
 
 
 // ======================= @Basic_String ======================
+
+inline String
+string_advance_str(String input, u64 distance)
+{
+    distance = pick_smaller(distance, input.size);
+    String result = {};
+    result.str = input.str + distance;
+    result.size = input.size - distance;
+    return result;
+}
+
+
+
+
 internal b32
 string_equal(String str_a, String str_b, b32 case_ins = false)
 {
@@ -1021,6 +1035,9 @@ string_ends_with(String big, String small, b32 case_ins = false)
 
 
 
+
+
+
 internal Find_Index
 string_find_index_from_left(String big, char c, b32 case_ins = false)
 {
@@ -1095,6 +1112,42 @@ string_get_file_name_from_path(String source)
 }
 
 
+struct String_Path_Split
+{
+    String directory;
+    String file_name;
+};
+
+
+internal String_Path_Split
+string_split_into_directory_and_file_name_parts(String source)
+{
+    u64 offset = 0;
+    
+    for (u64 negative = 1;
+         negative <= source.size;
+         ++negative)
+    {
+        u64 index = source.size - negative;
+        u8 c = source.str[index];
+        
+        if (is_slash(c))
+        {
+            offset = index + 1;
+            break;
+        }
+    }
+    
+    String_Path_Split result = {};
+    result.file_name = string_advance_str(source, offset);
+    result.directory = source;
+    result.directory.size = offset;
+    return result;
+}
+
+
+
+
 internal String
 string_trim_file_name_from_path(String source)
 {
@@ -1115,16 +1168,6 @@ string_trim_file_name_from_path(String source)
     return result;
 }
 
-
-inline String
-string_advance_str(String input, u64 distance)
-{
-    distance = pick_smaller(distance, input.size);
-    String result = {};
-    result.str = input.str + distance;
-    result.size = input.size - distance;
-    return result;
-}
 
 
 internal u64
@@ -1277,7 +1320,7 @@ round_up_to_page_size(Arena *arena, u64 value)
 inline void
 commit_virtual_memory_(Arena *arena, u64 position_required_to_fit)
 {
-    assert(position_required_to_fit < arena->reserved_capacity);
+    assert(position_required_to_fit <= arena->reserved_capacity);
     u64 target_capacity = 2 * position_required_to_fit;
     target_capacity = pick_smaller(target_capacity, arena->reserved_capacity);
     
@@ -1576,10 +1619,10 @@ internal Directory
 push_directory_from_string(Arena *arena, String source)
 {
     Directory result = {};
-    result.name_count = string_count_common_characters(source, lit2str("/\\")) + 1;
-    if (is_slash(source.str[source.size-1]))
+    result.name_count = string_count_common_characters(source, lit2str("/\\"));
+    if (source.size > 0 && !is_slash(source.str[source.size-1]))
     {
-        result.name_count -= 1;
+        result.name_count += 1;
     }
     
     result.names = push_array(arena, String, result.name_count);
@@ -1695,11 +1738,10 @@ internal Path
 push_path_from_string(Arena *arena, String source)
 {
     Path result = {};
-    String dir_string = string_trim_file_name_from_path(source);
-    String file_name_string = string_advance_str(source, dir_string.size);
+    String_Path_Split parts = string_split_into_directory_and_file_name_parts(source);
     
-    result.directory = push_directory_from_string(arena, dir_string);
-    result.file_name = file_name_string;
+    result.directory = push_directory_from_string(arena, parts.directory);
+    result.file_name = parts.file_name;
     
     return result;
 }
@@ -1753,35 +1795,42 @@ fill_string_from_path(void *output, u64 output_size,
     u64 out_index = 0;
     
     u8 *out = (u8 *)output;
+    b32 full_fill = false;
     
     for_u64(name_index, path->directory.name_count)
     {
         String *dir_name = path->directory.names + name_index;
         for_u64(char_index, dir_name->size)
         {
-            out[out_index++] = dir_name->str[char_index];
-            
             if (out_index >= output_size) {
-                return out_index;
+                goto early_exit_label;
             }
+            
+            out[out_index++] = dir_name->str[char_index];
+        }
+        
+        
+        if (out_index >= output_size) {
+            goto early_exit_label;
         }
         
         out[out_index++] = slash;
-        
-        if (out_index >= output_size) {
-            return out_index;
-        }
     }
     
     for_u64(char_index, path->file_name.size)
     {
-        out[out_index++] = path->file_name.str[char_index];
-        
         if (out_index >= output_size) {
-            return out_index;
+            goto early_exit_label;
         }
+        
+        out[out_index++] = path->file_name.str[char_index];
     }
     
+    full_fill = true;
+    
+    early_exit_label:
+    
+    assert(full_fill);
     assert(output_size == out_index);
     return out_index;
 }
@@ -1820,16 +1869,16 @@ push_cstr_from_path(Arena *arena, Path *path,
 
 // =================== @Alloc_String_Builder ==================
 // TODO(f0): Base API on "fill" version
-struct String_Builder_Item
+struct Separator_String_Builder_Item
 {
     String string;
     b32 skip_following_separator;
     u32 _padding;
 };
 
-struct String_Builder
+struct Separator_String_Builder
 {
-    Linked_List<String_Builder_Item> list;
+    Linked_List<Separator_String_Builder_Item> list;
     u64 string_length_sum;
     u64 separator_count;
     b32 last_has_separator;
@@ -1839,7 +1888,7 @@ struct String_Builder
 
 // NOTE(f0): Use if you manually mess with builder's items
 internal void
-builder_recalculate_length(String_Builder *builder)
+builder_recalculate_length(Separator_String_Builder *builder)
 {
     builder->string_length_sum = 0;
     builder->separator_count = 0;
@@ -1853,11 +1902,11 @@ builder_recalculate_length(String_Builder *builder)
     }
 }
 
-internal String_Builder_Item *
-builder_add(Arena *arena, String_Builder *builder,
+internal Separator_String_Builder_Item *
+builder_add(Arena *arena, Separator_String_Builder *builder,
             String string, b32 skip_following_separator = false)
 {
-    String_Builder_Item *item = builder->list.push_get_item(arena);
+    Separator_String_Builder_Item *item = builder->list.push_get_item(arena);
     item->string = string;
     item->skip_following_separator = skip_following_separator;
     
@@ -1871,7 +1920,7 @@ builder_add(Arena *arena, String_Builder *builder,
 }
 
 internal String
-build_string(Arena *arena, String_Builder *builder, String separator = string(" "))
+build_string(Arena *arena, Separator_String_Builder *builder, String separator = string(" "))
 {
     u64 len = builder->string_length_sum + (builder->separator_count * separator.size);
     if (builder->last_has_separator) {
@@ -1888,7 +1937,7 @@ build_string(Arena *arena, String_Builder *builder, String separator = string(" 
          node;
          node = node->next, ++node_index)
     {
-        String_Builder_Item *item = &node->item;
+        Separator_String_Builder_Item *item = &node->item;
         copy_bytes(result.str + char_index, item->string.str, item->string.size);
         char_index += item->string.size;
         
@@ -1906,7 +1955,7 @@ build_string(Arena *arena, String_Builder *builder, String separator = string(" 
 
 
 inline char *
-build_cstr(Arena *arena, String_Builder *builder, String separator = string(" "))
+build_cstr(Arena *arena, Separator_String_Builder *builder, String separator = string(" "))
 {
     String string = build_string(arena, builder, separator);
     char *result = (char *)string.str;

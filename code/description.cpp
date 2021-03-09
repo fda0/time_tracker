@@ -7,12 +7,11 @@ inline u64
 get_string_hash(String string)
 {
     // TODO(f0): real hash function...
+    u64 hash = 5381;
     
-    u64 hash = 12354145 * string.size;
     for_u32(i, string.size)
     {
-        hash <<= 5;
-        hash ^= (hash + string.str[i]);
+        hash = ((hash << 5) + hash) + string.str[i];
     }
     return hash;
 }
@@ -97,6 +96,8 @@ create_description_table(u64 initial_capacity_count = 4096)
     
     Description_Table result = {};
     result.capacity_count = initial_capacity_count;
+    result.max_element_count = (u64)((f32)result.capacity_count*0.7f) + 1;
+    
     
     u64 memory_size = sizeof(Description) * result.capacity_count;
     result.arena = create_virtual_arena(memory_size);

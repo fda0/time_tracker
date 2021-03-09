@@ -29,7 +29,7 @@ s32 main()
         file_copy(arena, input_path, &out_path, true);
         
         char *out_path_cstr = push_cstr_from_path(arena, &out_path);
-        char *command = push_cstrf(arena, "..\\build\\main.exe -r -d \"%s\" > nul", out_path_cstr);
+        char *command = push_cstrf(arena, "..\\build\\tt.exe -r -d \"%s\" > nul", out_path_cstr);
         Pipe_Handle pipe = pipe_open_read(command);
         s32 close_code = pipe_close(&pipe);
         
@@ -51,8 +51,10 @@ s32 main()
             }
             else
             {
-                printf("[Not equal!] %.*s at line(%u), column(%u); ",
+                printf("[Not equal!] %.*s at line(%u), col(%u);\n",
                        string_expand(out_path.file_name), compare.line, compare.column);
+                
+                debug_break();
                 errors = true;
             }
         }
@@ -63,6 +65,8 @@ s32 main()
         }
     }
     
+    
+    debug_break();
     return (errors ? 1 : 0);
 }
 
