@@ -130,6 +130,7 @@ manual but may be guessed if not specified:
 
 #if Stf0_Level >= 30 // Memory
 #    include <Windows.h>
+#    include <shlwapi.h> // TODO(f0): used only for PathFileExistsA... maybe get rid of it?
 #    undef small
 #endif
 
@@ -264,10 +265,14 @@ Stf0_Open_Namespace
 #else
 #    error "not impl"
 #endif
-//=============
+
+
+//=============================
 #define File_Line          This_File "(" stringify_macro(This_Line_s32) ")"
 #define File_Line_Function File_Line ": " This_Function
-//=============
+
+
+//=============================
 #define force_halt() do{ fflush(stdout); *((s32 *)0) = 1; }while(0)
 
 #define assert_always(Expression) do{ if(!(Expression)) {\
@@ -276,6 +281,7 @@ textify(Expression), This_Function);\
 fflush(stdout);\
 debug_break(); force_halt(); exit(1);\
 }}while(0)
+
 
 //=============================
 #if Def_Slow
@@ -286,8 +292,11 @@ debug_break(); force_halt(); exit(1);\
 #    define debug_break()
 #    define assert(Expression)
 #endif
-//
+
+
+//=============================
 #define exit_error() do{ fflush(stdout); debug_break(); exit(1);}while(0)
+
 
 
 // ===================== Hacky C++11 defer ====================
@@ -498,6 +507,17 @@ inline Bit_Scan_Result find_least_significant_bit(s64 value) {
 
 
 
+
+// ================= @Basic_Intrinsic_Helpers =================
+inline b32
+is_non_zero_power_of_two(u64 value)
+{
+    Bit_Scan_Result msb = find_most_significant_bit(value);
+    Bit_Scan_Result lsb = find_least_significant_bit(value);
+    b32 result = (msb.found == lsb.found &&
+                  msb.index == lsb.index);
+    return result;
+}
 
 
 
@@ -1153,39 +1173,57 @@ struct Arena
     u64 capacity;
     //
     u64 reserved_capacity;
-    u64 page_size;
     //
+    u32 page_size;
     s32 stack_count; // NOTE(f0): safety/testing variable
-    u32 _padding;
 };
 
 
 
 // ======================= @Memory_Scope ======================
+
 struct Memory_Scope
 {
     Arena *arena_copy;
     u64 position;
     s32 stack_count;
     u32 _padding;
+};
+
+inline Memory_Scope
+create_memory_scope(Arena *arena)
+{
+    Memory_Scope result = {};
+    result.arena_copy = arena;
+    result.position = arena->position;
+    result.stack_count = arena->stack_count++;
+    return result;
+}
+
+inline void
+pop_memory_scope(Memory_Scope *scope)
+{
+    --scope->arena_copy->stack_count;
+    assert(scope->arena_copy->stack_count == scope->stack_count);
+    scope->arena_copy->position = scope->position;
+}
+
+struct Automatic_Scope
+{
+    Memory_Scope scope;
     
-    Memory_Scope(Arena* arena)
+    Automatic_Scope(Arena* arena)
     {
-        arena_copy = arena;
-        position = arena->position;
-        stack_count = arena->stack_count++;
+        scope = create_memory_scope(arena);
     }
     
-    ~Memory_Scope()
+    ~Automatic_Scope()
     {
-        --arena_copy->stack_count;
-        assert(arena_copy->stack_count == stack_count);
-        arena_copy->position = position;
+        pop_memory_scope(&scope);
     }
 };
 
-#define memory_scope(Arena) Memory_Scope glue(memory_scope_, __COUNTER__)(Arena)
-
+#define memory_scope(Arena) Automatic_Scope glue(automatic_scope_, __COUNTER__)(Arena)
 
 
 
@@ -1233,7 +1271,7 @@ get_aligment_offset(Arena *arena, u64 aligment)
 inline u64
 round_up_to_page_size(Arena *arena, u64 value)
 {
-    u64 result = align_bin_to(value, arena->page_size);
+    u64 result = align_bin_to(value, (u64)arena->page_size);
     return result;
 }
 
@@ -1309,6 +1347,13 @@ create_virtual_arena(u64 target_reserved_capacity = gigabytes(16))
     arena.base = VirtualAlloc(nullptr, arena.reserved_capacity, MEM_RESERVE, PAGE_READWRITE);
     assert(arena.base);
     return arena;
+}
+
+internal void
+free_virtual_arena(Arena *arena)
+{
+    b32 result = VirtualFree(arena->base, 0, MEM_RELEASE);
+    assert(result);
 }
 
 inline void *
@@ -1476,17 +1521,13 @@ typedef Linked_List<String> String_List;
 // ======================= @Alloc_Basic =======================
 
 inline String
-alloc_string(Arena *arena, u64 size)
+allocate_string(Arena *arena, u64 size)
 {
     String result = {
         push_array(arena, u8, size),
         size
     };
     return result;
-}
-inline String
-push_string(Arena *arena, u64 size) {
-    return alloc_string(arena, size);
 }
 
 
@@ -1613,7 +1654,7 @@ push_string_from_directory(Arena *arena, Directory directory,
     u8 slash = (u8)(use_windows_slash ? '\\' : '/');
     
     u64 result_index = 0;
-    String result = push_string(arena, get_directory_string_length(directory));
+    String result = allocate_string(arena, get_directory_string_length(directory));
     result.str[result.size] = 0;
     
     for_u64(name_index, directory.name_count)
@@ -1752,7 +1793,7 @@ push_string_from_path(Arena *arena, Path *path,
                       b32 use_windows_slash = (Native_Slash_Char == '\\'))
 {
     u64 pre_len = get_path_string_length(path);
-    String result = push_string(arena, pre_len);
+    String result = allocate_string(arena, pre_len);
     
     u64 post_len = fill_string_from_path(result.str, result.size, path, use_windows_slash);
     assert(pre_len == post_len);
@@ -1779,6 +1820,7 @@ push_cstr_from_path(Arena *arena, Path *path,
 
 
 // =================== @Alloc_String_Builder ==================
+// TODO(f0): Base API on "fill" version
 struct String_Builder_Item
 {
     String string;
@@ -1837,7 +1879,7 @@ build_string(Arena *arena, String_Builder *builder, String separator = string(" 
         len -= separator.size;
     }
     
-    String result = alloc_string(arena, len+1);
+    String result = allocate_string(arena, len+1);
     result.size -= 1;
     
     u64 char_index = 0;
@@ -1863,6 +1905,7 @@ build_string(Arena *arena, String_Builder *builder, String separator = string(" 
     return result;
 }
 
+
 inline char *
 build_cstr(Arena *arena, String_Builder *builder, String separator = string(" "))
 {
@@ -1871,6 +1914,82 @@ build_cstr(Arena *arena, String_Builder *builder, String separator = string(" ")
     result[string.size] = 0;
     return result;
 }
+
+
+
+
+// =================== @Alloc_Simple_String_Builder ==================
+// TODO(f0): Base API on "fill" version
+struct Simple_String_Builder_Item
+{
+    String string;
+};
+
+struct Simple_String_Builder
+{
+    Linked_List<Simple_String_Builder_Item> list;
+    u64 string_length_sum;
+};
+
+
+
+// NOTE(f0): Use if you manually mess with builder's items
+internal void
+builder_recalculate_length(Simple_String_Builder *builder)
+{
+    builder->string_length_sum = 0;
+    
+    for_linked_list(node, builder->list)
+    {
+        builder->string_length_sum += node->item.string.size;
+    }
+}
+
+internal Simple_String_Builder_Item *
+builder_add(Arena *arena, Simple_String_Builder *builder, String string)
+{
+    Simple_String_Builder_Item *item = builder->list.push_get_item(arena);
+    item->string = string;
+    builder->string_length_sum += string.size;
+    return item;
+}
+
+internal String
+build_string(Arena *arena, Simple_String_Builder *builder)
+{
+    u64 len = builder->string_length_sum;
+    
+    String result = allocate_string(arena, len+1);
+    result.size -= 1;
+    
+    u64 char_index = 0;
+    u64 node_index = 0;
+    
+    for (auto *node = builder->list.first;
+         node;
+         node = node->next, ++node_index)
+    {
+        Simple_String_Builder_Item *item = &node->item;
+        copy_bytes(result.str + char_index, item->string.str, item->string.size);
+        char_index += item->string.size;
+    }
+    
+    assert(char_index == result.size);
+    return result;
+}
+
+inline char *
+build_cstr(Arena *arena, Simple_String_Builder *builder)
+{
+    String string = build_string(arena, builder);
+    char *result = (char *)string.str;
+    result[string.size] = 0;
+    return result;
+}
+
+
+
+
 
 
 
@@ -1886,7 +2005,7 @@ push_stringf(Arena *arena, char *format, ...)
     va_start(args, format);
     s32 len = vsnprintf(0, 0, format, args);
     assert(len >= 0);
-    String result = alloc_string(arena, (u64)(len+1));
+    String result = allocate_string(arena, (u64)(len+1));
     vsnprintf((char *) result.str, result.size, format, args);
     --result.size;
     va_end(args);
@@ -1916,8 +2035,26 @@ push_cstrf(Arena *arena, char *format, ...)
 
 
 
+// =================== @Alloc_String_Helpers ==================
+internal String
+push_string_concatenate(Arena *arena, String first, String second)
+{
+    String result = allocate_string(arena, first.size + second.size);
+    copy_bytes(result.str,              first.str,  first.size);
+    copy_bytes(result.str + first.size, second.str, second.size);
+    return result;
+}
 
 
+internal String
+push_string_replace_file_name_extension(Arena *arena, String file_name, String new_extension)
+{
+    // Example: new_extension = l2s("txt");
+    String file_name_no_extension = string_find_from_right_trim_ending(file_name, '.');
+    file_name_no_extension.size += 1;
+    String result = push_string_concatenate(arena, file_name_no_extension, new_extension);
+    return result;
+}
 
 
 
@@ -2234,18 +2371,11 @@ file_delete(Arena *arena, Path *path)
 internal b32
 file_exists(cstr_lit path)
 {
-    b32 result = false;
-    
 #if Def_Windows
-    File_Handle file = {CreateFileA(path, GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr)};
+    b32 result = PathFileExistsA(path);
 #else
 #error "not impl"
 #endif
-    
-    if (is_valid_handle(&file)) {
-        result = true;
-        file_close(&file);
-    }
     return result;
 }
 

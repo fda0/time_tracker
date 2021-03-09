@@ -85,21 +85,21 @@ platform_get_executable_path(char *output, u32 output_size)
 
 namespace Color
 {
-global_variable char *f_black = "\033[30m";
-global_variable char *f_white = "\033[97m";
-global_variable char *f_date = "\033[33m";
-global_variable char *f_sum = "\033[32m";
-global_variable char *f_desc = "\033[36m";
-global_variable char *f_dimmed = "\033[90m";
-global_variable char *f_desc_delta = "\033[96m";
-
-global_variable char *b_error = "\033[41m";
-global_variable char *b_date = "\033[43m";
-global_variable char *b_help_header = "\033[100m";
-
-global_variable char *f_reset = "\033[39m";
-global_variable char *b_reset = "\033[49m";
-}; // namespace Color
+    global char *f_black = "\033[30m";
+    global char *f_white = "\033[97m";
+    global char *f_date = "\033[33m";
+    global char *f_sum = "\033[32m";
+    global char *f_desc = "\033[36m";
+    global char *f_dimmed = "\033[90m";
+    global char *f_desc_delta = "\033[96m";
+    
+    global char *b_error = "\033[41m";
+    global char *b_date = "\033[43m";
+    global char *b_help_header = "\033[100m";
+    
+    global char *f_reset = "\033[39m";
+    global char *b_reset = "\033[49m";
+};
 
 internal void
 initialize_colors(bool turn_off_colors)

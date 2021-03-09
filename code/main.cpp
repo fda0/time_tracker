@@ -18,11 +18,10 @@
 //       Like "sort start 6:40 stop ... "
 
 
-// NOTE: This program ignores concept of timezones to simplify usage.
-
 #include "main.h"
+#include "description.cpp"
+
 #include "error.cpp"
-#include "files.cpp"
 #include "token.cpp"
 #include "string.cpp"
 #include "time.cpp"
@@ -44,23 +43,6 @@ get_last_record(Program_State *state)
     return result;
 }
 
-
-internal Description
-create_description(Program_State *state, Token token)
-{
-    Assert(token.type == Token_String);
-    
-    Description result;
-    result.length = (s32)token.text_length;
-    result.content = Push_Array(&state->mixed_arena, result.length, char);
-    
-    for (s64 i = 0; i < result.length; ++i)
-    {
-        result.content[i] = token.text[i];
-    }
-    
-    return result;
-}
 
 
 
@@ -214,7 +196,7 @@ calculate_sum_for_day(Program_State *state, s64 starting_index)
     Day_Sum_Result result = {};
     date64 day = state->records.at(starting_index)->date;
     
-    for (s64 index = starting_index; index < state->records.count; ++index)
+    for (u64 index = starting_index; index < state->records.count; ++index)
     {
         Record *record = state->records.at(index);
         
@@ -282,7 +264,7 @@ calculate_sum_for_day(Program_State *state, s64 starting_index)
 
 
 inline b32
-compare_record_type_to_mask(Dynamic_Array<Record> *records, s64 index, s32 type_mask)
+compare_record_type_to_mask(Virtual_Array<Record> *records, u64 index, u32 type_mask)
 {
     b32 result = false;
     if (records->count > index && 0 < index)
@@ -309,6 +291,7 @@ get_sign_char_and_abs_value(s32 *value)
     return result;
 }
 
+#if 0
 internal void
 print_record_tail(Program_State *state, s32 *sum)
 {
@@ -345,7 +328,9 @@ print_record_tail(Program_State *state, s32 *sum)
     printf("\n");
     state->defered_descs.clear();
 }
+#endif
 
+#if 0
 internal void
 print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, b32 alternative_colors = false)
 {
@@ -362,7 +347,6 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
     // 16:30 -> 18:30  +00:30 "Working on X" -00:15 "Tea break"
     using namespace Color;
     
-    state->defered_descs.clear();
     
     b32 is_new_day = true;
     s64 active_day_index = 0;
@@ -371,7 +355,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
     Range_State range_state = Range_Closed_PostPrint;
     b32 overnight_carry = false;
     
-    for (s64 record_index = 0; record_index < state->records.count; ++record_index)
+    for_u64(record_index, state->records.count)
     {
         Record *record = state->records.at(record_index);
         
@@ -497,25 +481,27 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
         }
     }
 }
+#endif
 
 
 
 internal void
 archive_current_file(Program_State *state, b32 long_format = false)
 {
-    date64 now = get_current_timestamp(state);
+    // TODO(f0): calculate hash of the whole file for file_name
     
+    date64 now = get_current_timestamp(state);
     Str128 timestamp = get_timestamp_string_for_file(now, long_format);
     
-    char archive_file_name[MAX_PATH];
-    snprintf(archive_file_name, sizeof(archive_file_name), "%s%s_%s.txt", state->archive_directory,
-             state->input_file_name, timestamp.str);
+    String file_name = push_stringf(&state->arena, "%.*s_%s.txt",
+                                    string_expand(state->title), timestamp.str);
     
-    platform_copy_file(state->input_file_full_path, archive_file_name);
+    Path archive_path = path_from_directory(state->archive_dir, file_name);
+    file_copy(&state->arena, &state->input_path, &archive_path, false);
     
     if (long_format) 
     {
-        printf("File archived as: %s\n", archive_file_name);
+        printf("File archived as: %.*s\n", string_expand(file_name));
     }
 }
 
@@ -524,16 +510,24 @@ archive_current_file(Program_State *state, b32 long_format = false)
 internal void
 save_to_file(Program_State *state)
 {
+    memory_scope(&state->arena);
+    
     archive_current_file(state);
     state->parse_error_count = 0;
     
-    FILE *file = fopen(state->input_file_full_path, "w");
-    if (file)
+    
+    File_Handle file = file_open_write(&state->arena, &state->input_path);
+    if (no_errors(&file))
     {
+        String_Builder builder = {};
+        auto add = [&](String string) {
+            builder_add(&state->arena, &builder, string);
+        };
+        
         b32 is_new_day = true;
         s64 active_day_index = 0;
         
-        for (s64 record_index = 0; record_index < state->records.count; ++record_index)
+        for_u64(record_index, state->records.count)
         {
             Record *record = state->records.at(record_index);
             
@@ -541,7 +535,9 @@ save_to_file(Program_State *state)
             if (is_new_day)
             {
                 Str32 day_of_week = get_day_of_the_week_string(record->date);
-                fprintf(file, "// %s\n", day_of_week.str);
+                add(l2s("// "));
+                add(string(day_of_week.str));
+                add(l2s("\n"));
             }
             
             
@@ -572,69 +568,70 @@ save_to_file(Program_State *state)
                 continue;
             }
             
-            fprintf(file, "%s", command);
+            add(string(command));
             
             
             // print date
             if (is_new_day)
             {
                 Str32 date_str = get_date_string(record->date);
-                fprintf(file, " %s", date_str.str);
+                add(string(date_str.str));
             }
             
             
             // print time
             Str32 time_str = get_time_string(record->value);
-            fprintf(file, " %s", time_str.str);
+            add(string(time_str.str));
             
             
             // print description
-            if (record->description.length)
+            Description *desc = get_description(&state->desc_table, record->desc_hash);
+            if (desc->size)
             {
-                fprintf(file, " \"%.*s\"", record->description.length, record->description.content);
+                add(l2s(" \""));
+                add(string_from_desc(desc));
+                add(l2s("\""));
             }
             
             // new line
-            fprintf(file, "\n");
-            
+            add(l2s("\n"));
             
             
             // __prepare next iteration + get sum___
-            Record *next_record = record + 1;
-            is_new_day = ((record_index == state->records.count - 1) || !are_in_same_day(record, next_record));
+            if (record_index == state->records.count - 1) {
+                is_new_day = true;
+            } else {
+                Record *next_record = state->records.at(record_index + 1);
+                is_new_day = !are_in_same_day(record, next_record);
+            }
             
             if (is_new_day)
             {
                 Day_Sum_Result sum_result = calculate_sum_for_day(state, active_day_index);
                 Str128 sum_bar = get_sum_and_progress_bar_string(sum_result.sum, sum_result.missing_ending);
                 
-                fprintf(file, "// %s\n\n", sum_bar.str);
+                add(l2s("// "));
+                add(string(sum_bar.str));
+                add(l2s("\n\n"));
                 active_day_index = record_index + 1;
             }
         }
         
         
-#if 0        
-        using namespace Color;
+        String output_string = build_string(&state->arena, &builder);
+        file_write_string(&file, output_string);
+        file_close(&file);
         
-        if (state->parse_error_count > 0) {
-            fprintf(file, "// Parse Error count: %d\n", state->parse_error_count);
-            printf("%sParse Error count: %d%s\n", b_error, state->parse_error_count, b_reset);
+        {
+            // TODO(f0): pull get file mod time to stf0
+            char *input_path_cstr = push_cstr_from_path(&state->arena, &state->input_path);
+            state->input_file_mod_time = platform_get_file_mod_time(input_path_cstr);
         }
-        
-        if (state->logic_error_count > 0) {
-            fprintf(file, "// Logic Error count: %d\n", state->logic_error_count);
-            printf("%sLogic Error count: %d%s\n", b_error, state->logic_error_count, b_reset);
-        }
-#endif
-        
-        fclose(file);
-        
-        state->input_file_mod_time = platform_get_file_mod_time(state->input_file_full_path);
     }
     else
     {
-        printf("Failed to write to file: %s\n", state->input_file_full_path);
+        char *input_path_cstr = push_cstr_from_path(&state->arena, &state->input_path);
+        printf("Failed to write to file: %s\n", input_path_cstr);
     }
     
     state->change_count = 0;
@@ -1728,31 +1725,13 @@ int
 main(int argument_count, char **arguments)
 {
     //~ NOTE: Initialization
-    
     Program_State state = {};
+    state.arena = create_virtual_arena();
+    Arena *arena = &state.arena;
+    state.desc_table = create_description_table(4096);
+    //clear_memory(&state);
     
-    // NOTE: Initialize arenas:
-    const size_t total_size = Gigabytes(1);
-    static u8 raw_memory_block[total_size]; // TODO: Move to VirtualAlloc
     
-    { // SCOPE: Memory partitioning
-        Alloc_Resources total_res = {};
-        total_res.size = total_size;
-        total_res.address = raw_memory_block;
-        
-        Alloc_Resources defered_desc_res = plan_alloc(&total_res, Megabytes(16));
-        Alloc_Resources mixed_res = plan_alloc(&total_res, Megabytes(512));
-        Alloc_Resources record_res = plan_alloc(&total_res, total_res.size);
-        
-        Assert(total_res.size == 0);
-        Assert((total_res.address - raw_memory_block) == total_size);
-        
-        alocate_arena(&state.defered_descs.arena_, defered_desc_res.address, defered_desc_res.size);
-        alocate_arena(&state.mixed_arena, mixed_res.address, mixed_res.size);
-        alocate_arena(&state.records.arena_, record_res.address, record_res.size);
-    }
-    
-    clear_memory(&state);
     
     b32 reformat_mode = false;
     
@@ -1805,7 +1784,7 @@ main(int argument_count, char **arguments)
             }
             else if (type == Cmd_Input_File_Path)
             {
-                strncpy(state.input_file_full_path, arg, Array_Count(state.input_file_full_path));
+                state.input_path = push_path_from_string(arena, string(arg));
                 type = Cmd_None;
             }
             else
@@ -1821,60 +1800,40 @@ main(int argument_count, char **arguments)
     
     initialize_timezone_offset(&state);
     
+    state.exe_path = push_current_executable_path(arena);
+    state.title = string_find_from_right_trim_ending(state.exe_path.file_name, '.');
     
+    if (state.input_path.file_name.size == 0)
     {
-        char executable_path[MAX_PATH];
-        platform_get_executable_path(executable_path, sizeof(executable_path));
-        state.executable_path2 = get_file_path_divided(executable_path);
+        state.input_path = state.exe_path;
+        state.input_path.file_name = push_string_concatenate(arena, state.title, l2s(".txt"));
     }
     
     
-    if (!state.input_file_full_path[0])
+    state.archive_dir = push_directory_append(arena, state.exe_path.directory, l2s("archive"));
+    directory_create(arena, state.archive_dir);
+    
+    
+    
+    //~ Load file. Save with better formatting if there was no load errors.
+    
     {
-        // NOTE: Default database name
-        copy_path_with_different_extension(state.input_file_name, sizeof(state.input_file_name),
-                                           state.executable_path2.file_name, "txt");
+        memory_scope(arena);
         
-        snprintf(state.input_file_full_path, Array_Count(state.input_file_full_path), "%s%s",
-                 state.executable_path2.directory, state.input_file_name);
-    }
-    else
-    {
-        // NOTE: Custom database name
-        File_Path2 custom_path2 = get_file_path_divided(state.input_file_full_path);
-        strncpy(state.input_file_name, custom_path2.file_name, Array_Count(state.input_file_name));
-    }
-    
-    sprintf(state.archive_directory, "%sarchive", state.executable_path2.directory);
-    platform_add_ending_slash_to_path(state.archive_directory);
-    platform_create_directory(state.archive_directory);
-    
-    
-    
-    //~ NOTE: Load file. Save with better formatting if there was no load errors.
-    
-    { // SCOPE: Create new database file if it doesn't exist
-        char *path = state.input_file_full_path;
-        FILE *file_read = fopen(path, "rb");
-        if (file_read)
+        char *input_path_cstr = push_cstr_from_path(arena, &state.input_path);
+        if (!file_exists(input_path_cstr))
         {
-            fclose(file_read);
-        }
-        else
-        {
-            printf("No database with name: %s\n", path);
-            
-            FILE *file_write = fopen(path, "ab");
-            if (file_write)
-            {
-                printf("Created new file: %s\n", path);
-                fclose(file_write);
+            File_Handle file = file_open_write(input_path_cstr);
+            if (no_errors(&file)) {
+                printf("Created new file: %s\n", input_path_cstr);
             }
             else
             {
-                printf("Failed to create file: %s\n", path);
-                exit(1);
+                printf("Failed to create new file: %s\n", input_path_cstr);
+                exit_error();
             }
+            
+            file_close(&file);
         }
     }
     

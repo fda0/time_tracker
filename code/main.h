@@ -1,3 +1,6 @@
+#include "stf0.h"
+#include "description.h"
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,33 +8,16 @@
 #include <time.h>
 
 
+struct Stubs
+{
+    Description description;
+};
+global Stubs global_stubs = {};
 
-//~ NOTE: Types
 
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
-
-typedef int8_t s8;
-typedef int16_t s16;
-typedef int32_t s32;
-typedef int64_t s64;
-
-typedef s32 b32;
 
 typedef time_t date64;
 typedef s32 time32;
-
-typedef float f32;
-typedef double f64;
-
-#define internal static
-#define global_variable static
-#define local_persist static
-
-
-#define S64_MAX LLONG_MAX
 
 
 
@@ -109,18 +95,6 @@ enum Missing_Ending
 };
 
 
-struct Description
-{
-    char *content;
-    s32 length;
-};
-
-struct Defered_Description
-{
-    Description description;
-    s32 value;
-};
-
 enum Record_Type : s32
 {
     Record_Empty,
@@ -133,11 +107,11 @@ enum Record_Type : s32
 struct Record
 {
     date64 date;
+    u64 desc_hash;
 
     Record_Type type;
     s32 value;
 
-    Description description;
 };
 
 
@@ -150,14 +124,17 @@ struct Record
 
 struct Program_State
 {
-    Dynamic_Array<Defered_Description> defered_descs;
-    Memory_Arena mixed_arena;
-    Dynamic_Array<Record> records;
-
+    Arena arena;
+    Virtual_Array<Record> records;
+    Description_Table desc_table;
+    
     char archive_directory[MAX_PATH];
-    File_Path2 executable_path2;
-    char input_file_name[MAX_PATH];
-    char input_file_full_path[MAX_PATH]; // TODO: Collapse to File_Path2
+    String title;
+    Path exe_path;
+    Path input_path;
+    Directory archive_dir;
+    //char input_file_name[MAX_PATH];
+    //char input_file_full_path[MAX_PATH]; // TODO: Collapse to File_Path2
 
     File_Time input_file_mod_time;
     date64 timezone_offset;
