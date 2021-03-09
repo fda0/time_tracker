@@ -917,6 +917,7 @@ struct Compare_Line_Pos
 {
     u32 line;
     u32 column;
+    u64 index;
     b32 is_equal;
 };
 
@@ -956,6 +957,8 @@ string_compare_with_line_column(String str_a, String str_b, b32 case_ins = false
             result.column = 1;
         }
     }
+    
+    result.index = i;
     
     if (result.is_equal &&
         str_a.size != str_b.size)
@@ -1377,8 +1380,6 @@ push_bytes_virtual_commit_unaligned_(Arena *arena, u64 alloc_size)
 internal Arena
 create_virtual_arena(u64 target_reserved_capacity = gigabytes(16))
 {
-    // TODO(f0): what about MEM_LARGE_PAGES?
-    
     SYSTEM_INFO system_info;
     GetSystemInfo(&system_info);
     

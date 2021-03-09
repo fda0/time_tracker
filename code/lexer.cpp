@@ -1,4 +1,6 @@
 
+// TODO(f0): Parse X (16?) elements ahead and put them in ring buffer
+
 inline b32
 is_end_of_line(char c)
 {

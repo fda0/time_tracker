@@ -5,4 +5,4 @@
 
 @tests
 #build tests.cpp
-//#run "cd tests && ..\build\tests" -print_output
+#run "cd tests && ..\build\tests" -print_output

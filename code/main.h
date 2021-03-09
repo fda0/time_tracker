@@ -108,35 +108,36 @@ enum Record_Type : s32
 
 struct Record
 {
-    date64 date;
-    u64 desc_hash;
-
     Record_Type type;
     s32 value;
-
+    date64 date;
+    u64 desc_hash;
 };
 
 
-
-#include "memory.h"
-
+struct Records
+{
+    Virtual_Array<Record> array;
+    Record_Type active_type;
+};
 
 
 // TODO: Pull out char[MAX_PATH] to StrMaxPath?
 
 struct Program_State
 {
+    // NOTE: These require special initialization:
     Arena arena;
-    Virtual_Array<Record> records;
+    Records records;
     Description_Table desc_table;
     
+    
+    // NOTE: These can be zero initialized
     char archive_directory[MAX_PATH];
     String title;
     Path exe_path;
     Path input_path;
     Directory archive_dir;
-    //char input_file_name[MAX_PATH];
-    //char input_file_full_path[MAX_PATH]; // TODO: Collapse to File_Path2
 
     File_Time input_file_mod_time;
     date64 timezone_offset;

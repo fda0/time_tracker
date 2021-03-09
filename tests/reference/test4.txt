@@ -1,0 +1,15 @@
+// Sunday
+start 2019-03-10 09:45
+start 11:20 "replace_test!"
+start 17:59
+stop 18:00
+// sum: 08:15       [++++ ++++ -   ]
+
+// Wednesday
+start 2019-04-10 09:55
+// sum: 20:01       [++++ ++++ ++++ ++++ ++++ -   ]
+
+// Thursday
+stop 2019-04-11 05:56
+// sum: 00:00       []
+

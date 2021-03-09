@@ -34,10 +34,10 @@ internal Record *
 get_last_record(Program_State *state)
 {
     Record *result = nullptr;
-    s64 count = state->records.count;
+    s64 count = state->records.array.count;
     if (count)
     {
-        result = state->records.at(count - 1);
+        result = state->records.array.at(count - 1);
     }
     
     return result;
@@ -194,11 +194,11 @@ calculate_sum_for_day(Program_State *state, s64 starting_index)
 {
     date64 range_start = 0;
     Day_Sum_Result result = {};
-    date64 day = state->records.at(starting_index)->date;
+    date64 day = state->records.array.at(starting_index)->date;
     
-    for (u64 index = starting_index; index < state->records.count; ++index)
+    for (u64 index = starting_index; index < state->records.array.count; ++index)
     {
-        Record *record = state->records.at(index);
+        Record *record = state->records.array.at(index);
         
         if (day != record->date && range_start == 0)
         {
@@ -357,9 +357,9 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
     Range_State range_state = Range_Closed_PostPrint;
     b32 overnight_carry = false;
     
-    for_u64(record_index, state->records.count)
+    for_u64(record_index, state->records.array.count)
     {
-        Record *record = state->records.at(record_index);
+        Record *record = state->records.array.at(record_index);
         
         // skip if not in range
         if ((date_end) && (record->date > date_end))
@@ -460,7 +460,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
         
         // __prepare next iteration + get sum___
         Record *next_record = record + 1;
-        is_new_day = ((record_index == state->records.count - 1) || !are_in_same_day(record, next_record));
+        is_new_day = ((record_index == state->records.array.count - 1) || !are_in_same_day(record, next_record));
         
         if (is_new_day)
         {
@@ -531,9 +531,9 @@ save_to_file(Program_State *state)
         b32 is_new_day = true;
         s64 active_day_index = 0;
         
-        for_u64(record_index, state->records.count)
+        for_u64(record_index, state->records.array.count)
         {
-            Record *record = state->records.at(record_index);
+            Record *record = state->records.array.at(record_index);
             
             // print day header comment
             if (is_new_day)
@@ -603,10 +603,10 @@ save_to_file(Program_State *state)
             
             
             // __prepare next iteration + get sum___
-            if (record_index == state->records.count - 1) {
+            if (record_index == state->records.array.count - 1) {
                 is_new_day = true;
             } else {
-                Record *next_record = state->records.at(record_index + 1);
+                Record *next_record = state->records.array.at(record_index + 1);
                 is_new_day = !are_in_same_day(record, next_record);
             }
             
@@ -669,14 +669,16 @@ automatic_save_to_file(Program_State *state)
 
 
 internal void
-add_record(Program_State *state, Record *data, b32 allow_sorting)
+add_record(Program_State *state, Record *data)
 {
-    u64 candidate_index = state->records.count;
+    b32 allow_sorting = false; // TODO(f0): delete sorting
+    
+    u64 candidate_index = state->records.array.count;
     b32 replace = false;
     
     for (s64 index = candidate_index - 1; index >= 0; --index)
     {
-        Record *old_space = state->records.at(index);
+        Record *old_space = state->records.array.at(index);
         if (old_space->date < data->date)
         {
             break;
@@ -708,12 +710,11 @@ add_record(Program_State *state, Record *data, b32 allow_sorting)
     }
     
     
-    allow_sorting = false; // TODO(f0): delete sorting
     
     
     // NOTE: Reject sorting
     if (!allow_sorting &&
-        !(candidate_index == state->records.count || (candidate_index == state->records.count - 1 && replace)))
+        !(candidate_index == state->records.array.count || (candidate_index == state->records.array.count - 1 && replace)))
     {
         
         Print_Parse_Error(state);
@@ -731,6 +732,7 @@ add_record(Program_State *state, Record *data, b32 allow_sorting)
     }
     
     
+    //assert(!replace);
     
     if (!replace)
     {
@@ -740,7 +742,7 @@ add_record(Program_State *state, Record *data, b32 allow_sorting)
             
             for (s64 index = candidate_index - 1; index >= 0; --index)
             {
-                Record *old_space = state->records.at(index);
+                Record *old_space = state->records.array.at(index);
                 if (old_space->type == Record_TimeStart)
                 {
                     can_add = true;
@@ -759,7 +761,7 @@ add_record(Program_State *state, Record *data, b32 allow_sorting)
         
         if (can_add)
         {
-            *state->records.grow() = *data;
+            *state->records.array.grow() = *data;
             ++state->change_count;
         }
         else
@@ -771,7 +773,7 @@ add_record(Program_State *state, Record *data, b32 allow_sorting)
     }
     else
     {
-        *state->records.at(candidate_index) = *data;
+        *state->records.array.at(candidate_index) = *data;
         ++state->change_count;
     }
 }
@@ -880,7 +882,7 @@ fill_description_optional(Program_State *state, Forward_Token *forward, Record *
 
 
 internal void
-prase_command_start(Program_State *state, Tokenizer *tokenizer, b32 allow_sorting)
+prase_command_start(Program_State *state, Tokenizer *tokenizer)
 {
     Forward_Token forward = create_forward_token(tokenizer);
     Record record = {};
@@ -900,7 +902,7 @@ prase_command_start(Program_State *state, Tokenizer *tokenizer, b32 allow_sortin
     
     if (success)
     {
-        add_record(state, &record, allow_sorting);
+        add_record(state, &record);
     }
     else
     {
@@ -914,7 +916,7 @@ prase_command_start(Program_State *state, Tokenizer *tokenizer, b32 allow_sortin
 
 
 internal void
-prase_command_stop(Program_State *state, Tokenizer *tokenizer, b32 allow_sorting)
+prase_command_stop(Program_State *state, Tokenizer *tokenizer)
 {
     Forward_Token forward = create_forward_token(tokenizer);
     Record record = {};
@@ -929,7 +931,7 @@ prase_command_stop(Program_State *state, Tokenizer *tokenizer, b32 allow_sorting
     
     if (success)
     {
-        add_record(state, &record, allow_sorting);
+        add_record(state, &record);
     }
     else
     {
@@ -944,7 +946,7 @@ prase_command_stop(Program_State *state, Tokenizer *tokenizer, b32 allow_sorting
 
 
 internal void
-parse_command_add_sub(Program_State *state, Tokenizer *tokenizer, b32 is_add, b32 allow_sorting)
+parse_command_add_sub(Program_State *state, Tokenizer *tokenizer, b32 is_add)
 {
     Forward_Token forward = create_forward_token(tokenizer);
     
@@ -976,7 +978,7 @@ parse_command_add_sub(Program_State *state, Tokenizer *tokenizer, b32 is_add, b3
     
     if (success)
     {
-        add_record(state, &record, allow_sorting);
+        add_record(state, &record);
     }
     else
     {
@@ -1110,10 +1112,10 @@ get_recent_days_range(Program_State *state)
     date64 today = get_today(state);
     date64 start = today - Days(31);
     
-    s64 record_count = state->records.count;
+    s64 record_count = state->records.array.count;
     if (record_count)
     {
-        date64 last_date = state->records.at(record_count - 1)->date;
+        date64 last_date = state->records.array.at(record_count - 1)->date;
         if (last_date > today)
         {
             today = last_date;
@@ -1125,7 +1127,7 @@ get_recent_days_range(Program_State *state)
             past_index = 0;
         }
         
-        date64 start_date = state->records.at(past_index)->date;
+        date64 start_date = state->records.array.at(past_index)->date;
         if (start_date < start)
         {
             start = start_date;
@@ -1202,10 +1204,10 @@ process_and_print_summary(Program_State *state, Granularity granularity, date64 
     
     // NOTE: Skip record before date_begin
     for (;
-         record_index < state->records.count;
+         record_index < state->records.array.count;
          ++record_index)
     {
-        Record *record = state->records.at(record_index);
+        Record *record = state->records.array.at(record_index);
         if (date_begin <= record->date)
         {
             break;
@@ -1216,15 +1218,15 @@ process_and_print_summary(Program_State *state, Granularity granularity, date64 
     time32 sum = 0;
     Boundries_Result boundries = {};
     b32 loop = true;
-    Record *record = state->records.at(record_index);
+    Record *record = state->records.array.at(record_index);
     
     while (loop)
     {
-        loop = increase_index_to_next_day(&state->records, &record_index);
+        loop = increase_index_to_next_day(&state->records.array, &record_index);
         
         if (loop)
         {
-            record = state->records.at(record_index);
+            record = state->records.array.at(record_index);
             if (date_end < record->date)
             {
                 loop = false;
@@ -1409,7 +1411,6 @@ process_input(char *content, Program_State *state, b32 reading_from_file, b32 *m
     using namespace Color;
     Tokenizer tokenizer = create_tokenizer(content);
     b32 parsing = true;
-    b32 allow_sorting = false;
     
     
     while (parsing)
@@ -1420,30 +1421,19 @@ process_input(char *content, Program_State *state, b32 reading_from_file, b32 *m
             case Token_Identifier: {
                 if (token_equals(token, "start"))
                 {
-                    prase_command_start(state, &tokenizer, allow_sorting);
+                    prase_command_start(state, &tokenizer);
                 }
                 else if (token_equals(token, "stop"))
                 {
-                    prase_command_stop(state, &tokenizer, allow_sorting);
+                    prase_command_stop(state, &tokenizer);
                 }
                 else if (token_equals(token, "add"))
                 {
-                    parse_command_add_sub(state, &tokenizer, true, allow_sorting);
+                    parse_command_add_sub(state, &tokenizer, true);
                 }
                 else if (token_equals(token, "subtract") || token_equals(token, "sub"))
                 {
-                    parse_command_add_sub(state, &tokenizer, false, allow_sorting);
-                }
-                else if (token_equals(token, "sort"))
-                {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
-                        allow_sorting = true;
-                    }
+                    parse_command_add_sub(state, &tokenizer, false);
                 }
                 else if (token_equals(token, "show"))
                 {
@@ -1737,7 +1727,7 @@ main(int argument_count, char **arguments)
     //~ NOTE: Initialization
     Program_State state = {};
     state.arena = create_virtual_arena();
-    state.records = create_virtual_array<Record>();
+    state.records.array = create_virtual_array<Record>();
     state.desc_table = create_description_table(4096);
     //clear_memory(&state);
     Arena *arena = &state.arena;
@@ -1892,7 +1882,7 @@ main(int argument_count, char **arguments)
             process_input(thread_memory.input_buffer, &state, false, &is_running);
             if (state.change_count > 0)
             {
-                if (state.records.count > 0)
+                if (state.records.array.count > 0)
                 {
                     Record *last_record = get_last_record(&state);
                     print_days_from_range(&state, last_record->date, last_record->date, true);
