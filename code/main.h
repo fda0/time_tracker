@@ -10,16 +10,22 @@
 #include <time.h>
 
 
+typedef time_t date64;
+typedef s32 time32;
+
+
 struct Stubs
 {
     Description description;
 };
 global Stubs global_stubs = {};
 
+struct Global_State
+{
+    date64 timezone_offset;
+};
+global Global_State global_state;
 
-
-typedef time_t date64;
-typedef s32 time32;
 
 
 
@@ -45,34 +51,7 @@ struct Thread_Memory
 
 //~ NOTE: Macros
 
-#define Macro_Wrap(Macro) \
-    do                    \
-    {                     \
-        Macro             \
-    } while (0)
 
-#if BUILD_INTERNAL
-#define Assert(Expression)          \
-    Macro_Wrap(if (!(Expression)) { \
-        __debugbreak();             \
-        *(int *)0 = 1;              \
-    })
-#else
-#define Assert(Expression)
-#endif
-
-#define Invalid_Code_Path Assert(0)
-
-
-
-#define Array_Count(Array) (sizeof(Array) / sizeof((Array)[0]))
-
-#define Minimum(A, B) (A > B ? B : A)
-
-#define Kilobytes(Value) ((Value)*1024ULL)
-#define Megabytes(Value) (Kilobytes(Value) * 1024ULL)
-#define Gigabytes(Value) (Megabytes(Value) * (u64)1024ULL)
-#define Terabytes(Value) (Gigabytes(Value) * (u64)1024ULL)
 
 #define Days(Value) (Hours(Value) * 24)
 #define Hours(Value) (Minutes(Value) * 60)
@@ -80,14 +59,6 @@ struct Thread_Memory
 
 
 //~ NOTE: Data types
-
-struct File_Path2
-{
-    char file_name[MAX_PATH];
-    char directory[MAX_PATH];
-};
-
-
 
 enum Missing_Ending
 {
@@ -129,10 +100,11 @@ struct Record_Session
     Record *last;
     Record *active;
     
-    Tokenizer tokenizer;
+    Lexer lexer;
     u32 change_count;
     b32 no_errors;
     b32 reading_from_file;
+    b32 load_file_unresolved_errors;
     
     // unwind backup
     Program_Scope scope;

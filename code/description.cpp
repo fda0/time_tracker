@@ -154,7 +154,7 @@ inline u64
 add_description(Description_Table *table, Token token)
 {
     assert(token.type == Token_String);
-    u64 hash = add_description(table, string(token.text, token.text_length));
+    u64 hash = add_description(table, token.text);
     return hash;
 }
     

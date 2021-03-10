@@ -47,31 +47,31 @@ is_time_separator(char c)
 }
 
 internal void
-eat_all_whitespace(Tokenizer *tokenizer)
+eat_all_whitespace(Lexer *lx)
 {
     for (;;)
     {
-        if (is_whitespace(tokenizer->at[0]))
+        if (is_whitespace(lx->at[0]))
         {
-            ++tokenizer->at;
+            ++lx->at;
         }
-        else if (is_end_of_line(tokenizer->at[0]))
+        else if (is_end_of_line(lx->at[0]))
         {
-            ++tokenizer->at;
-            tokenizer->line_start = tokenizer->at;
-            ++tokenizer->line_count;
+            ++lx->at;
+            lx->line_start = lx->at;
+            ++lx->line_count;
 
-            if ((tokenizer->at[0] == '\r') && (tokenizer->at[1] == '\n'))
+            if ((lx->at[0] == '\r') && (lx->at[1] == '\n'))
             {
-                --tokenizer->line_count;
+                --lx->line_count;
             }
         }
-        else if (tokenizer->at[0] == '/' && tokenizer->at[1] == '/')
+        else if (lx->at[0] == '/' && lx->at[1] == '/')
         {
-            tokenizer->at += 2;
-            while (tokenizer->at[0] && !is_end_of_line(tokenizer->at[0]))
+            lx->at += 2;
+            while (lx->at[0] && !is_end_of_line(lx->at[0]))
             {
-                ++tokenizer->at;
+                ++lx->at;
             }
         }
         else
@@ -82,30 +82,26 @@ eat_all_whitespace(Tokenizer *tokenizer)
 }
 
 
-internal Tokenizer
-create_tokenizer(char *input_text)
+internal Lexer
+create_lexer(char *input_text)
 {
-    Tokenizer tokenizer = {};
-    tokenizer.at = input_text;
-    tokenizer.line_start = input_text;
-
-    return tokenizer;
+    Lexer lexer = {};
+    lexer.at = (u8 *)input_text;
+    lexer.line_start = (u8 *)input_text;
+    return lexer;
 }
 
 
 internal Token
-get_token(Tokenizer *tokenizer)
+get_token(Lexer *lx)
 {
-    eat_all_whitespace(tokenizer);
+    eat_all_whitespace(lx);
 
     Token token = {};
-    token.text_length = 1;
-    token.text = tokenizer->at;
-    token.line_index = tokenizer->line_count;
-    token.line_start = tokenizer->line_start;
+    token.text = string(lx->at, 1);
 
-    char c = tokenizer->at[0];
-    ++tokenizer->at;
+    char c = lx->at[0];
+    ++lx->at;
     switch (c)
     {
     case '\0': {
@@ -120,28 +116,28 @@ get_token(Tokenizer *tokenizer)
 
     case '"': {
         token.type = Token_String;
-        token.text = tokenizer->at;
-        while (tokenizer->at[0] && tokenizer->at[0] != '"')
+        token.text.str = lx->at;
+        while (lx->at[0] && lx->at[0] != '"')
         {
-            ++tokenizer->at;
+            ++lx->at;
         }
 
-        token.text_length = tokenizer->at - token.text;
-        if (tokenizer->at[0] == '"')
-            ++tokenizer->at;
+        token.text.size = lx->at - token.text.str;
+        if (lx->at[0] == '"')
+            ++lx->at;
     }
     break;
 
     case '-':
     case '+': {
         token.type = Token_Offset;
-        token.text = tokenizer->at;
+        token.text.str = lx->at;
         do
         {
-            ++tokenizer->at;
-        } while (tokenizer->at[0] && is_number(tokenizer->at[0]));
+            ++lx->at;
+        } while (lx->at[0] && is_number(lx->at[0]));
 
-        token.text_length = tokenizer->at - token.text;
+        token.text.size = lx->at - token.text.str;
     }
     break;
 
@@ -150,28 +146,28 @@ get_token(Tokenizer *tokenizer)
         {
             token.type = Token_Identifier;
 
-            while (is_alpha(tokenizer->at[0]) || is_number(tokenizer->at[0]) || tokenizer->at[0] == '_')
+            while (is_alpha(lx->at[0]) || is_number(lx->at[0]) || lx->at[0] == '_')
             {
-                ++tokenizer->at;
+                ++lx->at;
             }
 
-            token.text_length = tokenizer->at - token.text;
+            token.text.size = lx->at - token.text.str;
         }
         else if (is_number(c))
         {
             token.type = Token_Time;
 
-            while (is_number(tokenizer->at[0]) || is_date_separator(tokenizer->at[0]) ||
-                   is_time_separator(tokenizer->at[0]))
+            while (is_number(lx->at[0]) || is_date_separator(lx->at[0]) ||
+                   is_time_separator(lx->at[0]))
             {
-                ++tokenizer->at;
-                if (is_date_separator(tokenizer->at[0]))
+                ++lx->at;
+                if (is_date_separator(lx->at[0]))
                 {
                     token.type = Token_Date;
                 }
             }
 
-            token.text_length = tokenizer->at - token.text;
+            token.text.size = lx->at - token.text.str;
         }
         else
         {
@@ -189,48 +185,20 @@ get_token(Tokenizer *tokenizer)
 internal b32
 token_equals(Token token, char *match, b32 case_sensitive = false)
 {
-    char delta = 'a' - 'A';
-
-    for (u32 index = 0; index < token.text_length; ++index, ++match)
-    {
-        char t = token.text[index];
-        char m = *match;
-        if (m == 0)
-        {
-            return false;
-        }
-
-        if (!case_sensitive)
-        {
-            if (m >= 'A' && m <= 'Z')
-            {
-                m += delta;
-            }
-            if (t >= 'A' && t <= 'Z')
-            {
-                t += delta;
-            }
-        }
-
-        if (t != m)
-        {
-            return false;
-        }
-    }
-
-    b32 result = (*match == 0);
+    String match_str = string(match);
+    b32 result = string_equal(token.text, match_str, case_sensitive);
     return result;
 }
 
 
 internal Forward_Token
-create_forward_token(Tokenizer *tokenizer)
+create_forward_token(Lexer *lx)
 {
     Forward_Token result = {};
-    result.tokenizer_ = tokenizer;
-    result.peek_tokenizer_ = *result.tokenizer_;
+    result.lexer_ = lx;
+    result.peek_lexer_ = *result.lexer_;
 
-    result.peek = get_token(&result.peek_tokenizer_);
+    result.peek = get_token(&result.peek_lexer_);
 
     return result;
 }
@@ -238,8 +206,8 @@ create_forward_token(Tokenizer *tokenizer)
 inline void
 advance(Forward_Token *forward)
 {
-    *forward->tokenizer_ = forward->peek_tokenizer_;
+    *forward->lexer_ = forward->peek_lexer_;
     forward->token = forward->peek;
 
-    forward->peek = get_token(&forward->peek_tokenizer_);
+    forward->peek = get_token(&forward->peek_lexer_);
 }

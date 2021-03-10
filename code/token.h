@@ -1,10 +1,10 @@
 
-struct Tokenizer
+struct Lexer
 {
-    char *at;
+    u8 *at;
     
-    size_t line_count;
-    char *line_start;
+    u8 *line_start;
+    u64 line_count;
 };
 
 
@@ -27,17 +27,13 @@ struct Token
 {
     Token_Type type;
     
-    size_t text_length;
-    char *text;
-    
-    size_t line_index;
-    char *line_start;
+    String text;
 };
 
 struct Forward_Token
 {
-    Tokenizer *tokenizer_;
-    Tokenizer peek_tokenizer_;
+    Lexer *lexer_;
+    Lexer peek_lexer_;
     Token token;
     Token peek;
 };

@@ -1,5 +1,5 @@
 
-global date64 global_timezone_offset;
+
 
 
 inline date64
@@ -23,7 +23,7 @@ get_current_timestamp()
     date64 now;
     time(&now);
     
-    date64 result = now + global_timezone_offset;
+    date64 result = now + global_state.timezone_offset;
     return result;
 }
 
@@ -54,7 +54,7 @@ initialize_timezone_offset()
     date64 utc_test_time = platform_tm_to_time(local_date);
     
     date64 offset = utc_test_time - test_time;
-    global_timezone_offset = offset;
+    global_state.timezone_offset = offset;
 }
 
 

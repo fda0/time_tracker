@@ -86,7 +86,7 @@ get_last_record(Record_Session *session)
 
 
 internal Parse_Number_Result
-parse_number(char *src, s32 count)
+parse_number(u8 *src, s32 count)
 {
     Parse_Number_Result result = {};
     
@@ -109,14 +109,14 @@ parse_number(char *src, s32 count)
 internal Parse_Date_Result
 parse_date(Record_Session *session, Token token)
 {
-    Assert(token.type == Token_Date);
+    assert(token.type == Token_Date);
     
     // NOTE: Supported format: 2020-12-31
     Parse_Date_Result result = {};
     
-    if (token.text_length == (4 + 1 + 2 + 1 + 2))
+    if (token.text.size == (4 + 1 + 2 + 1 + 2))
     {
-        char *text = token.text;
+        u8 *text = token.text.str;
         tm date = {};
         
         // year
@@ -155,14 +155,14 @@ parse_time(Record_Session *session, Token token)
     // NOTE: Supported format: 10:32, 02:00, 2:0, 120...
     Parse_Time_Result result = {};
     
-    if (token.text_length > 0)
+    if (token.text.size > 0)
     {
         b32 had_first_colon = false;
         u32 multiplier = 1;
         
-        for (s32 index = (s32)token.text_length - 1; index >= 0; --index)
+        for (s32 index = (s32)token.text.size - 1; index >= 0; --index)
         {
-            char c = token.text[index];
+            char c = token.text.str[index];
             
             if (c >= '0' && c <= '9')
             {
@@ -586,18 +586,15 @@ save_to_file(Program_State *state)
             }
             else if (record->type == Record_TimeDelta)
             {
-                if (record->value < 0)
-                {
+                if (record->value < 0) {
                     command = "sub";
-                }
-                else
-                {
+                } else {
                     command = "add";
                 }
             }
             else
             {
-                Invalid_Code_Path;
+                assert(0);
                 continue;
             }
             
@@ -678,13 +675,18 @@ save_to_file(Program_State *state)
 internal void
 add_record(Record_Session *session, Record *record)
 {
-    // TODO(f0): Try encoding time of day in date to simplify this...
-    if (!no_errors(session)) return;
+    if (session->load_file_unresolved_errors) {
+        session_set_error(session, "New records can't be added because file has unresolved errors");
+    }
+    
+    if (!no_errors(session)) {
+        return;
+    }
+    
     
     
     b32 allowed = false;
     Record *replace_at = nullptr;
-    
     
     
     if (record->type == Record_TimeStop)
@@ -873,7 +875,7 @@ fill_description_optional(Record_Session *session, Forward_Token *forward, Recor
     {
         advance(forward);
         //record->desc_hash = add_description(&session->desc_table, forward->token); @desc
-        record->desc = string(forward->token.text, forward->token.text_length);
+        record->desc = forward->token.text;
     }
 }
 
@@ -881,7 +883,7 @@ fill_description_optional(Record_Session *session, Forward_Token *forward, Recor
 internal void
 prase_command_start(Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(&session->tokenizer);
+    Forward_Token forward = create_forward_token(&session->lexer);
     Record record = {};
     record.type = Record_TimeStart;
     
@@ -912,7 +914,7 @@ prase_command_start(Record_Session *session)
 internal void
 prase_command_stop(Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(&session->tokenizer);
+    Forward_Token forward = create_forward_token(&session->lexer);
     Record record = {};
     record.type = Record_TimeStop;
     
@@ -939,7 +941,7 @@ prase_command_stop(Record_Session *session)
 internal void
 parse_command_add_sub(Record_Session *session, b32 is_add)
 {
-    Forward_Token forward = create_forward_token(&session->tokenizer);
+    Forward_Token forward = create_forward_token(&session->lexer);
     
     Record record = {};
     record.type = Record_TimeDelta;
@@ -1018,7 +1020,7 @@ get_date_range(Record_Session *session)
     b32 success = true;
     b32 has_matching_token = false;
     
-    Forward_Token forward = create_forward_token(&session->tokenizer);
+    Forward_Token forward = create_forward_token(&session->lexer);
     
     
     if (forward.peek.type == Token_Identifier && token_equals(forward.peek, "from"))
@@ -1127,7 +1129,7 @@ get_recent_days_range(Virtual_Array<Record> *records)
 internal void
 parse_command_show(Program_State *state, Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(&session->tokenizer);
+    Forward_Token forward = create_forward_token(&session->lexer);
     
     Date_Range_Result range = get_date_range(session);
     
@@ -1284,8 +1286,10 @@ process_and_print_summary(Program_State *state, Granularity granularity, date64 
                 }
                 break;
                 
-                default:
-                Invalid_Code_Path;
+                default: {
+                    assert(0);
+                } // fall
+                
                 case Granularity_Days: {
                     boundries.day_count = 1;
                     boundries.begin = record->date;
@@ -1302,7 +1306,7 @@ process_and_print_summary(Program_State *state, Granularity granularity, date64 
 internal void
 parse_command_summary(Program_State *state, Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(&session->tokenizer);
+    Forward_Token forward = create_forward_token(&session->lexer);
     
     Granularity granularity = Granularity_Days;
     // TODO: Pull out granularity check.
@@ -1355,9 +1359,9 @@ parse_command_summary(Program_State *state, Record_Session *session)
 internal void
 parse_command_exit(Program_State *state, Record_Session *session, b32 *program_is_running)
 {
-    Assert(program_is_running != NULL);
+    assert(program_is_running != NULL);
     
-    Forward_Token forward = create_forward_token(&session->tokenizer);
+    Forward_Token forward = create_forward_token(&session->lexer);
     if ((forward.peek.type == Token_Identifier) && (token_equals(forward.peek, "no-save")))
     {
         advance(&forward);
@@ -1388,7 +1392,7 @@ parse_command_exit(Program_State *state, Record_Session *session, b32 *program_i
 
 
 internal Record_Session
-create_record_session_no_tokenizer(Arena *arena, Virtual_Array<Record> *records,
+create_record_session_no_lexer(Arena *arena, Virtual_Array<Record> *records,
                                    b32 reading_from_file)
 {
     Record_Session result = {};
@@ -1422,8 +1426,8 @@ internal Record_Session
 create_record_session(Arena *arena, Virtual_Array<Record> *records,
                       b32 reading_from_file, char *content)
 {
-    Record_Session result = create_record_session_no_tokenizer(arena, records, reading_from_file);
-    result.tokenizer = create_tokenizer(content);
+    Record_Session result = create_record_session_no_lexer(arena, records, reading_from_file);
+    result.lexer = create_lexer(content);
     return result;
 }
 
@@ -1433,13 +1437,16 @@ process_input(Program_State *state, Record_Session *session, b32 *program_is_run
 {
 #define Error_Cmd_Exclusive session_set_error(session, "This command can be used only from console")
     
-    using namespace Color;
+    if (state->load_file_error) {
+        session->load_file_unresolved_errors = true;
+    }
+    
     b32 parsing = true;
     b32 reading_from_file = session->reading_from_file;
     
     while (parsing)
     {
-        Token token = get_token(&session->tokenizer);
+        Token token = get_token(&session->lexer);
         switch (token.type)
         {
             case Token_Identifier: {
@@ -1556,9 +1563,12 @@ process_input(Program_State *state, Record_Session *session, b32 *program_is_run
                 }
                 else if (token_equals(token, "help"))
                 {
-                    if (reading_from_file) {
+                    if (reading_from_file)
+                    {
                         Error_Cmd_Exclusive;
-                    } else {
+                    }
+                    else
+                    {
                         print_help_desc("[...] - optional, (...) - required\n");
                         print_help_header("Commands available everywhere");
                         print_help_item("start", "[yyyy-MM-dd] (hh:mm) [\"description\"]", "starts new timespan");
@@ -1598,8 +1608,7 @@ process_input(Program_State *state, Record_Session *session, b32 *program_is_run
                 {
                     char error_message[512];
                     snprintf(error_message, sizeof(error_message),
-                             "%.*s - unexpected identifier",
-                             (s32)token.text_length, token.text);
+                             "%.*s - unexpected identifier", string_expand(token.text));
                     
                     session_set_error(session, error_message);
                 }
@@ -1618,8 +1627,8 @@ process_input(Program_State *state, Record_Session *session, b32 *program_is_run
             
             default: {
                 char error_message[512];
-                snprintf("%.*s - unexpected element",
-                         (s32)token.text_length, token.text);
+                snprintf(error_message, sizeof(error_message),
+                         "%.*s - unexpected element", string_expand(token.text));
                 
                 session_set_error(session, error_message);
             }
@@ -1630,13 +1639,15 @@ process_input(Program_State *state, Record_Session *session, b32 *program_is_run
     
     if (no_errors(session))
     {
-        if (!reading_from_file) {
+        if (!reading_from_file &&
+            session->change_count > 0)
+        {
             save_to_file(state);
         }
     }
     else
     {
-        printf("\nCommands not applied due to errors\n");
+        printf("[Warning] Commands not applied due to errors\n");
         pop_program_scope(&session->scope);
     }
 }
@@ -1664,8 +1675,17 @@ load_file(Program_State *state)
     {
         Record_Session session = create_record_session(&state->arena, &state->records, true, file_content);
         process_input(state, &session);
-        state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
-        printf("File loaded\n");
+        
+        if (no_errors(&session))
+        {
+            state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
+            printf("File loaded\n");
+        }
+        else
+        {
+            state->load_file_error = true;
+            printf("[Error] File contains errors. It requires manual fixing. Use \"edit\" to open it in default editor.\n");
+        }
     }
     else
     {
@@ -1674,6 +1694,8 @@ load_file(Program_State *state)
         char *file_name = push_cstr_from_path(&state->arena, &state->input_path);
         printf("[Critial error] Failed to load from file: %s\n", file_name);
     }
+    
+    state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
 }
 
 
@@ -1722,7 +1744,7 @@ plan_alloc(Alloc_Resources *total_res, size_t size_to_alloc)
     total_res->size -= size_to_alloc;
     total_res->address += size_to_alloc;
     
-    Assert(total_res->size >= 0);
+    assert(total_res->size >= 0);
     
     return result;
 }
@@ -1802,7 +1824,7 @@ s32 main(int argument_count, char **arguments)
             }
             else
             {
-                Invalid_Code_Path;
+                assert(0);
             }
         }
         
@@ -1894,9 +1916,9 @@ s32 main(int argument_count, char **arguments)
     {
         if (thread_memory.new_data)
         {
-            Record_Session session = create_record_session_no_tokenizer(&state.arena, &state.records, false);
+            Record_Session session = create_record_session_no_lexer(&state.arena, &state.records, false);
             char *input_copy = push_cstr_copy(&state.arena, thread_memory.input_buffer);
-            session.tokenizer = create_tokenizer(input_copy);
+            session.lexer = create_lexer(input_copy);
                                                      
             process_input(&state, &session, &program_is_running);
             if (no_errors(&session))
@@ -1905,7 +1927,6 @@ s32 main(int argument_count, char **arguments)
                 {
                     Record *last_record = get_last_record(&session);
                     print_days_from_range(&state, last_record->date, last_record->date, true);
-                    save_to_file(&state);
                 }
             }
             
