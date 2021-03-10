@@ -3,6 +3,9 @@
 
 s32 main()
 {
+    stf0_initialize();
+    Time_Perfomance start = get_perfomance_time();
+    
     Arena arena_ = create_virtual_arena();
     Arena *arena = &arena_;
     
@@ -18,7 +21,7 @@ s32 main()
     
     for_linked_list(input_node, input_list)
     {
-        memory_scope(arena);
+        arena_scope(arena);
         
         Path *input_path = &input_node->item;
         Path out_path = {
@@ -33,47 +36,49 @@ s32 main()
         Pipe_Handle pipe = pipe_open_read(command);
         s32 close_code = pipe_close(&pipe);
         
-        if (close_code != 0)
-        {
-            printf("\n[Error exit code(%d)] %.*s; ", close_code, string_expand(out_path.file_name));
-        }
-        
         if (no_errors(&pipe))
         {
-            Path ref_path = {
-                ref_dir,
-                input_path->file_name
-            };
-            
-            String ref_content = push_read_entire_file(arena, &ref_path);
-            String out_content = push_read_entire_file(arena, &out_path);
-            
-            
-            Compare_Line_Pos compare = string_compare_with_line_column(ref_content, out_content);
-            if (compare.is_equal)
+            if (close_code != 0)
             {
-                printf("[Ok] %.*s; ", string_expand(out_path.file_name));
+                printf("[Error exit code(%d)] %.*s; ", close_code, string_expand(out_path.file_name));
             }
             else
             {
-                printf("[Not equal!] %.*s at line(%u), col(%u);\n",
-                       string_expand(out_path.file_name), compare.line, compare.column);
+                Path ref_path = {
+                    ref_dir,
+                    input_path->file_name
+                };
                 
-                u64 half_range = 6;
-                
-                u64 diff_index = pick_bigger(0, compare.index - half_range);
-                
-                String ref_diff = string_advance_str(ref_content, diff_index);
-                ref_diff.size = pick_smaller(half_range*2, ref_diff.size);
-                printf("%.*s\n", string_expand(ref_diff));
-                
-                String out_diff = string_advance_str(out_content, diff_index);
-                out_diff.size = pick_smaller(half_range*2, out_diff.size);
-                printf("%.*s\n", string_expand(out_diff));
+                String ref_content = push_read_entire_file(arena, &ref_path);
+                String out_content = push_read_entire_file(arena, &out_path);
                 
                 
-                //debug_break();
-                errors = true;
+                Compare_Line_Pos compare = string_compare_with_line_column(ref_content, out_content);
+                if (compare.is_equal)
+                {
+                    printf("[Ok] %.*s; ", string_expand(out_path.file_name));
+                }
+                else
+                {
+                    printf("[Not equal!] %.*s at line(%u), col(%u);\n",
+                           string_expand(out_path.file_name), compare.line, compare.column);
+                    
+                    u64 half_range = 6;
+                    
+                    u64 diff_index = pick_bigger(0, compare.index - half_range);
+                    
+                    String ref_diff = string_advance_str(ref_content, diff_index);
+                    ref_diff.size = pick_smaller(half_range*2, ref_diff.size);
+                    printf("%.*s\n", string_expand(ref_diff));
+                    
+                    String out_diff = string_advance_str(out_content, diff_index);
+                    out_diff.size = pick_smaller(half_range*2, out_diff.size);
+                    printf("%.*s\n", string_expand(out_diff));
+                    
+                    
+                    //debug_break();
+                    errors = true;
+                }
             }
         }
         else
@@ -82,6 +87,12 @@ s32 main()
             errors = true;
         }
     }
+    
+    
+    Time_Perfomance end = get_perfomance_time();
+    f32 seconds = get_seconds_elapsed(end, start);
+    
+    printf("[Perfomance time] %fs, %.3fms\n", seconds, 1000.f*seconds);
     
     
     //debug_break();

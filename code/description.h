@@ -1,4 +1,7 @@
 
+// TODO(f0): track added descriptions for temporary amount of time to delete them if needed
+
+
 struct Description
 {
     u64 hash;
@@ -15,7 +18,7 @@ struct Description_Table
         Description *array;
     };
     u64 capacity_count;
+    
     u64 element_count;
     u64 max_element_count;
-    Description empty_description;
 };

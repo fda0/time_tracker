@@ -1227,48 +1227,50 @@ struct Arena
 
 // ======================= @Memory_Scope ======================
 
-struct Memory_Scope
+struct Arena_Scope
 {
-    Arena *arena_copy;
+    Arena *copy;
     u64 position;
-    s32 stack_count;
-    u32 _padding;
 };
 
-inline Memory_Scope
-create_memory_scope(Arena *arena)
+inline Arena_Scope
+create_arena_scope(Arena *arena)
 {
-    Memory_Scope result = {};
-    result.arena_copy = arena;
+    Arena_Scope result = {};
+    result.copy = arena;
     result.position = arena->position;
-    result.stack_count = arena->stack_count++;
     return result;
 }
 
 inline void
-pop_memory_scope(Memory_Scope *scope)
+pop_arena_scope(Arena_Scope *scope)
 {
-    --scope->arena_copy->stack_count;
-    assert(scope->arena_copy->stack_count == scope->stack_count);
-    scope->arena_copy->position = scope->position;
+    assert(scope);
+    assert(scope->copy);
+    
+    scope->copy->position = scope->position;
 }
 
-struct Automatic_Scope
+struct Automatic_Arena_Scope
 {
-    Memory_Scope scope;
+    Arena_Scope scope;
+    s32 stack_count;
     
-    Automatic_Scope(Arena* arena)
+    Automatic_Arena_Scope(Arena* arena)
     {
-        scope = create_memory_scope(arena);
+        scope = create_arena_scope(arena);
+        stack_count = arena->stack_count++;
     }
     
-    ~Automatic_Scope()
+    ~Automatic_Arena_Scope()
     {
-        pop_memory_scope(&scope);
+        pop_arena_scope(&scope);
+        scope.copy->stack_count -= 1;
+        assert(scope.copy->stack_count == stack_count);
     }
 };
 
-#define memory_scope(Arena) Automatic_Scope glue(automatic_scope_, __COUNTER__)(Arena)
+#define arena_scope(Arena) Automatic_Arena_Scope glue(automatic_arena_scope_, __COUNTER__)(Arena)
 
 
 
@@ -1456,6 +1458,12 @@ struct Virtual_Array
         count += grow_count;
         return result;
     }
+    
+    inline void reset_memory()
+    {
+        arena.position = 0;
+        count = 0;
+    }
 };
 
 
@@ -1472,6 +1480,41 @@ create_virtual_array(u64 initial_count = 0,
     }
     return result;
 }
+
+
+// ================ @Memory_Virtual_Array_Scope ===============
+
+template <typename T>
+struct Virtual_Array_Scope
+{
+    Arena_Scope arena_scope;
+    Virtual_Array<T> *copy;
+    u64 element_count;
+};
+
+template <typename T>
+inline Virtual_Array_Scope<T>
+create_virtual_array_scope(Virtual_Array<T> *array)
+{
+    Virtual_Array_Scope<T> result = {};
+    result.arena_scope = create_arena_scope(&array->arena);
+    result.copy = array;
+    result.element_count = array->count;
+    return result;
+}
+
+template <typename T>
+inline void
+pop_virtual_array_scope(Virtual_Array_Scope<T> *scope)
+{
+    assert(scope);
+    assert(scope->copy);
+    
+    pop_arena_scope(&scope->arena_scope);
+    scope->copy->count = scope->element_count;
+}
+
+
 
 
 
@@ -2253,7 +2296,7 @@ file_open_read(cstr_lit path)
 internal File_Handle
 file_open_read(Arena *arena, Path *path)
 {
-    memory_scope(arena);
+    arena_scope(arena);
     char *path_cstr = push_cstr_from_path(arena, path);
     File_Handle file = file_open_read(path_cstr);
     return file;
@@ -2281,7 +2324,7 @@ file_open_write(cstr_lit path)
 internal File_Handle
 file_open_write(Arena *arena, Path *path)
 {
-    memory_scope(arena);
+    arena_scope(arena);
     char *path_cstr = push_cstr_from_path(arena, path);
     File_Handle file = file_open_write(path_cstr);
     return file;
@@ -2309,7 +2352,7 @@ file_open_append(cstr_lit path)
 internal File_Handle
 file_open_append(Arena *arena, Path *path)
 {
-    memory_scope(arena);
+    arena_scope(arena);
     char *path_cstr = push_cstr_from_path(arena, path);
     File_Handle file = file_open_append(path_cstr);
     return file;
@@ -2352,7 +2395,7 @@ file_copy(cstr_lit source, cstr_lit destination, b32 overwrite)
 internal b32
 file_copy(Arena *arena, Path *source, Path *destination, b32 overwrite)
 {
-    memory_scope(arena);
+    arena_scope(arena);
     char *source_cstr = push_cstr_from_path(arena, source);
     char *destination_cstr = push_cstr_from_path(arena, destination);
     b32 result = file_copy(source_cstr, destination_cstr, overwrite);
@@ -2379,7 +2422,7 @@ file_hard_link(cstr_lit source_path, cstr_lit link_path)
 internal b32
 file_hard_link(Arena *arena, Path *source_path, Path *link_path)
 {
-    memory_scope(arena);
+    arena_scope(arena);
     char *link_path_cstr = push_cstr_from_path(arena, link_path);
     char *source_path_cstr = push_cstr_from_path(arena, source_path);
     b32 result = file_hard_link(link_path_cstr, source_path_cstr);
@@ -2406,7 +2449,7 @@ file_delete(cstr_lit path)
 internal b32
 file_delete(Arena *arena, Path *path)
 {
-    memory_scope(arena);
+    arena_scope(arena);
     char *path_cstr = push_cstr_from_path(arena, path);
     b32 result = file_delete(path_cstr);
     return result;
@@ -2433,7 +2476,7 @@ file_exists(cstr_lit path)
 internal b32
 file_exists(Arena *arena, Path *path)
 {
-    memory_scope(arena);
+    arena_scope(arena);
     char *path_cstr = push_cstr_from_path(arena, path);
     b32 result = file_exists(path_cstr);
     return result;
@@ -2652,7 +2695,7 @@ directory_create(cstr_lit directory_path)
 internal b32
 directory_create(Arena *arena, Directory directory)
 {
-    memory_scope(arena);
+    arena_scope(arena);
     char *dir_cstr = push_cstr_from_directory(arena, directory);
     b32 result = directory_create(dir_cstr);
     return result;
@@ -2675,7 +2718,7 @@ directory_set_current(cstr_lit path)
 internal b32
 directory_set_current(Arena *arena, Directory directory)
 {
-    memory_scope(arena);
+    arena_scope(arena);
     char *path_cstr = push_cstr_from_directory(arena, directory);
     b32 result = directory_set_current(path_cstr);
     return result;
@@ -2782,7 +2825,7 @@ push_find_path_list_in_directory(Arena *arena, Directory directory)
 internal void
 files_delete_matching(Arena *arena, Path *wildcard_file_name_path)
 {
-    memory_scope(arena);
+    arena_scope(arena);
     
 #if Def_Windows
     char *search_cstr = push_cstr_from_path(arena, wildcard_file_name_path);
@@ -2796,7 +2839,7 @@ files_delete_matching(Arena *arena, Path *wildcard_file_name_path)
         do {
             if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
             {
-                memory_scope(arena);
+                arena_scope(arena);
                 path_copy.file_name = string(data.cFileName);
                 char *delete_cstr = push_cstr_from_path(arena, &path_copy);
                 DeleteFileA(delete_cstr);
@@ -2814,7 +2857,7 @@ files_delete_matching(Arena *arena, Path *wildcard_file_name_path)
 internal void
 directory_delete_all_files(Arena *arena, Directory directory)
 {
-    memory_scope(arena);
+    arena_scope(arena);
     Path wildcard_path = path_from_directory(directory, l2s("*"));
     files_delete_matching(arena, &wildcard_path);
 }

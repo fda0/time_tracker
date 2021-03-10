@@ -4,7 +4,7 @@
     {                                                                                   \
         if (State->reading_from_file)                                                   \
         {                                                                               \
-            printf("%s[Parse Error #%d] ", Color::b_error, state->parse_error_count++); \
+            printf("%s[Parse Error #%d] ", Color::b_error, 9001);                       \
         }                                                                               \
         else                                                                            \
         {                                                                               \

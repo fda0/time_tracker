@@ -1,4 +1,7 @@
 
+global date64 global_timezone_offset;
+
+
 inline date64
 truncate_to_date(date64 timestamp)
 {
@@ -15,34 +18,34 @@ truncate_to_time(date64 timestamp)
 
 
 internal date64
-get_current_timestamp(Program_State *state)
+get_current_timestamp()
 {
     date64 now;
     time(&now);
     
-    date64 result = now + state->timezone_offset;
+    date64 result = now + global_timezone_offset;
     return result;
 }
 
 internal s32
-get_time(Program_State *state)
+get_time()
 {
-    date64 now = get_current_timestamp(state);
+    date64 now = get_current_timestamp();
     s32 time = truncate_to_time(now);
     return time;
 }
 
 internal date64
-get_today(Program_State *state)
+get_today()
 {
-    date64 now = get_current_timestamp(state);
+    date64 now = get_current_timestamp();
     date64 today = truncate_to_date(now);
     return today;
 }
 
 
 internal void
-initialize_timezone_offset(Program_State *state)
+initialize_timezone_offset()
 {
     date64 test_time;
     time(&test_time);
@@ -51,7 +54,7 @@ initialize_timezone_offset(Program_State *state)
     date64 utc_test_time = platform_tm_to_time(local_date);
     
     date64 offset = utc_test_time - test_time;
-    state->timezone_offset = offset;
+    global_timezone_offset = offset;
 }
 
 

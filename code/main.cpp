@@ -27,17 +27,56 @@
 #include "time.cpp"
 
 
+
+
 internal void load_file(Program_State *state);
 
 
+inline b32
+no_errors(Record_Session *session)
+{
+    b32 result = session->no_errors;
+    return result;
+}
+
+
+inline void
+session_set_error(Record_Session *session, char *message)
+{
+    session->no_errors = false;
+    printf("%s\n", message);
+    //print_line_with_token(token);
+}
+
+
+inline Program_Scope
+create_program_scope(Arena *arena, Virtual_Array<Record> *records)
+{
+    Program_Scope result = {};
+    result.arena_scope = create_arena_scope(arena);
+    result.records_scope = create_virtual_array_scope(records);
+    return result;
+}
+
+inline void
+pop_program_scope(Program_Scope *scope)
+{
+    assert(scope);
+    pop_arena_scope(&scope->arena_scope);
+    pop_virtual_array_scope(&scope->records_scope);
+}
+
+
+
+
 internal Record *
-get_last_record(Program_State *state)
+get_last_record(Record_Session *session)
 {
     Record *result = nullptr;
-    s64 count = state->records.array.count;
+    s64 count = session->records->count;
     if (count)
     {
-        result = state->records.array.at(count - 1);
+        result = session->records->at(count - 1);
     }
     
     return result;
@@ -68,7 +107,7 @@ parse_number(char *src, s32 count)
 }
 
 internal Parse_Date_Result
-parse_date(Program_State *state, Token token)
+parse_date(Record_Session *session, Token token)
 {
     Assert(token.type == Token_Date);
     
@@ -103,20 +142,15 @@ parse_date(Program_State *state, Token token)
         result.is_valid = (year.is_valid && month.is_valid && day.is_valid && dash1 && dash2);
     }
     
-    if (!result.is_valid)
-    {
-        Print_Parse_Error(state);
-        printf("Bad date format!");
-        print_line_with_token(token);
-        Print_Clear();
-        printf("\n");
+    if (!result.is_valid) {
+        session_set_error(session, "Bad date format!");
     }
     
     return result;
 }
 
 internal Parse_Time_Result
-parse_time(Program_State *state, Token token)
+parse_time(Record_Session *session, Token token)
 {
     // NOTE: Supported format: 10:32, 02:00, 2:0, 120...
     Parse_Time_Result result = {};
@@ -162,11 +196,7 @@ parse_time(Program_State *state, Token token)
     
     if (!result.is_valid)
     {
-        Print_Parse_Error(state);
-        printf("Bad time format!");
-        print_line_with_token(token);
-        Print_Clear();
-        printf("\n");
+        session_set_error(session, "Bad time format");
     }
     
     return result;
@@ -194,11 +224,11 @@ calculate_sum_for_day(Program_State *state, s64 starting_index)
 {
     date64 range_start = 0;
     Day_Sum_Result result = {};
-    date64 day = state->records.array.at(starting_index)->date;
+    date64 day = state->records.at(starting_index)->date;
     
-    for (u64 index = starting_index; index < state->records.array.count; ++index)
+    for (u64 index = starting_index; index < state->records.count; ++index)
     {
-        Record *record = state->records.array.at(index);
+        Record *record = state->records.at(index);
         
         if (day != record->date && range_start == 0)
         {
@@ -245,7 +275,7 @@ calculate_sum_for_day(Program_State *state, s64 starting_index)
     }
     else
     {
-        date64 now = get_current_timestamp(state);
+        date64 now = get_current_timestamp();
         date64 delta = now - range_start;
         
         if (delta > Days(1))
@@ -357,9 +387,9 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
     Range_State range_state = Range_Closed_PostPrint;
     b32 overnight_carry = false;
     
-    for_u64(record_index, state->records.array.count)
+    for_u64(record_index, state->records.count)
     {
-        Record *record = state->records.array.at(record_index);
+        Record *record = state->records.at(record_index);
         
         // skip if not in range
         if ((date_end) && (record->date > date_end))
@@ -409,8 +439,8 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
         }
         else if (record->type == Record_TimeDelta)
         {
-            Description *desc = get_description(&state->desc_table, record->desc_hash);
-            if (!desc->size)
+            //Description *desc = get_description(&state->desc_table, record->desc_hash); @desc
+            if (!record->desc.size)
             {
                 sum += record->value;
             }
@@ -460,7 +490,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
         
         // __prepare next iteration + get sum___
         Record *next_record = record + 1;
-        is_new_day = ((record_index == state->records.array.count - 1) || !are_in_same_day(record, next_record));
+        is_new_day = ((record_index == state->records.count - 1) || !are_in_same_day(record, next_record));
         
         if (is_new_day)
         {
@@ -494,7 +524,7 @@ archive_current_file(Program_State *state, b32 long_format = false)
 {
     // TODO(f0): calculate hash of the whole file for file_name
     
-    date64 now = get_current_timestamp(state);
+    date64 now = get_current_timestamp();
     Str128 timestamp = get_timestamp_string_for_file(now, long_format);
     
     String file_name = push_stringf(&state->arena, "%.*s_%s.txt",
@@ -511,14 +541,13 @@ archive_current_file(Program_State *state, b32 long_format = false)
 
 
 
-internal void
+internal b32
 save_to_file(Program_State *state)
 {
-    memory_scope(&state->arena);
-    
+    arena_scope(&state->arena);
     archive_current_file(state);
-    state->parse_error_count = 0;
     
+    b32 success = false;
     
     File_Handle file = file_open_write(&state->arena, &state->input_path);
     if (no_errors(&file))
@@ -531,9 +560,9 @@ save_to_file(Program_State *state)
         b32 is_new_day = true;
         s64 active_day_index = 0;
         
-        for_u64(record_index, state->records.array.count)
+        for_u64(record_index, state->records.count)
         {
-            Record *record = state->records.array.at(record_index);
+            Record *record = state->records.at(record_index);
             
             // print day header comment
             if (is_new_day)
@@ -590,11 +619,11 @@ save_to_file(Program_State *state)
             
             
             // print description
-            Description *desc = get_description(&state->desc_table, record->desc_hash);
-            if (desc->size)
+            //Description *desc = get_description(&state->desc_table, record->desc_hash); @desc
+            if (record->desc.size)
             {
                 add(l2s(" \""));
-                add(string_from_description(desc));
+                add(record->desc);
                 add(l2s("\""));
             }
             
@@ -603,10 +632,10 @@ save_to_file(Program_State *state)
             
             
             // __prepare next iteration + get sum___
-            if (record_index == state->records.array.count - 1) {
+            if (record_index == state->records.count - 1) {
                 is_new_day = true;
             } else {
-                Record *next_record = state->records.array.at(record_index + 1);
+                Record *next_record = state->records.at(record_index + 1);
                 is_new_day = !are_in_same_day(record, next_record);
             }
             
@@ -627,6 +656,10 @@ save_to_file(Program_State *state)
         file_write_string(&file, output_string);
         file_close(&file);
         
+        if (no_errors(&file)) {
+            success = true;
+        }
+        
         state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
     }
     else
@@ -635,151 +668,116 @@ save_to_file(Program_State *state)
         printf("Failed to write to file: %s\n", input_path_cstr);
     }
     
-    state->change_count = 0;
+    return success;
 }
 
 
-
-internal b32
-automatic_save_to_file(Program_State *state)
-{
-    b32 did_save = false;
-    
-    if (state->change_count > 0)
-    {
-        if ((state->parse_error_count == 0))
-        {
-            save_to_file(state);
-            did_save = true;
-        }
-        else
-        {
-            Print_Error();
-            printf("Can't do automatic save due to "
-                   "parse errors (%d). "
-                   "Use 'save' command to force save.",
-                   state->parse_error_count);
-            Print_ClearN();
-        }
-    }
-    
-    return did_save;
-}
 
 
 
 internal void
-add_record(Program_State *state, Record *data)
+add_record(Record_Session *session, Record *record)
 {
-    b32 allow_sorting = false; // TODO(f0): delete sorting
+    // TODO(f0): Try encoding time of day in date to simplify this...
+    if (!no_errors(session)) return;
     
-    u64 candidate_index = state->records.array.count;
-    b32 replace = false;
     
-    for (s64 index = candidate_index - 1; index >= 0; --index)
+    b32 allowed = false;
+    Record *replace_at = nullptr;
+    
+    
+    
+    if (record->type == Record_TimeStop)
     {
-        Record *old_space = state->records.array.at(index);
-        if (old_space->date < data->date)
+        // Stop needs to follow Start
+        if (session->active && session->active->type == Record_TimeStart)
         {
-            break;
-        }
-        else if (old_space->date > data->date)
-        {
-            candidate_index = index;
-        }
-        else if ((data->type == Record_TimeStart || data->type == Record_TimeStop) &&
-                 (old_space->type == Record_TimeStart || old_space->type == Record_TimeStop))
-        {
-            
-            if (old_space->value > data->value)
+            if (session->active->date < record->date ||
+                (session->active->date == record->date &&
+                 session->active->value < record->value))
             {
-                candidate_index = index;
+                allowed = true;
             }
-            else if (old_space->type == Record_TimeStop && old_space->value == data->value)
-            {
-                
-                candidate_index = index;
-                replace = true;
-                break;
-            }
-            else
-            {
-                break;
-            }
-        }
-    }
-    
-    
-    
-    
-    // NOTE: Reject sorting
-    if (!allow_sorting &&
-        !(candidate_index == state->records.array.count || (candidate_index == state->records.array.count - 1 && replace)))
-    {
-        
-        Print_Parse_Error(state);
-        if (state->reading_from_file)
-        {
-            printf("Can't insert out of order records from file!");
-        }
-        else
-        {
-            printf("Preface your commands with \"sort\" command if you want to insert out of order records.");
-        }
-        Print_ClearN();
-        
-        return;
-    }
-    
-    
-    //assert(!replace);
-    
-    if (!replace)
-    {
-        b32 can_add = false;
-        if (data->type == Record_TimeStop)
-        {
-            
-            for (s64 index = candidate_index - 1; index >= 0; --index)
-            {
-                Record *old_space = state->records.array.at(index);
-                if (old_space->type == Record_TimeStart)
-                {
-                    can_add = true;
-                    break;
-                }
-                else if (old_space->type == Record_TimeStop)
-                {
-                    break;
-                }
-            }
-        }
-        else
-        {
-            can_add = true;
-        }
-        
-        if (can_add)
-        {
-            *state->records.array.grow() = *data;
-            ++state->change_count;
-        }
-        else
-        {
-            Print_Error();
-            printf("[Warning] stop is being skipped - it can be added only when start is active");
-            Print_ClearN();
         }
     }
     else
     {
-        *state->records.array.at(candidate_index) = *data;
-        ++state->change_count;
+        if (!session->last)
+        {
+            allowed = true;
+        }
+        else
+        {
+            if (session->last->date < record->date)
+            {
+                allowed = true;
+            }
+            else if (session->last->date == record->date)
+            {
+                if (!session->active || record->type == Record_TimeDelta)
+                {
+                    allowed = true;
+                }
+                else if (session->active->date < record->date)
+                {
+                    allowed = true;
+                }
+                else if (session->active->date == record->date)
+                {
+                    if (record->type == Record_TimeStart)
+                    {
+                        if (session->active->value < record->value)
+                        {
+                            allowed = true;
+                        }
+                        else if (session->last->type == Record_TimeStop &&
+                                 session->last->date == record->date &&
+                                 session->last->value == record->value)
+                        {
+                            // Start can replace recent Stop
+                            replace_at = session->last;
+                            allowed = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    
+    
+    
+    if (allowed)
+    {
+        session->change_count += 1;;
+        
+        if (replace_at)
+        {
+            session->last = replace_at;
+            session->active = replace_at;
+        }
+        else
+        {
+            session->last = session->records->grow();
+            
+            if (record->type == Record_TimeStart ||
+                record->type == Record_TimeStop)
+            {
+                session->active = session->last;
+            }
+        }
+        
+        *session->last = *record;
+    }
+    else
+    {
+        session->no_errors = false;
+        debug_break();
     }
 }
 
 internal b32
-fill_date_optional(Program_State *state, Forward_Token *forward, Record *record)
+fill_date_optional(Record_Session *session, Forward_Token *forward, Record *record)
 {
     b32 success = false;
     
@@ -787,7 +785,7 @@ fill_date_optional(Program_State *state, Forward_Token *forward, Record *record)
     {
         advance(forward);
         
-        Parse_Date_Result parsed_date = parse_date(state, forward->token);
+        Parse_Date_Result parsed_date = parse_date(session, forward->token);
         if (parsed_date.is_valid)
         {
             record->date = parsed_date.date;
@@ -796,14 +794,14 @@ fill_date_optional(Program_State *state, Forward_Token *forward, Record *record)
     }
     else
     {
-        if (!state->reading_from_file)
+        if (!session->reading_from_file)
         {
-            record->date = get_today(state);
+            record->date = get_today();
             success = true;
         }
         else
         {
-            Record *last_record = get_last_record(state);
+            Record *last_record = get_last_record(session);
             if (last_record)
             {
                 record->date = last_record->date;
@@ -811,9 +809,7 @@ fill_date_optional(Program_State *state, Forward_Token *forward, Record *record)
             }
             else
             {
-                Print_Parse_Error(state);
-                printf("First record needs to specify date. ");
-                Print_Clear();
+                session_set_error(session, "First record needs to specify date");
             }
         }
     }
@@ -822,7 +818,7 @@ fill_date_optional(Program_State *state, Forward_Token *forward, Record *record)
 }
 
 internal b32
-fill_time_optional(Program_State *state, Forward_Token *forward, Record *record)
+fill_time_optional(Record_Session *session, Forward_Token *forward, Record *record)
 {
     b32 success = false;
     
@@ -830,7 +826,7 @@ fill_time_optional(Program_State *state, Forward_Token *forward, Record *record)
     {
         advance(forward);
         
-        Parse_Time_Result parsed_time = parse_time(state, forward->token);
+        Parse_Time_Result parsed_time = parse_time(session, forward->token);
         if (parsed_time.is_valid)
         {
             record->value = parsed_time.time;
@@ -839,9 +835,9 @@ fill_time_optional(Program_State *state, Forward_Token *forward, Record *record)
     }
     else
     {
-        if (!state->reading_from_file)
+        if (!session->reading_from_file)
         {
-            record->value = get_time(state);
+            record->value = get_time();
             success = true;
         }
     }
@@ -851,7 +847,7 @@ fill_time_optional(Program_State *state, Forward_Token *forward, Record *record)
 
 
 internal b32
-fill_time_required(Program_State *state, Forward_Token *forward, Record *record)
+fill_time_required(Record_Session *session, Forward_Token *forward, Record *record)
 {
     b32 success = false;
     
@@ -859,7 +855,7 @@ fill_time_required(Program_State *state, Forward_Token *forward, Record *record)
     {
         advance(forward);
         
-        Parse_Time_Result parsed_time = parse_time(state, forward->token);
+        Parse_Time_Result parsed_time = parse_time(session, forward->token);
         if (parsed_time.is_valid)
         {
             record->value = parsed_time.time;
@@ -871,130 +867,122 @@ fill_time_required(Program_State *state, Forward_Token *forward, Record *record)
 }
 
 internal void
-fill_description_optional(Program_State *state, Forward_Token *forward, Record *record)
+fill_description_optional(Record_Session *session, Forward_Token *forward, Record *record)
 {
     if ((forward->peek.type == Token_String))
     {
         advance(forward);
-        record->desc_hash = add_description(&state->desc_table, forward->token);
+        //record->desc_hash = add_description(&session->desc_table, forward->token); @desc
+        record->desc = string(forward->token.text, forward->token.text_length);
     }
 }
 
 
 internal void
-prase_command_start(Program_State *state, Tokenizer *tokenizer)
+prase_command_start(Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(tokenizer);
+    Forward_Token forward = create_forward_token(&session->tokenizer);
     Record record = {};
     record.type = Record_TimeStart;
     
-    b32 success = fill_date_optional(state, &forward, &record);
+    b32 success = fill_date_optional(session, &forward, &record);
     
     if (success)
     {
-        success = fill_time_optional(state, &forward, &record);
+        success = fill_time_optional(session, &forward, &record);
     }
     
     if (success)
     {
-        fill_description_optional(state, &forward, &record);
+        fill_description_optional(session, &forward, &record);
     }
     
     if (success)
     {
-        add_record(state, &record);
+        add_record(session, &record);
     }
     else
     {
-        Print_Parse_Error(state);
-        printf("Incorect command usage. Use:\n"
-               "start [yyyy-MM-dd] (hh:mm) [\"description\"]");
-        print_line_with_token(forward.token);
-        Print_ClearN();
+        session_set_error(session, "Incorect command usage. Use:\n"
+                          "start [yyyy-MM-dd] (hh:mm) [\"description\"]");
     }
 }
 
 
 internal void
-prase_command_stop(Program_State *state, Tokenizer *tokenizer)
+prase_command_stop(Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(tokenizer);
+    Forward_Token forward = create_forward_token(&session->tokenizer);
     Record record = {};
     record.type = Record_TimeStop;
     
-    b32 success = fill_date_optional(state, &forward, &record);
+    b32 success = fill_date_optional(session, &forward, &record);
     
     if (success)
     {
-        success = fill_time_optional(state, &forward, &record);
+        success = fill_time_optional(session, &forward, &record);
     }
     
     if (success)
     {
-        add_record(state, &record);
+        add_record(session, &record);
     }
     else
     {
-        Print_Parse_Error(state);
-        printf("Incorect command usage. Use:\n"
-               "start [yyyy-MM-dd] (hh:mm)");
-        print_line_with_token(forward.token);
-        Print_ClearN();
+        session_set_error(session, "Incorect command usage. Use:\n"
+                          "start [yyyy-MM-dd] (hh:mm)");
     }
 }
 
 
 
 internal void
-parse_command_add_sub(Program_State *state, Tokenizer *tokenizer, b32 is_add)
+parse_command_add_sub(Record_Session *session, b32 is_add)
 {
-    Forward_Token forward = create_forward_token(tokenizer);
+    Forward_Token forward = create_forward_token(&session->tokenizer);
     
     Record record = {};
     record.type = Record_TimeDelta;
     
-    b32 success = fill_date_optional(state, &forward, &record);
+    b32 success = fill_date_optional(session, &forward, &record);
     
     if (success)
     {
-        success = fill_time_required(state, &forward, &record);
-        if (!is_add)
-            record.value *= -1;
+        success = fill_time_required(session, &forward, &record);
+        if (!is_add) record.value *= -1;
         
         if (success && record.value == 0)
         {
-            Print_Parse_Error(state);
-            printf("[Warning] Time equal to zero! Record not added.");
-            print_line_with_token(forward.token);
-            Print_ClearN();
+            session_set_error(session, "[Warning] Time equal to zero! Record not added.");
             return;
         }
     }
     
     if (success)
     {
-        fill_description_optional(state, &forward, &record);
+        fill_description_optional(session, &forward, &record);
     }
     
     if (success)
     {
-        add_record(state, &record);
+        add_record(session, &record);
     }
     else
     {
-        Print_Parse_Error(state);
-        printf("Incorect command usage. Use:\n"
-               "%s [yyyy-MM-dd] (hh:mm) [\"description\"]",
-               (is_add) ? "add" : "sub");
-        print_line_with_token(forward.token);
-        Print_ClearN();
+        char error_message[512];
+        snprintf(error_message, sizeof(error_message),
+                 "Incorect command usage. Use:\n"
+                 "%s [yyyy-MM-dd] (hh:mm) [\"description\"]",
+                 (is_add) ? "add" : "sub");
+        
+        session_set_error(session, error_message);
     }
 }
 
 
 
 internal Parse_Complex_Date_Result
-parse_complex_date(Program_State *state, Token token)
+parse_complex_date(Record_Session *session, Token token)
 {
     // NOTE: Allows to use keywords like today, yesterday + normal date formats
     // TODO: ^ today+1 yesterday-4
@@ -1003,7 +991,7 @@ parse_complex_date(Program_State *state, Token token)
     
     if (token.type == Token_Date)
     {
-        Parse_Date_Result parse = parse_date(state, token);
+        Parse_Date_Result parse = parse_date(session, token);
         result.date = parse.date;
         result.condition = (parse.is_valid) ? Con_IsValid : Con_HasErrors;
     }
@@ -1024,22 +1012,21 @@ get_max_date_range()
 }
 
 internal Date_Range_Result
-get_date_range(Program_State *state, Tokenizer *tokenizer)
+get_date_range(Record_Session *session)
 {
     Date_Range_Result result = {};
     b32 success = true;
     b32 has_matching_token = false;
     
-    Forward_Token forward = create_forward_token(tokenizer);
+    Forward_Token forward = create_forward_token(&session->tokenizer);
     
     
     if (forward.peek.type == Token_Identifier && token_equals(forward.peek, "from"))
     {
-        
         advance(&forward);
         has_matching_token = true;
         
-        Parse_Complex_Date_Result date = parse_complex_date(state, forward.peek);
+        Parse_Complex_Date_Result date = parse_complex_date(session, forward.peek);
         success = is_condition_valid(date.condition);
         if (success)
         {
@@ -1053,11 +1040,10 @@ get_date_range(Program_State *state, Tokenizer *tokenizer)
     {
         if (forward.peek.type == Token_Identifier && token_equals(forward.peek, "to"))
         {
-            
             advance(&forward);
             has_matching_token = true;
             
-            Parse_Complex_Date_Result date = parse_complex_date(state, forward.peek);
+            Parse_Complex_Date_Result date = parse_complex_date(session, forward.peek);
             success = is_condition_valid(date.condition);
             if (success)
             {
@@ -1072,7 +1058,6 @@ get_date_range(Program_State *state, Tokenizer *tokenizer)
     {
         if (!has_matching_token)
         {
-            
             if (token_equals(forward.peek, "all"))
             {
                 has_matching_token = true;
@@ -1081,7 +1066,7 @@ get_date_range(Program_State *state, Tokenizer *tokenizer)
             }
             else
             {
-                Parse_Complex_Date_Result date = parse_complex_date(state, forward.peek);
+                Parse_Complex_Date_Result date = parse_complex_date(session, forward.peek);
                 result.condition = date.condition;
                 if (is_condition_valid(result.condition))
                 {
@@ -1107,15 +1092,15 @@ get_date_range(Program_State *state, Tokenizer *tokenizer)
 
 
 internal Date_Range_Result
-get_recent_days_range(Program_State *state)
+get_recent_days_range(Virtual_Array<Record> *records)
 {
-    date64 today = get_today(state);
+    date64 today = get_today();
     date64 start = today - Days(31);
     
-    s64 record_count = state->records.array.count;
+    s64 record_count = records->count;
     if (record_count)
     {
-        date64 last_date = state->records.array.at(record_count - 1)->date;
+        date64 last_date = records->at(record_count - 1)->date;
         if (last_date > today)
         {
             today = last_date;
@@ -1127,7 +1112,7 @@ get_recent_days_range(Program_State *state)
             past_index = 0;
         }
         
-        date64 start_date = state->records.array.at(past_index)->date;
+        date64 start_date = records->at(past_index)->date;
         if (start_date < start)
         {
             start = start_date;
@@ -1140,11 +1125,11 @@ get_recent_days_range(Program_State *state)
 
 
 internal void
-parse_command_show(Program_State *state, Tokenizer *tokenizer)
+parse_command_show(Program_State *state, Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(tokenizer);
+    Forward_Token forward = create_forward_token(&session->tokenizer);
     
-    Date_Range_Result range = get_date_range(state, tokenizer);
+    Date_Range_Result range = get_date_range(session);
     
     if (range.condition == Con_IsValid)
     {
@@ -1152,17 +1137,14 @@ parse_command_show(Program_State *state, Tokenizer *tokenizer)
     }
     else if (range.condition == Con_NoMatchigTokens)
     {
-        Date_Range_Result recent = get_recent_days_range(state);
+        Date_Range_Result recent = get_recent_days_range(session->records);
         print_days_from_range(state, recent.begin, recent.end);
     }
     else
     {
-        Print_Parse_Error(state);
-        printf("Incorect command usage. Use:\n"
-               "show [yyyy-MM-dd]\n"
-               "show [from yyyy-MM-dd] [to yyyy-MM-dd]\n");
-        print_line_with_token(forward.token);
-        Print_ClearN();
+        session_set_error(session, "Incorect command usage. Use:\n"
+                          "show [yyyy-MM-dd]\n"
+                          "show [from yyyy-MM-dd] [to yyyy-MM-dd]\n");
     }
 }
 
@@ -1204,10 +1186,10 @@ process_and_print_summary(Program_State *state, Granularity granularity, date64 
     
     // NOTE: Skip record before date_begin
     for (;
-         record_index < state->records.array.count;
+         record_index < state->records.count;
          ++record_index)
     {
-        Record *record = state->records.array.at(record_index);
+        Record *record = state->records.at(record_index);
         if (date_begin <= record->date)
         {
             break;
@@ -1218,15 +1200,15 @@ process_and_print_summary(Program_State *state, Granularity granularity, date64 
     time32 sum = 0;
     Boundries_Result boundries = {};
     b32 loop = true;
-    Record *record = state->records.array.at(record_index);
+    Record *record = state->records.at(record_index);
     
     while (loop)
     {
-        loop = increase_index_to_next_day(&state->records.array, &record_index);
+        loop = increase_index_to_next_day(&state->records, &record_index);
         
         if (loop)
         {
-            record = state->records.array.at(record_index);
+            record = state->records.at(record_index);
             if (date_end < record->date)
             {
                 loop = false;
@@ -1246,7 +1228,7 @@ process_and_print_summary(Program_State *state, Granularity granularity, date64 
             {
                 Str32 date_str = get_date_string(boundries.begin);
                 
-                date64 today = get_today(state);
+                date64 today = get_today();
                 if (today < boundries.one_day_past_end && today >= boundries.begin)
                 {
                     day_count = (s32)(today / (Days(1))) - (s32)(boundries.begin / (Days(1)));
@@ -1318,9 +1300,9 @@ process_and_print_summary(Program_State *state, Granularity granularity, date64 
 
 
 internal void
-parse_command_summary(Program_State *state, Tokenizer *tokenizer)
+parse_command_summary(Program_State *state, Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(tokenizer);
+    Forward_Token forward = create_forward_token(&session->tokenizer);
     
     Granularity granularity = Granularity_Days;
     // TODO: Pull out granularity check.
@@ -1349,7 +1331,7 @@ parse_command_summary(Program_State *state, Tokenizer *tokenizer)
     }
     
     // arg - optional - time range
-    Date_Range_Result range = get_date_range(state, tokenizer);
+    Date_Range_Result range = get_date_range(session);
     
     if (range.condition == Con_NoMatchigTokens)
     {
@@ -1361,168 +1343,195 @@ parse_command_summary(Program_State *state, Tokenizer *tokenizer)
     
     if (range.condition == Con_HasErrors)
     {
-        Print_Parse_Error(state);
-        printf("Incorect command usage. Use:\n"
-               "summary [granularity]\n"
-               "summary [granularity] [yyyy-MM-dd]\n"
-               "summary [granularity] [from yyyy-MM-dd] [to yyyy-MM-dd]\n"
-               "\n\tgranularity - days/months (or d/m)\n");
-        print_line_with_token(forward.token);
-        Print_ClearN();
+        session_set_error(session, "Incorect command usage. Use:\n"
+                          "summary [granularity]\n"
+                          "summary [granularity] [yyyy-MM-dd]\n"
+                          "summary [granularity] [from yyyy-MM-dd] [to yyyy-MM-dd]\n"
+                          "\n\tgranularity - days/months (or d/m)\n");
     }
 }
 
 
 internal void
-parse_command_exit(Program_State *state, Tokenizer *tokenizer, b32 *main_loop_is_running)
+parse_command_exit(Program_State *state, Record_Session *session, b32 *program_is_running)
 {
-    Assert(main_loop_is_running != NULL);
+    Assert(program_is_running != NULL);
     
-    Forward_Token forward = create_forward_token(tokenizer);
+    Forward_Token forward = create_forward_token(&session->tokenizer);
     if ((forward.peek.type == Token_Identifier) && (token_equals(forward.peek, "no-save")))
     {
         advance(&forward);
-        *main_loop_is_running = false;
+        *program_is_running = false;
     }
     else
     {
-        
-        b32 did_save = automatic_save_to_file(state);
-        
-        if (did_save || (state->change_count == 0))
+        if (no_errors(session))
         {
-            *main_loop_is_running = false;
+            
+            if (session->change_count > 0)
+            {
+                b32 save_result = save_to_file(state);
+                
+                if (save_result) {
+                    *program_is_running = false;
+                } else {
+                    session_set_error(session, "Failed to save to file!");
+                }
+            }
         }
         else
         {
-            Print_Error();
-            printf("Automatic save failed. To exit without saving use: exit no-save");
-            Print_ClearN();
+            session_set_error(session, "Errors detected, exit aborted");
         }
     }
 }
 
 
-internal void
-process_input(char *content, Program_State *state, b32 reading_from_file, b32 *main_loop_is_running = NULL)
+internal Record_Session
+create_record_session_no_tokenizer(Arena *arena, Virtual_Array<Record> *records,
+                                   b32 reading_from_file)
 {
-    state->reading_from_file = reading_from_file;
+    Record_Session result = {};
+    result.records = records;
+    result.scope = create_program_scope(arena, records);
+    
+    for_u64(i, records->count)
+    {
+        u64 index = records->count - i - 1;
+        Record *record = records->at(index);
+        
+        if (!result.last) {
+            result.last = record;
+        }
+        
+        if (!result.active) { 
+            if (record->type == Record_TimeStart || record->type == Record_TimeStop) {
+                result.active = record;
+                break;
+            }
+        }
+    }
+    
+    result.no_errors = true;
+    result.reading_from_file = reading_from_file;
+    return result;
+}
+
+
+internal Record_Session
+create_record_session(Arena *arena, Virtual_Array<Record> *records,
+                      b32 reading_from_file, char *content)
+{
+    Record_Session result = create_record_session_no_tokenizer(arena, records, reading_from_file);
+    result.tokenizer = create_tokenizer(content);
+    return result;
+}
+
+
+internal void
+process_input(Program_State *state, Record_Session *session, b32 *program_is_running = NULL)
+{
+#define Error_Cmd_Exclusive session_set_error(session, "This command can be used only from console")
     
     using namespace Color;
-    Tokenizer tokenizer = create_tokenizer(content);
     b32 parsing = true;
-    
+    b32 reading_from_file = session->reading_from_file;
     
     while (parsing)
     {
-        Token token = get_token(&tokenizer);
+        Token token = get_token(&session->tokenizer);
         switch (token.type)
         {
             case Token_Identifier: {
                 if (token_equals(token, "start"))
                 {
-                    prase_command_start(state, &tokenizer);
+                    prase_command_start(session);
                 }
                 else if (token_equals(token, "stop"))
                 {
-                    prase_command_stop(state, &tokenizer);
+                    prase_command_stop(session);
                 }
                 else if (token_equals(token, "add"))
                 {
-                    parse_command_add_sub(state, &tokenizer, true);
+                    parse_command_add_sub(session, true);
                 }
                 else if (token_equals(token, "subtract") || token_equals(token, "sub"))
                 {
-                    parse_command_add_sub(state, &tokenizer, false);
+                    parse_command_add_sub(session, false);
                 }
                 else if (token_equals(token, "show"))
                 {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
-                        parse_command_show(state, &tokenizer);
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
+                        parse_command_show(state, session);
                     }
                 }
                 else if (token_equals(token, "summary"))
                 {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
-                        parse_command_summary(state, &tokenizer);
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
+                        parse_command_summary(state, session);
                     }
                 }
                 else if (token_equals(token, "exit"))
                 {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
-                        parse_command_exit(state, &tokenizer, main_loop_is_running);
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
+                        parse_command_exit(state, session, program_is_running);
                     }
                 }
                 else if (token_equals(token, "save"))
                 {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
-                        save_to_file(state);
-                        printf("File saved\n");
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
+                        b32 save_result = save_to_file(state);
+                        if (save_result) {
+                            printf("File saved\n");
+                        } else {
+                            printf("Failed to save!\n");
+                        }
                     }
                 }
                 else if (token_equals(token, "archive"))
                 {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
                         archive_current_file(state, true);
                     }
                 }
-                else if (token_equals(token, "load"))
+                else if (token_equals(token, "reload"))
                 {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
-                        load_file(state);
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
+                        if (no_errors(session)) {
+                            load_file(state);
+                            return;
+                        } else {
+                            session_set_error(session, "Load aborted");
+                        }
                     }
                 }
                 else if (token_equals(token, "time"))
                 {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
-                        date64 now = get_current_timestamp(state);
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
+                        date64 now = get_current_timestamp();
                         Str128 now_str = get_timestamp_string(now);
                         printf("Current time: %s\n", now_str.str);
                     }
                 }
                 else if (token_equals(token, "edit"))
                 {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
                         // TODO(f0): should work with Path
                         char *input_cstr = push_cstr_from_path(&state->arena, &state->input_path);
                         platform_open_in_default_editor(input_cstr);
@@ -1530,35 +1539,26 @@ process_input(char *content, Program_State *state, b32 reading_from_file, b32 *m
                 }
                 else if (token_equals(token, "dir"))
                 {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
                         char *dir_cstr = push_cstr_from_directory(&state->arena, state->exe_path.directory);
                         platform_open_in_default_editor(dir_cstr);
                     }
                 }
                 else if (token_equals(token, "clear"))
                 {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
                         platform_clear_screen();
                     }
                 }
                 else if (token_equals(token, "help"))
                 {
-                    if (state->reading_from_file)
-                    {
-                        Command_Line_Only_Message(state, token);
-                    }
-                    else
-                    {
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
                         print_help_desc("[...] - optional, (...) - required\n");
                         print_help_header("Commands available everywhere");
                         print_help_item("start", "[yyyy-MM-dd] (hh:mm) [\"description\"]", "starts new timespan");
@@ -1596,10 +1596,12 @@ process_input(char *content, Program_State *state, b32 reading_from_file, b32 *m
                 }
                 else
                 {
-                    Print_Parse_Error(state);
-                    printf("%.*s - unexpected identifier", (s32)token.text_length, token.text);
-                    print_line_with_token(token);
-                    Print_ClearN();
+                    char error_message[512];
+                    snprintf(error_message, sizeof(error_message),
+                             "%.*s - unexpected identifier",
+                             (s32)token.text_length, token.text);
+                    
+                    session_set_error(session, error_message);
                 }
             }
             break;
@@ -1615,28 +1617,37 @@ process_input(char *content, Program_State *state, b32 reading_from_file, b32 *m
             break;
             
             default: {
-                Print_Parse_Error(state);
-                printf("%.*s - unexpected element", (s32)token.text_length, token.text);
-                print_line_with_token(token);
-                Print_ClearN();
+                char error_message[512];
+                snprintf("%.*s - unexpected element",
+                         (s32)token.text_length, token.text);
+                
+                session_set_error(session, error_message);
             }
             break;
         }
     }
     
     
-    state->reading_from_file = false;
+    if (no_errors(session))
+    {
+        if (!reading_from_file) {
+            save_to_file(state);
+        }
+    }
+    else
+    {
+        printf("\nCommands not applied due to errors\n");
+        pop_program_scope(&session->scope);
+    }
 }
 
 
 internal void
-clear_memory(Program_State *state)
+clear_program_state(Program_State *state)
 {
     // TODO(f0): Don't leak memory!
-    
-    //state->defered_descs.clear();
-    //clear_arena(&state->mixed_arena);
-    //state->records.clear();
+    clear_table(&state->desc_table);
+    state->records.reset_memory();
 }
 
 
@@ -1644,22 +1655,24 @@ clear_memory(Program_State *state)
 internal void
 load_file(Program_State *state)
 {
-    clear_memory(state);
-    state->parse_error_count = 0;
+    pop_program_scope(&state->initial_scope);
+    state->load_file_error = false;
     
     char *file_content = push_read_entire_file_and_zero_terminate(&state->arena, &state->input_path);
     
     if (file_content)
     {
-        process_input(file_content, state, true);
+        Record_Session session = create_record_session(&state->arena, &state->records, true, file_content);
+        process_input(state, &session);
         state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
         printf("File loaded\n");
     }
     else
     {
-        memory_scope(&state->arena);
+        state->load_file_error = true;
+        arena_scope(&state->arena);
         char *file_name = push_cstr_from_path(&state->arena, &state->input_path);
-        printf("[Parse Error #%d] Failed to load from file: %s\n", state->parse_error_count++, file_name);
+        printf("[Critial error] Failed to load from file: %s\n", file_name);
     }
 }
 
@@ -1721,22 +1734,21 @@ enum Cmd_Arugment_Type
     Cmd_Input_File_Path
 };
 
-int
-main(int argument_count, char **arguments)
+
+s32 main(int argument_count, char **arguments)
 {
     //~ NOTE: Initialization
     Program_State state = {};
     state.arena = create_virtual_arena();
-    state.records.array = create_virtual_array<Record>();
+    state.records = create_virtual_array<Record>();
     state.desc_table = create_description_table(4096);
     //clear_memory(&state);
     Arena *arena = &state.arena;
     
     
-    
+    //~ command line inputs
     b32 reformat_mode = false;
-    
-    { //~ SCOPE: Processing of command line arugments
+    { 
         Cmd_Arugment_Type type = Cmd_None;
         b32 disable_colors = false;
         
@@ -1794,12 +1806,13 @@ main(int argument_count, char **arguments)
             }
         }
         
-        
         initialize_colors(disable_colors);
     }
     
     
-    initialize_timezone_offset(&state);
+    
+    //~ initialize essential state
+    initialize_timezone_offset();
     
     state.exe_path = push_current_executable_path(arena);
     state.title = string_find_from_right_trim_ending(state.exe_path.file_name, '.');
@@ -1814,12 +1827,18 @@ main(int argument_count, char **arguments)
     state.archive_dir = push_directory_append(arena, state.exe_path.directory, l2s("archive"));
     directory_create(arena, state.archive_dir);
     
+    // NOTE: Save initial program state
+    state.initial_scope = create_program_scope(&state.arena, &state.records);
     
     
-    //~ Load file. Save with better formatting if there was no load errors.
     
+    
+    
+    
+    
+    //~ initial file creation and load
     {
-        memory_scope(arena);
+        arena_scope(arena);
         
         char *input_path_cstr = push_cstr_from_path(arena, &state.input_path);
         if (!file_exists(input_path_cstr))
@@ -1840,54 +1859,54 @@ main(int argument_count, char **arguments)
     
     
     load_file(&state);
-    b32 did_save_on_first_load = false;
-    if (state.parse_error_count == 0)
+    if (!state.load_file_error)
     {
-        Date_Range_Result range = get_recent_days_range(&state);
+        Date_Range_Result range = get_recent_days_range(&state.records);
         print_days_from_range(&state, range.begin, range.end);
         save_to_file(&state);
-        did_save_on_first_load = true;
+        
+        if (reformat_mode) {
+            printf("File reformated. Exiting.\n");
+            exit(0);
+        }
     }
     else
     {
-        state.change_count = 0;
-    }
-    
-    if (reformat_mode)
-    {
-        if (did_save_on_first_load)
-            printf("File reformated. Exiting.\n");
-        else
+        if (reformat_mode) {
             printf("Reformatting skipped due to errors. Exiting.\n");
-        
-        exit(0);
+            exit(1);
+        }
     }
     
     
-    //~ NOTE: Initialize input thread.
     
+    
+    //~
     Thread_Memory thread_memory = {};
     sprintf(thread_memory.cursor, "::>");
     platform_create_thread(read_from_keyboard, &thread_memory);
     
     
     
-    //~ NOTE: Main loop
-    
-    b32 is_running = true;
-    while (is_running)
+    //~
+    b32 program_is_running = true;
+    while (program_is_running)
     {
         if (thread_memory.new_data)
         {
-            process_input(thread_memory.input_buffer, &state, false, &is_running);
-            if (state.change_count > 0)
+            Record_Session session = create_record_session_no_tokenizer(&state.arena, &state.records, false);
+            char *input_copy = push_cstr_copy(&state.arena, thread_memory.input_buffer);
+            session.tokenizer = create_tokenizer(input_copy);
+                                                     
+            process_input(&state, &session, &program_is_running);
+            if (no_errors(&session))
             {
-                if (state.records.array.count > 0)
+                if (session.change_count > 0)
                 {
-                    Record *last_record = get_last_record(&state);
+                    Record *last_record = get_last_record(&session);
                     print_days_from_range(&state, last_record->date, last_record->date, true);
+                    save_to_file(&state);
                 }
-                automatic_save_to_file(&state);
             }
             
             thread_memory.new_data = false;
@@ -1901,7 +1920,6 @@ main(int argument_count, char **arguments)
         if (source_file_changed)
         {
             load_file(&state);
-            state.change_count = 0;
             printf(thread_memory.cursor);
         }
         

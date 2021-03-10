@@ -111,15 +111,33 @@ struct Record
     Record_Type type;
     s32 value;
     date64 date;
-    u64 desc_hash;
+    //u64 desc_hash;
+    String desc;
 };
 
 
-struct Records
+struct Program_Scope
 {
-    Virtual_Array<Record> array;
-    Record_Type active_type;
+    Arena_Scope arena_scope;
+    Virtual_Array_Scope<Record> records_scope;
 };
+
+
+struct Record_Session
+{
+    Virtual_Array<Record> *records;
+    Record *last;
+    Record *active;
+    
+    Tokenizer tokenizer;
+    u32 change_count;
+    b32 no_errors;
+    b32 reading_from_file;
+    
+    // unwind backup
+    Program_Scope scope;
+};
+
 
 
 // TODO: Pull out char[MAX_PATH] to StrMaxPath?
@@ -128,7 +146,7 @@ struct Program_State
 {
     // NOTE: These require special initialization:
     Arena arena;
-    Records records;
+    Virtual_Array<Record> records;
     Description_Table desc_table;
     
     
@@ -140,12 +158,9 @@ struct Program_State
     Directory archive_dir;
 
     File_Time input_file_mod_time;
-    date64 timezone_offset;
-
-    s32 parse_error_count;
-    s32 change_count;
-
-    b32 reading_from_file;
+    
+    b32 load_file_error;
+    Program_Scope initial_scope;
 };
 
 

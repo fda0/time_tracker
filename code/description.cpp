@@ -158,8 +158,13 @@ add_description(Description_Table *table, Token token)
     return hash;
 }
     
-    
-    
+
+internal void
+clear_table(Description_Table *table)
+{
+    clear_array(table->array, Description, table->capacity_count);
+    table->element_count = 0;
+}
     
     
     
