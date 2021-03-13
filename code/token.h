@@ -1,10 +1,15 @@
 
+struct Lines
+{
+    u8 *current_line_start;
+    u64 count;
+};
+
 struct Lexer
 {
     u8 *at;
     
-    u8 *line_start;
-    u64 line_count;
+    Lines lines;
 };
 
 
@@ -26,7 +31,6 @@ enum Token_Type
 struct Token
 {
     Token_Type type;
-    
     String text;
 };
 

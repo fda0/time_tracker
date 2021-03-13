@@ -1,22 +1,3 @@
-/*
-    TODO:
-    * Config file?
-* Clean up error printing code.
-    * Convert to use Unicode?
-
-    * Add sum of the month in the file. Can look like:
-        // ~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=
-        //           Sum of the month 2020-07-**        123:20
-        // ~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=~=
-*/
-
-// TODO: Lower screenshot width in README.md so they won't get resized.
-
-// TODO: Input sorting testing!
-
-// TODO: Input sorting should be behind enable command;
-//       Like "sort start 6:40 stop ... "
-
 
 #include "main.h"
 #include "description.cpp"
@@ -32,6 +13,36 @@
 internal void load_file(Program_State *state);
 
 
+inline char *
+get_color(Color_Code code)
+{
+#if Def_Slow
+    s64 count = Color_Count;
+    assert(count == array_count(color_pairs));
+    assert(array_count(color_pairs) > code);
+    assert(color_pairs[code].code_check == code);
+#endif
+    char *result = "";
+    
+    if (!global_state.colors_disabled) {
+        result = color_pairs[code].value;
+    }
+    
+    return result;
+}
+
+inline void
+print_color(Color_Code code)
+{
+    if (!global_state.colors_disabled)
+    {
+        char *color = get_color(code);
+        printf("%s", color);
+    }
+}
+
+
+
 inline b32
 no_errors(Record_Session *session)
 {
@@ -44,8 +55,19 @@ inline void
 session_set_error(Record_Session *session, char *message)
 {
     session->no_errors = false;
-    printf("%s\n", message);
-    //print_line_with_token(token);
+                                                               
+    Find_Index find = cstr_find_common_character_from_left((char *)session->current_command_start, l2s("\0\n\r"));
+    String at_str = string(session->current_command_start, find.index);
+    
+    u64 line_count = session->lexer.lines.count;
+    if (line_count > 1)
+    {
+        printf("[Error] %s; at (line %llu): %.*s\n", message, line_count, string_expand(at_str));
+    }
+    else
+    {
+        printf("[Error] %s; at: %.*s\n", message, string_expand(at_str));
+    }
 }
 
 
@@ -337,7 +359,7 @@ print_record_tail(Program_State *state, s32 *sum)
         *sum = 0;
     }
 
-#if 0    
+#if 0
     for (s64 def_index = 0; def_index < state->defered_descs.count; ++def_index)
     {
         Defered_Description *def = state->defered_descs.at(def_index);
@@ -363,8 +385,344 @@ print_record_tail(Program_State *state, s32 *sum)
 #endif
 
 
+
+internal Record_Range
+get_records_range_for_starting_date(Program_State *state, u64 start_index)
+{
+    Record_Range result = {};
+    b32 start_is_active = false;
+    u64 index = start_index;
+    
+    if (index < state->records.count)
+    {
+        date64 date_begin = state->records.at(index)->date;
+        
+        for (;
+             index < state->records.count;
+             ++index)
+        {
+            Record *record = state->records.at(index);
+            if (date_begin <= record->date)
+            {
+                result.date = record->date;
+                result.first = index;
+                
+                if (record->type == Record_TimeStart)
+                {
+                    start_is_active = true;
+                }
+                
+                break;
+            }
+        }
+        
+        
+        for (;
+             index < state->records.count;
+             ++index)
+        {
+            Record *record = state->records.at(index);
+            
+            if (result.date != record->date)
+            {
+                result.one_past_last = result.next_day_start_index = index;
+                
+                if (start_is_active) {
+                    result.one_past_last += 1;
+                }
+                
+                break;
+            }
+            
+            if (record->type == Record_TimeStart)
+            {
+                start_is_active = true;
+            }
+            else if (record->type == Record_TimeStop)
+            {
+                start_is_active = false;
+            }
+        }
+        
+        if (!result.one_past_last) {
+            result.one_past_last = result.next_day_start_index = state->records.count;
+        }
+    }
+    
+    return result;
+}
+
+
+internal Range_u64
+get_index_range_for_date_range(Program_State *state, date64 date_begin, date64 date_end)
+{
+    Range_u64 result = {};
+    
+    u64 index = 0;
+    for (;
+         index < state->records.count;
+         ++index)
+    {
+        Record *record = state->records.at(index);
+        if (date_begin <= record->date) {
+            result.first = index;
+            break;
+        }
+    }
+    
+    
+    for (;
+         index < state->records.count;
+         ++index)
+    {
+        Record *record = state->records.at(index);
+        if (date_end < record->date) {
+            result.one_past_last = index;
+        }
+    }
+    
+    if (!result.one_past_last) {
+        result.one_past_last = state->records.count;
+    }
+    
+    return result;
+}
+
+
+inline void
+print_description(Record *record, Color_Code color = Color_Description)
+{
+    String desc = record->desc;
+    if (desc.size)
+    {
+        print_color(color);
+        printf(" \"%.*s\"", string_expand(desc));
+        print_color(Color_Reset);
+    }
+}
+
+inline void
+print_time_delta(Record *time_delta_record)
+{
+    s32 time = time_delta_record->value;
+    char sign = get_sign_char_and_abs_value(&time); // TODO(f0): Inline this here
+    
+    if (sign == '-') {
+        print_color(Color_AltNegative);
+    } else {
+        print_color(Color_AltPositive);
+    }
+    
+    Str32 time_str = get_time_string(time_delta_record->value);
+    printf("  %c%s", sign, time_str.str);
+    print_color(Color_Reset);
+    
+    print_description(time_delta_record, Color_AltDescription);
+}
+
+inline void
+print_defered_time_deltas(Linked_List<Record *> *defered)
+{
+    for_linked_list_ptr(node, defered)
+    {
+        Record *record = node->item;
+        print_time_delta(record);
+    }
+}
+
+
+
 internal void
 print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, b32 alternative_colors = false)
+{
+    enum Print_State
+    {
+        Open,
+        Closed_PrePrint,
+        Closed_PostPrint,
+    };
+    
+    Arena *arena = &state->arena;
+    arena_scope(arena);
+    
+    Range_u64 whole_range = get_index_range_for_date_range(state, date_begin, date_end);
+    
+    
+    for (Record_Range range = get_records_range_for_starting_date(state, whole_range.first);
+         range.date <= date_end && range.date != 0;
+         range = get_records_range_for_starting_date(state, range.next_day_start_index))
+    {
+        arena_scope(arena);
+        
+        Linked_List<Record *> defered_time_deltas = {};
+        
+        Print_State print_state = Closed_PostPrint;
+        Record *active_start = nullptr;
+        s32 day_time_sum = 0;
+        
+        {
+            // NOTE: day header
+            Str32 date_str = get_date_string(range.date);
+            Str32 day_of_week = get_day_of_the_week_string(range.date);
+            
+            printf("\n");
+            
+            if (alternative_colors) {
+                print_color(Color_AltDate);
+            } else {
+                print_color(Color_Date);
+            }
+            
+            printf("%s %s", date_str.str, day_of_week.str);
+            
+            print_color(Color_Reset);
+            printf("\n");
+        }
+        
+        
+        for (u64 index = range.first;
+             index < range.one_past_last;
+             ++index)
+        {
+            Record *record = state->records.at(index);
+            
+            if (record->date != range.date)
+            {
+                // NOTE: case: "start" ends on next/another day   
+                assert(record->type == Record_TimeStop || record->type == Record_TimeStart);
+                assert(active_start);
+                
+                day_time_sum += record->value - active_start->value;
+                day_time_sum += safe_truncate_to_s32(record->date - active_start->date);
+                
+                // gray color
+                Str32 time_str = get_time_string(record->value);
+                printf("%s", time_str.str);
+                
+                print_color(Color_Dimmed);
+                if (record->date != range.date + Days(1))
+                {
+                    Str32 date_str = get_date_string(record->date);
+                    printf(" (%s)", date_str.str);
+                }
+                else
+                {
+                    printf(" (next day)");
+                }
+                print_color(Color_Reset);
+                
+                
+                print_description(active_start);
+                
+                print_defered_time_deltas(&defered_time_deltas);
+                // print all defers (TimeDelta & CountDelta) here
+                printf("\n");
+            }
+            else
+            {
+                if (print_state == Open)
+                {
+                    if (record->type == Record_TimeDelta)
+                    {
+                        day_time_sum += record->value;
+                        // NOTE: case: this needs to be printed _after_ we print "stop"
+                        *defered_time_deltas.push_get_item(arena) = record;
+                    }
+                    else if (record->type == Record_TimeStart ||
+                             record->type == Record_TimeStop)
+                    {
+                        Str32 time_str = get_time_string(record->value);
+                        printf("%s", time_str.str);
+                        
+                        if (active_start)
+                        {
+                            print_description(active_start);
+                            day_time_sum += record->value - active_start->value;
+                        }
+                        else
+                        {
+                            assert(0);
+                        }
+                        
+                        print_defered_time_deltas(&defered_time_deltas);
+                        // print CountDelta defers on new lines
+                        printf("\n");
+                    }
+                    else
+                    {
+                        // defer2 counts?
+                        assert(0);
+                    }
+                    
+                    
+                    if (record->type == Record_TimeStart) {
+                        print_state = Closed_PostPrint;
+                    } else if (record->type == Record_TimeStop) {
+                        print_state = Closed_PrePrint;
+                    }
+                }
+                
+                
+                if (print_state == Closed_PostPrint)
+                {
+                    if (record->type == Record_TimeDelta)
+                    {
+                        day_time_sum += record->value;
+                        
+                        printf("      ");
+                        print_time_delta(record);
+                        printf("\n");
+                    }
+                    else if (record->type == Record_TimeStart)
+                    {
+                        Str32 time_str = get_time_string(record->value);
+                        printf("%s -> ", time_str.str);
+                        
+                        active_start = record;
+                        print_state = Open;
+                    }
+                    else if (record->type == Record_TimeStop)
+                    {
+                        // NOTE(f0): Skip - it gets counted towards previous day
+                    }
+                    else
+                    {
+                        // print count\n
+                        assert(0);
+                    }
+                }
+                
+                
+                if (print_state == Closed_PrePrint) {
+                    print_state = Closed_PostPrint;
+                }
+            }
+        }
+        
+        
+        // TODO(f0): Figure out missing ending stuff
+        Str32 time = get_time_string(day_time_sum);
+        Str128 bar = get_progress_bar_string(day_time_sum, MissingEnding_None);
+        
+        print_color(Color_Dimmed);
+        print_color(Color_Positive);
+        printf("Time total: %s  ", time.str);
+        
+        printf("%s", bar.str);
+        
+        print_color(Color_Reset);
+        printf("\n");
+    }
+    
+}
+
+
+
+
+
+
+internal void
+print_days_from_range1(Program_State *state, date64 date_begin, date64 date_end, b32 alternative_colors = false)
 {
     enum Range_State
     {
@@ -675,7 +1033,7 @@ save_to_file(Program_State *state)
 internal void
 add_record(Record_Session *session, Record *record)
 {
-    if (session->load_file_unresolved_errors) {
+    if (no_errors(session) && session->load_file_unresolved_errors) {
         session_set_error(session, "New records can't be added because file has unresolved errors");
     }
     
@@ -700,6 +1058,14 @@ add_record(Record_Session *session, Record *record)
             {
                 allowed = true;
             }
+            else
+            {
+                session_set_error(session, "Stop needs to be after the most recent Start");
+            }
+        }
+        else
+        {
+            session_set_error(session, "Stop can be used only when Start is active");
         }
     }
     else
@@ -710,7 +1076,14 @@ add_record(Record_Session *session, Record *record)
         }
         else
         {
-            if (session->last->date < record->date)
+            if (session->active && 
+                session->active->type == Record_TimeStart &&
+                record->type == Record_TimeDelta && 
+                session->active->date < record->date)
+            {
+                session_set_error(session, "Add/Sub needs to have the same date as active Start");
+            }
+            else if (session->last->date < record->date)
             {
                 allowed = true;
             }
@@ -748,8 +1121,13 @@ add_record(Record_Session *session, Record *record)
     
     
     
+    if (no_errors(session) && !allowed) {
+        session_set_error(session, "Out of order input. Try \"edit\" command");
+    }
     
-    if (allowed)
+    
+    
+    if (no_errors(session))
     {
         session->change_count += 1;;
         
@@ -770,11 +1148,6 @@ add_record(Record_Session *session, Record *record)
         }
         
         *session->last = *record;
-    }
-    else
-    {
-        session->no_errors = false;
-        debug_break();
     }
 }
 
@@ -1357,30 +1730,31 @@ parse_command_summary(Program_State *state, Record_Session *session)
 
 
 internal void
-parse_command_exit(Program_State *state, Record_Session *session, b32 *program_is_running)
+parse_command_exit(Program_State *state, Record_Session *session)
 {
-    assert(program_is_running != NULL);
-    
     Forward_Token forward = create_forward_token(&session->lexer);
     if ((forward.peek.type == Token_Identifier) && (token_equals(forward.peek, "no-save")))
     {
         advance(&forward);
-        *program_is_running = false;
+        exit(0);
     }
     else
     {
         if (no_errors(session))
         {
-            
             if (session->change_count > 0)
             {
                 b32 save_result = save_to_file(state);
                 
                 if (save_result) {
-                    *program_is_running = false;
+                    exit(0);
                 } else {
                     session_set_error(session, "Failed to save to file!");
                 }
+            }
+            else
+            {
+                exit(0);
             }
         }
         else
@@ -1433,7 +1807,7 @@ create_record_session(Arena *arena, Virtual_Array<Record> *records,
 
 
 internal void
-process_input(Program_State *state, Record_Session *session, b32 *program_is_running = NULL)
+process_input(Program_State *state, Record_Session *session)
 {
 #define Error_Cmd_Exclusive session_set_error(session, "This command can be used only from console")
     
@@ -1447,6 +1821,8 @@ process_input(Program_State *state, Record_Session *session, b32 *program_is_run
     while (parsing)
     {
         Token token = get_token(&session->lexer);
+        session->current_command_start = token.text.str;
+        
         switch (token.type)
         {
             case Token_Identifier: {
@@ -1487,7 +1863,7 @@ process_input(Program_State *state, Record_Session *session, b32 *program_is_run
                     if (reading_from_file) {
                         Error_Cmd_Exclusive;
                     } else {
-                        parse_command_exit(state, session, program_is_running);
+                        parse_command_exit(state, session);
                     }
                 }
                 else if (token_equals(token, "save"))
@@ -1499,7 +1875,7 @@ process_input(Program_State *state, Record_Session *session, b32 *program_is_run
                         if (save_result) {
                             printf("File saved\n");
                         } else {
-                            printf("Failed to save!\n");
+                            printf("Failed to save\n");
                         }
                     }
                 }
@@ -1647,7 +2023,7 @@ process_input(Program_State *state, Record_Session *session, b32 *program_is_run
     }
     else
     {
-        printf("[Warning] Commands not applied due to errors\n");
+        printf("[Warning] Records not added due to errors\n");
         pop_program_scope(&session->scope);
     }
 }
@@ -1684,7 +2060,7 @@ load_file(Program_State *state)
         else
         {
             state->load_file_error = true;
-            printf("[Error] File contains errors. It requires manual fixing. Use \"edit\" to open it in default editor.\n");
+            printf("[Warning] File contains errors. It requires manual fixing. Use \"edit\" to open it in default editor\n");
         }
     }
     else
@@ -1728,26 +2104,8 @@ read_from_keyboard(Thread_Memory *thread_memory)
 
 
 
-struct Alloc_Resources
-{
-    size_t size;
-    u8 *address;
-};
 
-inline Alloc_Resources
-plan_alloc(Alloc_Resources *total_res, size_t size_to_alloc)
-{
-    Alloc_Resources result = {};
-    result.size = size_to_alloc;
-    result.address = total_res->address;
-    
-    total_res->size -= size_to_alloc;
-    total_res->address += size_to_alloc;
-    
-    assert(total_res->size >= 0);
-    
-    return result;
-}
+
 
 
 enum Cmd_Arugment_Type
@@ -1911,8 +2269,7 @@ s32 main(int argument_count, char **arguments)
     
     
     //~
-    b32 program_is_running = true;
-    while (program_is_running)
+    for (;;)
     {
         if (thread_memory.new_data)
         {
@@ -1920,7 +2277,7 @@ s32 main(int argument_count, char **arguments)
             char *input_copy = push_cstr_copy(&state.arena, thread_memory.input_buffer);
             session.lexer = create_lexer(input_copy);
                                                      
-            process_input(&state, &session, &program_is_running);
+            process_input(&state, &session);
             if (no_errors(&session))
             {
                 if (session.change_count > 0)
@@ -1947,6 +2304,4 @@ s32 main(int argument_count, char **arguments)
         
         platform_sleep(33);
     }
-    
-    return 0;
 }

@@ -23,22 +23,81 @@ global Stubs global_stubs = {};
 struct Global_State
 {
     date64 timezone_offset;
+    b32 colors_disabled;
 };
 global Global_State global_state;
 
 
+enum Color_Code
+{
+    Color_Empty,
+    Color_Reset,
+    
+    Color_Base,
+    Color_Dimmed,
+    
+    Color_Date,
+    Color_AltDate,
+    
+    Color_Description,
+    Color_AltDescription,
+    
+    Color_Positive,
+    Color_AltPositive,
+    
+    Color_Negative,
+    Color_AltNegative,
+    
+    Color_Error,
+    Color_HelpHeader,
+    
+    Color_Bar,
+    
+    Color_Count
+};
+
+struct Color_Pair
+{
+    Color_Code code_check; // because C++ sucks!
+    char *value;
+};
+
+global Color_Pair color_pairs[Color_Count] = {
+    {Color_Empty, ""},
+    {Color_Reset, "\033[39m\033[49m"},
+    
+    {Color_Base, "\033[97m"},
+    {Color_Dimmed, "\033[90m"},
+    
+    {Color_Date, "\033[33m"},
+    {Color_AltDate, "\033[43m\033[30m"},
+    
+    {Color_Description, "\033[36m"},
+    {Color_AltDescription, "\033[96m"},
+    
+    {Color_Positive, "\033[32m"},
+    {Color_AltPositive, "\033[92m"},
+    
+    {Color_Negative, "\033[31m"},
+    {Color_AltNegative, "\033[91m"},
+    
+    {Color_Error, "\033[41m"},
+    {Color_HelpHeader, "\033[100m"},
+    
+    {Color_Bar, "\033[34m"},
+};
 
 
+
+
+
+//~ NOTE: Platforms and compilers
 struct Thread_Memory
 {
     char input_buffer[256];
     char cursor[64];
     b32 new_data;
 };
-
-
-
-//~ NOTE: Platforms and compilers
 
 
 #if Def_Windows
@@ -49,16 +108,31 @@ struct Thread_Memory
 
 
 
+
+
 //~ NOTE: Macros
-
-
-
 #define Days(Value) (Hours(Value) * 24)
 #define Hours(Value) (Minutes(Value) * 60)
 #define Minutes(Value) (Value * 60)
 
 
-//~ NOTE: Data types
+
+
+//~ NOTE: Structs
+struct Record_Range
+{
+    date64 date;
+    u64 first;
+    u64 one_past_last;
+    u64 next_day_start_index;
+};
+
+struct Range_u64
+{
+    u64 first;
+    u64 one_past_last;
+};
+
 
 enum Missing_Ending
 {
@@ -68,7 +142,7 @@ enum Missing_Ending
 };
 
 
-enum Record_Type : s32
+enum Record_Type
 {
     Record_Empty,
     Record_TimeStart,
@@ -80,10 +154,10 @@ enum Record_Type : s32
 struct Record
 {
     Record_Type type;
-    s32 value;
-    date64 date;
+    s32 value; // 8
+    date64 date; // 16
     //u64 desc_hash;
-    String desc;
+    String desc; // 32
 };
 
 
@@ -101,6 +175,7 @@ struct Record_Session
     Record *active;
     
     Lexer lexer;
+    u8 *current_command_start;
     u32 change_count;
     b32 no_errors;
     b32 reading_from_file;
@@ -123,7 +198,6 @@ struct Program_State
     
     
     // NOTE: These can be zero initialized
-    char archive_directory[MAX_PATH];
     String title;
     Path exe_path;
     Path input_path;

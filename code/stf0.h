@@ -217,6 +217,7 @@ typedef __m128i m128i;
 #define for_range(Type, I, Range) for (Type I = 0; I < (Range); ++I)
 #define for_array(I, Array) for_range(u64, I, array_count(Array))
 #define for_linked_list(Node, List) for (auto Node = (List).first; Node; Node = Node->next)
+#define for_linked_list_ptr(Node, List) for (auto Node = (List)->first; Node; Node = Node->next)
 #define for_u64(I, Range) for_range(u64, I, Range)
 #define for_u32(I, Range) for_range(u32, I, Range)
 //
@@ -403,7 +404,15 @@ safe_truncate_to_u16(s32 value)
     return result;
 }
 
-
+////
+inline u32 
+safe_truncate_to_s32(s64 value)
+{
+	assert(value <= S32_Max);
+    assert(value >= S32_Min);
+    u32 result = (u32)value;
+	return result;
+}
 
 
 

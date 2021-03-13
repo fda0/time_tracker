@@ -1,7 +1,18 @@
 #version 0.4.2
 #icon icon.ico
 
+
+//#run @warnings
+#run @build
+
+
+@build
 #build main.cpp -output tt.exe
+
+
+@warnings
+#run @build -warnings  -build_args "/wd4201 /wd4996"
+
 
 @tests
 #build tests.cpp

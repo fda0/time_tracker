@@ -58,12 +58,12 @@ eat_all_whitespace(Lexer *lx)
         else if (is_end_of_line(lx->at[0]))
         {
             ++lx->at;
-            lx->line_start = lx->at;
-            ++lx->line_count;
+            lx->lines.current_line_start = lx->at;
+            ++lx->lines.count;
 
             if ((lx->at[0] == '\r') && (lx->at[1] == '\n'))
             {
-                --lx->line_count;
+                --lx->lines.count;
             }
         }
         else if (lx->at[0] == '/' && lx->at[1] == '/')
@@ -87,7 +87,8 @@ create_lexer(char *input_text)
 {
     Lexer lexer = {};
     lexer.at = (u8 *)input_text;
-    lexer.line_start = (u8 *)input_text;
+    lexer.lines.current_line_start = (u8 *)input_text;
+    lexer.lines.count = 1;
     return lexer;
 }
 
