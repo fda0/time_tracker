@@ -2294,7 +2294,7 @@ file_open_read(cstr_lit path)
 {
     File_Handle file = {};
 #if Def_Windows
-    file.handle_ = CreateFileA(path, GENERIC_READ, 0, nullptr, OPEN_EXISTING, 0, nullptr);
+    file.handle_ = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
 #else
     file.handle_ = fopen(path, "rb");
 #endif

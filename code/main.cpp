@@ -1,4 +1,3 @@
-
 #include "main.h"
 #include "description.cpp"
 
@@ -6,8 +5,6 @@
 #include "lexer.cpp"
 #include "string.cpp"
 #include "time.cpp"
-
-
 
 
 internal void load_file(Program_State *state);
@@ -56,18 +53,22 @@ session_set_error(Record_Session *session, char *message)
 {
     session->no_errors = false;
                                                                
-    Find_Index find = cstr_find_common_character_from_left((char *)session->current_command_start, l2s("\0\n\r"));
-    String at_str = string(session->current_command_start, find.index);
+    Token command_token = session->current_command_token;
+    Find_Index find = cstr_find_common_character_from_left((char *)command_token.text.str, l2s("\0\n\r"));
+    String at_str = string(command_token.text.str, find.index);
     
-    u64 line_count = session->lexer.lines.count;
-    if (line_count > 1)
+    
+    print_color(Color_Error);
+    if (command_token.line.row > 1)
     {
-        printf("[Error] %s; at (line %llu): %.*s\n", message, line_count, string_expand(at_str));
+        printf("[Error] %s; at (line %u): %.*s", message, command_token.line.row, string_expand(at_str));
     }
     else
     {
-        printf("[Error] %s; at: %.*s\n", message, string_expand(at_str));
+        printf("[Error] %s; at: %.*s", message, string_expand(at_str));
     }
+    print_color(Color_Reset);
+    printf("\n");
 }
 
 
@@ -377,7 +378,7 @@ print_record_tail(Program_State *state, s32 *sum)
                    def->description.content, f_reset);
         }
     }
-    #endif
+#endif
 
     printf("\n");
     //state->defered_descs.clear();
@@ -533,7 +534,8 @@ print_defered_time_deltas(Linked_List<Record *> *defered)
 
 
 internal void
-print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, b32 alternative_colors = false)
+print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
+                      b32 alternative_colors = false)
 {
     enum Print_State
     {
@@ -631,8 +633,15 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end, 
                     else if (record->type == Record_TimeStart ||
                              record->type == Record_TimeStop)
                     {
+                        if (record->type == Record_TimeStart) {
+                            print_color(Color_Dimmed);
+                        }
+                        
                         Str32 time_str = get_time_string(record->value);
                         printf("%s", time_str.str);
+                        
+                        print_color(Color_Reset);
+                        
                         
                         if (active_start)
                         {
@@ -1152,15 +1161,16 @@ add_record(Record_Session *session, Record *record)
 }
 
 internal b32
-fill_date_optional(Record_Session *session, Forward_Token *forward, Record *record)
+fill_date_optional(Record_Session *session, Record *record)
 {
     b32 success = false;
+    Token token = peek_token(&session->lexer, 0);
     
-    if (forward->peek.type == Token_Date)
+    if (token.type == Token_Date)
     {
-        advance(forward);
+        advance(&session->lexer);
         
-        Parse_Date_Result parsed_date = parse_date(session, forward->token);
+        Parse_Date_Result parsed_date = parse_date(session, token);
         if (parsed_date.is_valid)
         {
             record->date = parsed_date.date;
@@ -1193,15 +1203,16 @@ fill_date_optional(Record_Session *session, Forward_Token *forward, Record *reco
 }
 
 internal b32
-fill_time_optional(Record_Session *session, Forward_Token *forward, Record *record)
+fill_time_optional(Record_Session *session, Record *record)
 {
     b32 success = false;
+    Token token = peek_token(&session->lexer, 0);
     
-    if ((forward->peek.type == Token_Time))
+    if (token.type == Token_Time)
     {
-        advance(forward);
+        advance(&session->lexer);
         
-        Parse_Time_Result parsed_time = parse_time(session, forward->token);
+        Parse_Time_Result parsed_time = parse_time(session, token);
         if (parsed_time.is_valid)
         {
             record->value = parsed_time.time;
@@ -1222,15 +1233,16 @@ fill_time_optional(Record_Session *session, Forward_Token *forward, Record *reco
 
 
 internal b32
-fill_time_required(Record_Session *session, Forward_Token *forward, Record *record)
+fill_time_required(Record_Session *session, Record *record)
 {
     b32 success = false;
+    Token token = peek_token(&session->lexer, 0);
     
-    if ((forward->peek.type == Token_Time))
+    if (token.type == Token_Time)
     {
-        advance(forward);
+        advance(&session->lexer);
         
-        Parse_Time_Result parsed_time = parse_time(session, forward->token);
+        Parse_Time_Result parsed_time = parse_time(session, token);
         if (parsed_time.is_valid)
         {
             record->value = parsed_time.time;
@@ -1242,13 +1254,15 @@ fill_time_required(Record_Session *session, Forward_Token *forward, Record *reco
 }
 
 internal void
-fill_description_optional(Record_Session *session, Forward_Token *forward, Record *record)
+fill_description_optional(Record_Session *session, Record *record)
 {
-    if ((forward->peek.type == Token_String))
+    Token token = peek_token(&session->lexer, 0);
+    
+    if (token.type == Token_String)
     {
-        advance(forward);
+        advance(&session->lexer);
         //record->desc_hash = add_description(&session->desc_table, forward->token); @desc
-        record->desc = forward->token.text;
+        record->desc = token.text;
     }
 }
 
@@ -1256,20 +1270,19 @@ fill_description_optional(Record_Session *session, Forward_Token *forward, Recor
 internal void
 prase_command_start(Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(&session->lexer);
     Record record = {};
     record.type = Record_TimeStart;
     
-    b32 success = fill_date_optional(session, &forward, &record);
+    b32 success = fill_date_optional(session, &record);
     
     if (success)
     {
-        success = fill_time_optional(session, &forward, &record);
+        success = fill_time_optional(session, &record);
     }
     
     if (success)
     {
-        fill_description_optional(session, &forward, &record);
+        fill_description_optional(session, &record);
     }
     
     if (success)
@@ -1287,15 +1300,14 @@ prase_command_start(Record_Session *session)
 internal void
 prase_command_stop(Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(&session->lexer);
     Record record = {};
     record.type = Record_TimeStop;
     
-    b32 success = fill_date_optional(session, &forward, &record);
+    b32 success = fill_date_optional(session, &record);
     
     if (success)
     {
-        success = fill_time_optional(session, &forward, &record);
+        success = fill_time_optional(session, &record);
     }
     
     if (success)
@@ -1314,28 +1326,26 @@ prase_command_stop(Record_Session *session)
 internal void
 parse_command_add_sub(Record_Session *session, b32 is_add)
 {
-    Forward_Token forward = create_forward_token(&session->lexer);
-    
     Record record = {};
     record.type = Record_TimeDelta;
     
-    b32 success = fill_date_optional(session, &forward, &record);
+    b32 success = fill_date_optional(session, &record);
     
     if (success)
     {
-        success = fill_time_required(session, &forward, &record);
+        success = fill_time_required(session, &record);
         if (!is_add) record.value *= -1;
         
         if (success && record.value == 0)
         {
-            session_set_error(session, "[Warning] Time equal to zero! Record not added.");
+            session_set_error(session, "Time equal to zero!");
             return;
         }
     }
     
     if (success)
     {
-        fill_description_optional(session, &forward, &record);
+        fill_description_optional(session, &record);
     }
     
     if (success)
@@ -1393,61 +1403,70 @@ get_date_range(Record_Session *session)
     b32 success = true;
     b32 has_matching_token = false;
     
-    Forward_Token forward = create_forward_token(&session->lexer);
-    
-    
-    if (forward.peek.type == Token_Identifier && token_equals(forward.peek, "from"))
     {
-        advance(&forward);
-        has_matching_token = true;
+        Token token = peek_token(&session->lexer, 0);
         
-        Parse_Complex_Date_Result date = parse_complex_date(session, forward.peek);
-        success = is_condition_valid(date.condition);
-        if (success)
+        if (token.type == Token_Identifier &&
+            token_equals(token, "from"))
         {
-            result.begin = date.date;
-            advance(&forward);
+            advance(&session->lexer);
+            has_matching_token = true;
+            
+            Parse_Complex_Date_Result date = parse_complex_date(session, token);
+            success = is_condition_valid(date.condition);
+            if (success)
+            {
+                result.begin = date.date;
+                advance(&session->lexer);
+            }
         }
     }
     
     
+    
     if (success)
     {
-        if (forward.peek.type == Token_Identifier && token_equals(forward.peek, "to"))
+        Token token = peek_token(&session->lexer, 0);
+        
+        if (token.type == Token_Identifier &&
+            token_equals(token, "to"))
         {
-            advance(&forward);
+            advance(&session->lexer);
             has_matching_token = true;
             
-            Parse_Complex_Date_Result date = parse_complex_date(session, forward.peek);
+            Parse_Complex_Date_Result date = parse_complex_date(session, token);
             success = is_condition_valid(date.condition);
             if (success)
             {
                 result.end = date.date;
-                advance(&forward);
+                advance(&session->lexer);
             }
         }
     }
     
     
+    
     if (success)
     {
+        Token token = peek_token(&session->lexer, 0);
+        
         if (!has_matching_token)
         {
-            if (token_equals(forward.peek, "all"))
+            if (token_equals(token, "all"))
             {
                 has_matching_token = true;
                 result = get_max_date_range();
-                advance(&forward);
+                advance(&session->lexer);
             }
             else
             {
-                Parse_Complex_Date_Result date = parse_complex_date(session, forward.peek);
+                Parse_Complex_Date_Result date = parse_complex_date(session, token);
                 result.condition = date.condition;
                 if (is_condition_valid(result.condition))
                 {
                     result.begin = date.date;
                     result.end = date.date;
-                    advance(&forward);
+                    advance(&session->lexer);
                 }
             }
         }
@@ -1502,8 +1521,6 @@ get_recent_days_range(Virtual_Array<Record> *records)
 internal void
 parse_command_show(Program_State *state, Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(&session->lexer);
-    
     Date_Range_Result range = get_date_range(session);
     
     if (range.condition == Con_IsValid)
@@ -1679,32 +1696,35 @@ process_and_print_summary(Program_State *state, Granularity granularity, date64 
 internal void
 parse_command_summary(Program_State *state, Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(&session->lexer);
-    
     Granularity granularity = Granularity_Days;
     // TODO: Pull out granularity check.
-    if (forward.peek.type == Token_Identifier)
+    
     {
-        if (token_equals(forward.peek, "days") ||
-            token_equals(forward.peek, "d"))
+        Token token = peek_token(&session->lexer, 0);
+        
+        if (token.type == Token_Identifier)
         {
-            advance(&forward);
-            granularity = Granularity_Days;
-        }
-        else if (token_equals(forward.peek, "months") ||
-                 token_equals(forward.peek, "m"))
-        {
-            advance(&forward);
-            granularity = Granularity_Months;
-        }
+            if (token_equals(token, "days") ||
+                token_equals(token, "d"))
+            {
+                advance(&session->lexer);
+                granularity = Granularity_Days;
+            }
+            else if (token_equals(token, "months") ||
+                     token_equals(token, "m"))
+            {
+                advance(&session->lexer);
+                granularity = Granularity_Months;
+            }
 #if 0
-        else if (token_equals(forward.peek, "years") ||
-                 token_equals(forward.peek, "y"))
-        {
-            advance(&forward);
-            granularity = Granularity_Years;
-        }
+            else if (token_equals(token, "years") ||
+                     token_equals(token, "y"))
+            {
+                advance(&session->lexer);
+                granularity = Granularity_Years;
+            }
 #endif
+        }
     }
     
     // arg - optional - time range
@@ -1732,10 +1752,11 @@ parse_command_summary(Program_State *state, Record_Session *session)
 internal void
 parse_command_exit(Program_State *state, Record_Session *session)
 {
-    Forward_Token forward = create_forward_token(&session->lexer);
-    if ((forward.peek.type == Token_Identifier) && (token_equals(forward.peek, "no-save")))
+    Token token = peek_token(&session->lexer, 0);
+    
+    if ((token.type == Token_Identifier) && (token_equals(token, "no-save")))
     {
-        advance(&forward);
+        advance(&session->lexer);
         exit(0);
     }
     else
@@ -1820,8 +1841,9 @@ process_input(Program_State *state, Record_Session *session)
     
     while (parsing)
     {
-        Token token = get_token(&session->lexer);
-        session->current_command_start = token.text.str;
+        Token token = peek_token(&session->lexer, 0);
+        advance(&session->lexer);
+        session->current_command_token = token;
         
         switch (token.type)
         {
@@ -2023,7 +2045,10 @@ process_input(Program_State *state, Record_Session *session)
     }
     else
     {
-        printf("[Warning] Records not added due to errors\n");
+        print_color(Color_Warning);
+        printf("[Warning] Records not added due to errors");
+        print_color(Color_Reset);
+        printf("\n");
         pop_program_scope(&session->scope);
     }
 }
@@ -2045,31 +2070,47 @@ load_file(Program_State *state)
     pop_program_scope(&state->initial_scope);
     state->load_file_error = false;
     
-    char *file_content = push_read_entire_file_and_zero_terminate(&state->arena, &state->input_path);
+    b32 load_successful = false;
     
-    if (file_content)
+    for (u32 load_tries = 0;
+         (load_tries < 5 && !load_successful);
+         ++load_tries)
     {
-        Record_Session session = create_record_session(&state->arena, &state->records, true, file_content);
-        process_input(state, &session);
+        char *file_content = push_read_entire_file_and_zero_terminate(&state->arena, &state->input_path);
         
-        if (no_errors(&session))
+        if (file_content)
         {
-            state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
-            printf("File loaded\n");
+            Record_Session session = create_record_session(&state->arena, &state->records, true, file_content);
+            process_input(state, &session);
+            
+            if (no_errors(&session))
+            {
+                printf("File loaded\n");
+            }
+            else
+            {
+                state->load_file_error = true;
+                printf("[Warning] File contains errors. It requires manual fixing. "
+                       "Use \"edit\" to open it in default editor\n");
+            }
+            
+            load_successful = true;
         }
-        else
-        {
-            state->load_file_error = true;
-            printf("[Warning] File contains errors. It requires manual fixing. Use \"edit\" to open it in default editor\n");
+        
+        if (!load_successful) {
+            platform_sleep(10);
         }
     }
-    else
+    
+    
+    if (!load_successful)
     {
         state->load_file_error = true;
         arena_scope(&state->arena);
         char *file_name = push_cstr_from_path(&state->arena, &state->input_path);
         printf("[Critial error] Failed to load from file: %s\n", file_name);
     }
+    
     
     state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
 }
@@ -2271,8 +2312,11 @@ s32 main(int argument_count, char **arguments)
     //~
     for (;;)
     {
+        Time32ms now = get_time32_ms();
+        
         if (thread_memory.new_data)
         {
+            state.last_input_time = now;
             Record_Session session = create_record_session_no_lexer(&state.arena, &state.records, false);
             char *input_copy = push_cstr_copy(&state.arena, thread_memory.input_buffer);
             session.lexer = create_lexer(input_copy);
@@ -2297,11 +2341,18 @@ s32 main(int argument_count, char **arguments)
         
         if (source_file_changed)
         {
+            state.last_input_time = now;
             load_file(&state);
             printf(thread_memory.cursor);
         }
         
         
-        platform_sleep(33);
+        s32 input_time_delta = (s32)now.t - (s32)state.last_input_time.t;
+        if (input_time_delta > 1000*5)
+        {
+            u32 sleep_duration = input_time_delta / 8192;
+            sleep_duration = pick_smaller(sleep_duration, 100);
+            platform_sleep(sleep_duration);
+        }
     }
 }

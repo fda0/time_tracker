@@ -1,19 +1,29 @@
-start 2019-03-10 09:45
-add 120
+
+start 2019-03-10 09:45 "2019_March :)"
+add 02:00
 stop 11:20
-start 17:59
-sub 1:23
+start 17:59 "2019_March >:O"
+sub 01:23 "2019_March minus some time"
 stop 18:00
 
 start 2019-04-10 09:55
 
-// should include "add & sub" for 04-11 (it ignores overeaching time range rule)
-add 2019-04-11 10
-stop 05:56
-sub 15
+stop 2019-04-11 01:20
+add 00:10 "standalone April bonus"
+start 05:56 "2019_April"
+sub 00:15
 
+start 2019-12-01 23:00 "December"// this~comment~will~be~deleted!
 
-start 2020-01-01 23:00 "meh"
+// Wednesday
+start 2020-01-01 12:00 "January"
+// sum: 15:00       [++++ ++++ ++++ +++ ]
 
-start 2020-01-02 03:00 "hah"
+// Thursday
+start 2020-01-02 03:00 "January_2"
 stop 04:00
+
+
+add 00:15 "standalone January bonus"
+// sum: 01:15       [+-  ]
+

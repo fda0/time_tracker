@@ -1,28 +1,34 @@
 // Sunday
-start 2019-03-10 09:45
+start 2019-03-10 09:45 "2019_March :)"
 add 02:00
 stop 11:20
-start 17:59
-sub 01:23
+start 17:59 "2019_March >:O"
+sub 01:23 "2019_March minus some time"
 stop 18:00
 // sum: 02:13       [++- ]
 
 // Wednesday
 start 2019-04-10 09:55
-// sum: 20:01       [++++ ++++ ++++ ++++ ++++ -   ]
+// sum: 15:25       [++++ ++++ ++++ +++-]
 
 // Thursday
-add 2019-04-11 00:10
-stop 05:56
+stop 2019-04-11 01:20
+add 00:10 "standalone April bonus"
+start 05:56 "2019_April"
 sub 00:15
-// sum: -00:05       []
+// sum: 5632:59       []
+
+// Sunday
+start 2019-12-01 23:00 "December"
+// sum: 733:00       []
 
 // Wednesday
-start 2020-01-01 23:00 "meh"
-// sum: 04:00       [++++]
+start 2020-01-01 12:00 "January"
+// sum: 15:00       [++++ ++++ ++++ +++ ]
 
 // Thursday
-start 2020-01-02 03:00 "hah"
+start 2020-01-02 03:00 "January_2"
 stop 04:00
-// sum: 01:00       [+   ]
+add 00:15 "standalone January bonus"
+// sum: 01:15       [+-  ]
 

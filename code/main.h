@@ -49,8 +49,9 @@ enum Color_Code
     Color_AltNegative,
     
     Color_Error,
-    Color_HelpHeader,
+    Color_Warning,
     
+    Color_HelpHeader,
     Color_Bar,
     
     Color_Count
@@ -81,9 +82,10 @@ global Color_Pair color_pairs[Color_Count] = {
     {Color_Negative, "\033[31m"},
     {Color_AltNegative, "\033[91m"},
     
-    {Color_Error, "\033[41m"},
-    {Color_HelpHeader, "\033[100m"},
+    {Color_Error, "\033[41m\033[97m"},
+    {Color_Warning, "\033[103m\033[30m"},
     
+    {Color_HelpHeader, "\033[100m"},
     {Color_Bar, "\033[34m"},
 };
 
@@ -175,7 +177,7 @@ struct Record_Session
     Record *active;
     
     Lexer lexer;
-    u8 *current_command_start;
+    Token current_command_token;
     u32 change_count;
     b32 no_errors;
     b32 reading_from_file;
@@ -207,6 +209,8 @@ struct Program_State
     
     b32 load_file_error;
     Program_Scope initial_scope;
+    
+    Time32ms last_input_time;
 };
 
 
