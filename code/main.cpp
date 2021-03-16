@@ -542,7 +542,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
     u32 open_start_ending_should_happen_only_once_test = 0;
 #endif
     
-    enum Print_State
+    enum Open_State
     {
         Open,
         Closed_PrePrint,
@@ -565,7 +565,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
         
         Linked_List<Record> defered_time_deltas = {};
         Record *active_start = nullptr;
-        Print_State print_state = Closed_PostPrint;
+        Open_State open_state = Closed_PostPrint;
         s32 day_time_sum = 0;
         b32 day_header_printed = false;
         
@@ -655,13 +655,13 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
             }
             else
             {
-                if (print_state == Open)
+                if (open_state == Open)
                 {
                     if (record.type == Record_TimeDelta)
                     {
                         day_time_sum += record.value;
                         // NOTE: case: this needs to be printed _after_ we print "stop"
-                        *defered_time_deltas.push_get_item(arena) = record;
+                        *defered_time_deltas.append(arena) = record;
                     }
                     else if (record.type == Record_TimeStart ||
                              record.type == Record_TimeStop)
@@ -696,14 +696,14 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
                     
                     
                     if (record.type == Record_TimeStart) {
-                        print_state = Closed_PostPrint;
+                        open_state = Closed_PostPrint;
                     } else if (record.type == Record_TimeStop) {
-                        print_state = Closed_PrePrint;
+                        open_state = Closed_PrePrint;
                     }
                 }
                 
                 
-                if (print_state == Closed_PostPrint)
+                if (open_state == Closed_PostPrint)
                 {
                     if (record.type == Record_TimeDelta)
                     {
@@ -719,7 +719,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
                         printf("%s -> ", time_str.str);
                         
                         active_start = state->records.at(index);
-                        print_state = Open;
+                        open_state = Open;
                     }
                     else if (record.type == Record_TimeStop)
                     {
@@ -733,8 +733,8 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
                 }
                 
                 
-                if (print_state == Closed_PrePrint) {
-                    print_state = Closed_PostPrint;
+                if (open_state == Closed_PrePrint) {
+                    open_state = Closed_PostPrint;
                 }
             }
         }

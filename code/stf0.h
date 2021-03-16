@@ -1557,7 +1557,7 @@ struct Linked_List
     Linked_List_Node<T> *last;
     u64 node_count;
     
-    inline Linked_List_Node<T> *push_get_node(Arena *arena)
+    inline Linked_List_Node<T> *append_get_node(Arena *arena)
     {
         if (node_count)
         {
@@ -1577,11 +1577,40 @@ struct Linked_List
         return last;
     }
     
-    inline T *push_get_item(Arena *arena)
+    inline T *append(Arena *arena)
     {
-        auto result = push_get_node(arena);
+        auto result = append_get_node(arena);
         return &result->item;
     }
+    
+    
+    
+    inline Linked_List_Node<T> *prepend_get_node(Arena *arena)
+    {
+        if (node_count)
+        {
+            assert(first);
+            assert(last);
+            Linked_List_Node<T> *new_first = push_array(arena, Linked_List_Node<T>, 1);
+            new_first->next = first;
+            first = new_first;
+        }
+        else
+        {
+            first = push_array(arena, Linked_List_Node<T>, 1);
+            last = first;
+        }
+        
+        ++node_count;
+        return last;
+    }
+    
+    inline T *prepend(Arena *arena)
+    {
+        auto result = prepend_get_node(arena);
+        return &result->item;
+    }
+    
 };
 
 
@@ -2010,7 +2039,7 @@ internal Separator_String_Builder_Item *
 builder_add(Arena *arena, Separator_String_Builder *builder,
             String string, b32 skip_following_separator = false)
 {
-    Separator_String_Builder_Item *item = builder->list.push_get_item(arena);
+    Separator_String_Builder_Item *item = builder->list.append(arena);
     item->string = string;
     item->skip_following_separator = skip_following_separator;
     
@@ -2100,7 +2129,7 @@ builder_recalculate_length(Simple_String_Builder *builder)
 internal Simple_String_Builder_Item *
 builder_add(Arena *arena, Simple_String_Builder *builder, String string)
 {
-    Simple_String_Builder_Item *item = builder->list.push_get_item(arena);
+    Simple_String_Builder_Item *item = builder->list.append(arena);
     item->string = string;
     builder->string_length_sum += string.size;
     return item;
@@ -2876,7 +2905,7 @@ list_files_in_directory(Arena *arena, Directory directory)
             if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
             {
                 String file_name_string = copy_string(arena, string(data.cFileName));
-                *result.push_get_item(arena) = get_path(directory, file_name_string);
+                *result.append(arena) = get_path(directory, file_name_string);
             }
         } while (FindNextFileA(find_handle, &data) != 0);
         FindClose(find_handle);
@@ -3140,7 +3169,7 @@ save_pipe_output(Arena *arena, Pipe_Handle *pipe)
     while (pipe_read_line(pipe, line_buffer, sizeof(line_buffer)))
     {
         String line = copy_string(arena, string(line_buffer, length_trim_white_reverse(line_buffer)));
-        *result.push_get_item(arena) = line;
+        *result.append(arena) = line;
     }
     return result;
 }

@@ -2,12 +2,77 @@
 
 // TODO(f0): save outputs to array, show errors first for readability
 
+struct Message_Pair
+{
+    String message;
+    String file_name;
+};
+
+struct Tests_Summary
+{
+    Arena arena;
+    Linked_List<Message_Pair> messages;
+    s32 success_count;
+    s32 test_count;
+};
+
+inline void
+add_summary(Tests_Summary *summary, b32 success, String message, String file_name)
+{
+    summary->test_count += 1;
+    Message_Pair *pair;
+    
+    if (success)
+    {
+        summary->success_count += 1;
+        pair = summary->messages.append(&summary->arena);
+    }
+    else
+    {
+        pair = summary->messages.prepend(&summary->arena);
+    }
+    
+    pair->message = copy_string(&summary->arena, message);
+    pair->file_name = copy_string(&summary->arena, file_name);
+}
+
+internal void
+print_summary(Tests_Summary *summary)
+{
+    printf("Success %d / %d;", summary->success_count, summary->test_count);
+    s32 error_count = summary->test_count - summary->success_count;
+    if (error_count) {
+        printf("__________ Errors: %d __________; ", error_count);
+    }
+    
+    printf("\n");
+    
+    for_linked_list(node, summary->messages)
+    {
+        Message_Pair *item = &node->item;
+        
+        printf("[%.*s] %.*s; ", string_expand(item->file_name), string_expand(item->message));
+        
+        if (--error_count == 0) {
+            printf("\n");
+        }
+    }
+}
+
+
+
+
+
+
 
 
 s32 main()
 {
     stf0_initialize();
     Time_Perfomance start = get_perfomance_time();
+    
+    Tests_Summary summary = {};
+    summary.arena = create_virtual_arena();
     
     Arena arena_ = create_virtual_arena();
     Arena *arena = &arena_;
@@ -19,7 +84,6 @@ s32 main()
     Directory ref_dir = directory_append(arena, cw_dir, l2s("reference"));
     Directory input_dir = directory_append(arena, cw_dir, l2s("input"));
     
-    b32 errors = false;
     Path_List input_list = list_files_in_directory(arena, input_dir);
     
     for_linked_list(input_node, input_list)
@@ -57,46 +121,45 @@ s32 main()
                     Compare_Line_Pos compare = compare_with_line_column(ref_content.content, out_content.content);
                     if (compare.is_equal)
                     {
-                        printf("[Ok] %.*s; ", string_expand(out_path.file_name));
+                        add_summary(&summary, true, l2s("Ok"), out_path.file_name);
                     }
                     else
                     {
-                        printf("[Not equal!] %.*s at line(%u), col(%u);\n",
-                               string_expand(out_path.file_name), compare.line, compare.column);
-                        
                         u64 half_range = 6;
-                        
                         u64 diff_index = pick_bigger(0, compare.column - half_range);
                         
                         String ref_diff = advance_str(ref_content.content, diff_index);
                         ref_diff.size = pick_smaller(half_range*2, ref_diff.size);
-                        printf("%.*s\n", string_expand(ref_diff));
                         
                         String out_diff = advance_str(out_content.content, diff_index);
                         out_diff.size = pick_smaller(half_range*2, out_diff.size);
-                        printf("%.*s\n", string_expand(out_diff));
                         
                         
-                        //debug_break();
-                        errors = true;
+                        String message = stringf(arena, "Files not equal at line(%u), col(%u)\n"
+                                                 "ref::>%.*s\n"
+                                                 "out::>%.*s\n",
+                                                 compare.line, compare.column,
+                                                 string_expand(ref_diff),
+                                                 string_expand(out_diff));
+                        
+                        add_summary(&summary, false, message, out_path.file_name);
                     }
                 }
                 else
                 {
-                    printf("[Read fail] %.*s; ", string_expand(out_path.file_name));
+                    add_summary(&summary, false, l2s("Read fail"), out_path.file_name);
                 }
             }
             else
             {
-                printf("[Read fail] %.*s; ", string_expand(ref_path.file_name));
+                add_summary(&summary, false, l2s("Read fail"), ref_path.file_name);
             }
             
             
         }
         else
         {
-            printf("[Pipe error] %s; ", out_path_cstr);
-            errors = true;
+            add_summary(&summary, false, l2s("Pipe open fail"), out_path.file_name);
         }
     }
     
@@ -104,10 +167,11 @@ s32 main()
     Time_Perfomance end = get_perfomance_time();
     f32 seconds = get_seconds_elapsed(end, start);
     
-    printf("\n[Perfomance time] %fs, %.3fms\n", seconds, 1000.f*seconds);
+    printf("[Perfomance time] %fs, %.3fms; ", seconds, 1000.f*seconds);
+    
+    print_summary(&summary);
     
     
-    //debug_break();
-    return (errors ? 1 : 0);
+    return summary.test_count - summary.success_count;
 }
 
