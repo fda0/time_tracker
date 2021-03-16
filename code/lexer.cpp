@@ -237,7 +237,7 @@ internal b32
 token_equals(Token token, char *match, b32 case_sensitive = false)
 {
     String match_str = string(match);
-    b32 result = string_equal(token.text, match_str, case_sensitive);
+    b32 result = equals(token.text, match_str, case_sensitive);
     return result;
 }
 

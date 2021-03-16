@@ -1,0 +1,5 @@
+start 2019-03-10 09:45;
+
+add 2019-04-10 20      // [error] this will fail because "add" cannot have new date when "start" is active!
+start 09:55
+stop 2019-04-11 05:56

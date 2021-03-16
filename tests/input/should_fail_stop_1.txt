@@ -1,0 +1,5 @@
+// double stop fail - on the same day
+
+start 2019-03-10 01:00
+stop 02:30
+stop 03:50

@@ -1,0 +1,481 @@
+
+// stop can no logner contain a description
+
+start 2020-07-05 09:35;
+stop 10:20;
+start 12:00;
+stop 16:55;
+start 19:30;
+stop 20:30;
+
+start 2020-07-06 10:45;
+stop 13:00;
+start 14:45;
+stop 19:02;
+
+start 2020-07-08 12:15;
+stop 14:13;
+
+start 2020-07-09 15:41;
+stop 17:58;
+
+start 2020-07-10 09:46;
+stop 10:21;
+start 17:54;
+stop 19:00;
+
+start 2020-07-13 18:57;
+stop 21:00;
+
+start 2020-07-14 11:25;
+stop 11:59;
+start 14:43;
+stop 18:03;
+
+start 2020-07-15 14:28;
+stop 18:04;
+start 23:08;
+stop 23:36;
+
+start 2020-07-16 10:20;
+stop 13:00;
+start 14:47;
+stop 16:36;
+start 18:13;
+stop 21:36;
+
+start 2020-07-17 01:00;
+stop 01:40;
+start 14:20;
+stop 15:05;
+start 17:31;
+stop 18:40;
+
+start 2020-07-20 11:40;
+stop 12:20;
+start 18:25;
+stop 20:14;
+
+start 2020-07-21 11:10 	"TT";
+stop 19:10;
+start 22:00;
+stop 2020-07-22 03:40;
+
+start 2020-07-22 10:34 	"TT";
+sub 00:30;
+stop 14:22;
+
+start 2020-07-23 12:49 	"TT";
+sub 00:10;
+stop 16:16;
+
+start 2020-07-24 10:25 	"TT";
+stop 12:41;
+start 19:30 	"TT";
+stop 23:14;
+
+start 2020-07-25 09:39 	"TT";
+add 00:05;
+stop 09:51;
+start 10:10 	"TT";
+stop 12:55;
+start 13:41 	"TT";
+add 00:25;
+stop 15:14;
+start 19:50;
+stop 20:07;
+
+start 2020-07-27 13:17 	"+ researching AI";
+stop 14:30;
+start 15:00 	"fixed TT bug";
+stop 16:00;
+start 17:30;
+sub 00:10;
+sub 00:10;
+sub 00:10;
+stop 23:37;
+
+start 2020-07-28 14:53;
+stop 15:22;
+start 15:43;
+sub 00:30 	"4coder config...";
+stop 18:01 	
+start 18:18;
+stop 20:27;
+
+start 2020-07-29 00:27;
+stop 01:45;
+start 08:48;
+stop 11:59;
+start 12:05;
+sub 00:40;
+sub 00:10;
+stop 16:00;
+
+start 2020-07-30 17:47 	"TT";
+stop 20:20;
+start 23:23;
+stop 23:47;
+
+start 2020-07-31 10:33;
+sub 00:10;
+stop 11:45;
+start 12:31;
+sub 00:10;
+stop 14:03;
+start 15:08;
+stop 16:51;
+
+start 2020-08-01 11:38 	"WG";
+sub 00:15;
+stop 12:52;
+start 13:06 	"WG";
+sub 00:15;
+stop 14:10;
+
+start 2020-08-03 09:00 	"WG";
+stop 11:42;
+start 12:06 	"WG";
+stop 12:31;
+
+start 2020-08-04 13:36 	"WG";
+add 00:20;
+stop 14:15;
+start 16:00 	"WG";
+sub 00:30;
+stop 19:30;
+start 21:00 	"WG";
+stop 23:00;
+
+start 2020-08-05 10:40 	"WG";
+stop 13:27;
+start 13:49 	"WG";
+stop 14:18;
+start 14:19;
+stop 16:35;
+
+start 2020-08-06 18:34 	"WG";
+stop 19:52;
+
+start 2020-08-07 15:33 	"WG";
+stop 15:57;
+start 16:53;
+stop 18:15;
+start 18:20;
+sub 00:10;
+stop 20:27;
+
+start 2020-08-09 13:14;
+stop 16:01;
+start 18:08;
+stop 20:03;
+
+start 2020-08-10 00:04;
+stop 00:52;
+start 08:37;
+sub 00:05;
+sub 00:05;
+stop 12:07;
+start 12:36;
+sub 00:07;
+sub 00:05;
+stop 13:35;
+start 14:12;
+stop 15:11;
+start 16:01;
+stop 17:32;
+start 22:50 	"TT";
+stop 2020-08-11 00:37;
+
+start 2020-08-11 08:26;
+stop 10:07;
+start 12:34;
+sub 00:10;
+stop 15:40;
+
+start 2020-08-12 08:40;
+stop 09:20;
+
+start 2020-08-13 17:02;
+stop 17:48;
+start 17:52;
+sub 00:30;
+stop 19:38;
+start 21:04;
+stop 21:48;
+start 22:46;
+stop 23:01;
+start 23:10;
+stop 23:30;
+
+add 2020-08-14 00:25;
+start 07:06;
+stop 08:07;
+start 08:39;
+stop 09:26;
+start 10:37;
+stop 10:53;
+start 11:21;
+stop 12:08;
+start 14:09;
+stop 17:10;
+
+add 2020-08-16 00:30 	"TT";
+start 14:20;
+stop 17:40;
+start 18:06;
+stop 19:58;
+
+start 2020-08-17 16:00;
+sub 00:10;
+sub 00:06;
+stop 16:44;
+start 16:57;
+add 00:06;
+sub 00:10;
+stop 18:33;
+
+start 2020-08-18 12:07;
+add 00:05;
+sub 00:15;
+stop 13:27;
+start 13:43;
+sub 00:15;
+stop 15:21;
+start 16:08;
+stop 16:50;
+start 18:35;
+stop 20:18;
+start 23:49;
+stop 23:56;
+
+start 2020-08-19 09:34;
+stop 10:12;
+start 15:55;
+stop 16:42;
+start 18:26;
+sub 00:15;
+stop 21:41;
+start 23:22;
+stop 2020-08-20 00:11;
+
+start 2020-08-20 11:41;
+stop 13:23;
+start 15:34;
+stop 19:35;
+start 20:09;
+stop 20:21;
+start 20:58;
+stop 21:35;
+start 22:21;
+stop 2020-08-21 00:11;
+
+start 2020-08-21 10:03;
+stop 10:47;
+start 10:56;
+stop 12:23;
+
+start 2020-08-22 12:03;
+stop 13:34;
+start 15:03;
+stop 15:57;
+start 16:03;
+sub 00:05;
+stop 19:38;
+
+start 2020-08-23 11:44;
+sub 00:15;
+sub 00:10;
+stop 13:42;
+start 15:00;
+add 00:30;
+stop 15:33;
+start 15:36;
+stop 17:41;
+add 06:00 	"4coder";
+
+add 2020-08-24 02:00 	"4coder";
+start 13:01;
+stop 13:08;
+start 15:34;
+sub 00:30;
+stop 19:28;
+
+start 2020-08-25 08:23;
+stop 09:02;
+start 09:12;
+add 00:03;
+stop 10:27;
+start 10:36;
+stop 10:43;
+start 11:06;
+stop 12:06;
+start 12:51;
+sub 00:10;
+stop 15:51;
+start 17:36;
+sub 00:15;
+stop 18:46;
+start 20:59;
+stop 23:23;
+
+start 2020-08-26 09:42;
+sub 00:05;
+sub 00:10;
+stop 12:19;
+start 14:48;
+sub 00:10;
+sub 00:08;
+sub 00:06;
+stop 17:57;
+
+start 2020-08-27 05:30;
+sub 00:10;
+stop 07:56;
+start 09:03;
+sub 00:06;
+sub 00:05;
+sub 00:05;
+sub 00:05;
+stop 14:03;
+start 15:30;
+stop 15:45;
+start 16:07;
+stop 16:21;
+start 18:03;
+stop 19:20;
+start 19:28;
+sub 00:08;
+sub 00:05;
+stop 22:56;
+
+start 2020-08-28 08:56;
+stop 10:05;
+start 10:48;
+stop 12:35;
+start 13:08;
+sub 00:06;
+stop 13:43;
+start 14:37;
+stop 16:24;
+start 16:38;
+stop 16:55;
+start 17:58;
+stop 18:39;
+start 21:58;
+stop 23:03;
+
+start 2020-08-29 11:27;
+stop 12:15;
+start 13:17;
+stop 14:15;
+
+start 2020-08-30 14:14;
+stop 17:47;
+add 05:00 	"C++ research :(";
+
+start 2020-08-31 12:53;
+stop 13:55;
+start 15:35;
+stop 19:37;
+start 19:47;
+stop 21:14;
+add 00:15;
+
+start 2020-09-01 10:21;
+stop 11:10;
+start 12:31;
+sub 00:05;
+stop 15:14;
+start 15:54;
+stop 17:17;
+start 17:38;
+stop 17:55;
+start 18:39;
+stop 19:30;
+start 23:41;
+stop 2020-09-02 00:00;
+
+start 2020-09-02 09:52;
+sub 00:10;
+stop 12:26;
+
+start 2020-09-03 07:49;
+stop 08:04;
+start 09:07;
+stop 09:28;
+start 09:54;
+sub 00:03;
+stop 12:59;
+start 13:02 	"TT";
+stop 15:54;
+start 16:17;
+sub 00:10;
+stop 18:05;
+start 20:44 	"TT";
+stop 23:38;
+
+start 2020-09-04 00:38 	"TT";
+stop 01:31;
+start 10:31;
+stop 13:00;
+start 14:35;
+sub 00:15;
+stop 16:15;
+start 16:27;
+stop 18:12;
+start 20:06;
+sub 00:15;
+sub 00:15;
+stop 23:57;
+
+start 2020-09-05 09:08;
+stop 10:58;
+start 11:10;
+stop 14:37;
+start 14:43;
+stop 15:00;
+
+start 2020-09-06 00:22;
+stop 02:54;
+start 11:26;
+stop 14:24;
+start 16:20;
+stop 19:15;
+start 19:30;
+stop 19:45;
+
+start 2020-09-07 10:32;
+sub 00:17;
+stop 13:36;
+
+start 2020-09-08 12:56;
+stop 14:28;
+start 14:48;
+sub 00:06;
+stop 16:06;
+start 19:00;
+sub 00:15;
+stop 2020-09-09 00:44;
+
+start 2020-09-09 12:08;
+stop 14:47;
+start 15:37;
+stop 16:33;
+start 18:15;
+stop 19:53;
+
+start 2020-09-10 14:12;
+stop 14:19;
+start 16:13;
+sub 00:15;
+stop 18:30;
+start 20:13;
+stop 20:32;
+start 21:01;
+stop 21:49;
+start 22:23;
+stop 22:36;
+start 23:30;
+stop 2020-09-11 03:04;
+

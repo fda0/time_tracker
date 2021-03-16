@@ -43,7 +43,7 @@ insert_description_(Description_Table *table, String content)
         {
 #if Def_Slow
             String table_str = string(candidate->str, candidate->size);
-            assert(string_equal(table_str, content));
+            assert(equals(table_str, content));
 #endif
             break;
         }

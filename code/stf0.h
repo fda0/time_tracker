@@ -12,9 +12,7 @@ stf0 switches:
 	Def_Slow:
 		0 - No slow code allowed!
 		1 - Slow code is welcomed (example: additional asserts)
-    Def_Log:
-		0 - No logging
-		1 - Logging some errors to file (io etc)
+
 manual but may be guessed if not specified:
     Def_Windows; Def_Linux - target platforms
     Def_Msvc; Dev_Llvm     - target compiler
@@ -57,8 +55,8 @@ manual but may be guessed if not specified:
 
 
 #pragma warning(push, 0)
-
-#if Stf0_Level >= 10 // Types
+// =========================== Types ==========================
+#if Stf0_Level >= 10
 #    include <inttypes.h>
 #    include <stdint.h>
 #    include <limits.h>
@@ -67,9 +65,8 @@ manual but may be guessed if not specified:
 #    include <emmintrin.h>
 #endif
 
-
-#if Stf0_Level >= 20 // Basic
-//=============================
+// =========================== Basic ==========================
+#if Stf0_Level >= 20
 #if !defined(Def_Internal)
 #    define Def_Internal 0
 #endif
@@ -83,14 +80,12 @@ manual but may be guessed if not specified:
 #if !defined(Def_Linux)
 #    define Def_Linux 0
 #endif
-//=============
+// ====== Platform not found ======
 #if !Def_Windows && !Def_Linux
 // TODO(f0): Check standard switches to automatically and deduce them and make compiling easier if possible
 //           And support different compilers (cl, clang, gcc)
 #error "Define Def_Windows or Def_Linux"
 #endif
-
-
 // ======== Detect compiler =======
 #if !defined(Def_Compiler_Msvc)
 #    define Def_Compiler_Msvc 0
@@ -98,7 +93,7 @@ manual but may be guessed if not specified:
 #if !defined(Def_Compiler_Llvm)
 #    define Def_Compiler_Llvm 0
 #endif
-//=============
+// ====== Compiler not found ======
 #if !Def_Compiler_Msvc && !Def_Compiler_Llvm
 #    if _MSC_VER
 #        undef Def_Compiler_Msvc
@@ -109,37 +104,34 @@ manual but may be guessed if not specified:
 #        define Def_Compiler_Llvm 1
 #        endif
 #endif
-
-
 //=============================
 #include <stdio.h>
 #include <stdlib.h>
-
-
-//   =============
-#if Def_Compiler_Msvc
-#    include <intrin.h>
-#elif Def_Compiler_Llvm
-#    include <x86intrin.h>
-#else
-#error "not impl; SSE/NEON optimizations?"
-#endif
-// ======================= end of basic =======================
+//=============================
+#    if Def_Compiler_Msvc
+#        include <intrin.h>
+#    elif Def_Compiler_Llvm
+#        include <x86intrin.h>
+#    else
+#        error "not impl; SSE/NEON optimizations?"
+#    endif
 #endif
 
-
-#if Stf0_Level >= 30 // Memory
+// ========================== Memory ==========================
+#if Stf0_Level >= 30
+#    define WIN32_LEAN_AND_MEAN
 #    include <Windows.h>
+#    include <timeapi.h>
 #    undef small
 #endif
 
-
-#if Stf0_Level >= 40 // String_Alloc
+// =========================== Alloc ==========================
+#if Stf0_Level >= 40
 #    include <stdarg.h>
 #endif
 
-
-#if Stf0_Level >= 50 // Platform
+// ========================= Platform =========================
+#if Stf0_Level >= 50
 #    pragma comment(lib, "winmm.lib")
 #endif
 
@@ -220,6 +212,7 @@ typedef __m128i m128i;
 #define for_linked_list_ptr(Node, List) for (auto Node = (List)->first; Node; Node = Node->next)
 #define for_u64(I, Range) for_range(u64, I, Range)
 #define for_u32(I, Range) for_range(u32, I, Range)
+#define for_s32(I, Range) for_range(s32, I, Range)
 //
 // NOTE(f0): Align bits needs to be power of 2
 #define align_bin_to(Value, AlignBits) ((Value + (AlignBits-1)) & ~(AlignBits-1))
@@ -286,7 +279,9 @@ debug_break(); force_halt(); exit(1);\
 //=============================
 #if Def_Slow
 // TODO(f0): other compilers
-#    define debug_break() do{ fflush(stdout); __debugbreak(); }while(0)
+#    define debug_break() do{if(IsDebuggerPresent()) {\
+fflush(stdout); __debugbreak();\
+}}while(0)
 #    define assert(Expression) assert_always(Expression)
 #else
 #    define debug_break()
@@ -588,7 +583,7 @@ string(char *str, u64 size)
 }
 
 inline u64
-cstr_length(cstr_lit string)
+length(cstr_lit string)
 {
     u64 length = 0;
     while (*string++)
@@ -603,7 +598,7 @@ string(char *cstr)
 {
     String result = {
         (u8 *)cstr,
-        cstr_length(cstr)
+        length(cstr)
     };
     return result;
 }
@@ -689,7 +684,7 @@ inline char get_lower(char c) {
 
 // ======================== @Basic_Cstr =======================
 internal b32
-cstr_equal(cstr_lit value_a, cstr_lit value_b, b32 case_ins = false)
+equals(cstr_lit value_a, cstr_lit value_b, b32 case_ins = false)
 {
     b32 result = false;
     for(;;)
@@ -697,57 +692,70 @@ cstr_equal(cstr_lit value_a, cstr_lit value_b, b32 case_ins = false)
         char a = (*value_a++);
         char b = (*value_b++);
         
-        if (case_ins)
-        {
+        if (case_ins) {
             a = get_lower(a);
             b = get_lower(b);
         }
         
-        if (a != b) { break; }
-        else if (a == 0) { result = true; break; }
+        if (a != b)
+        {
+            break;
+        }
+        else if (a == 0)
+        {
+            result = true;
+            break;
+        }
     }
     return result;
 }
 
 internal b32
-cstr_starts_with(cstr_lit big, cstr_lit small, b32 case_ins = false)
+starts_with(cstr_lit haystack, cstr_lit needle, b32 case_ins = false)
 {
     b32 result = false;
     for(;;)
     {
-        char b = (*big++);
-        char s = (*small++);
+        char h = (*haystack++);
+        char n = (*needle++);
         
-        if (case_ins)
-        {
-            b = get_lower(b);
-            s = get_lower(s);
+        if (case_ins) {
+            h = get_lower(h);
+            n = get_lower(n);
         }
         
-        if (s == 0) { result = true; break; }
-        else if (b == 0 || b != s) { break; }
+        if (n == 0)
+        {
+            result = true;
+            break;
+        }
+        else if (h == 0 || h != n)
+        {
+            break;
+        }
     }
     return result;
 }
 
 internal b32
-cstr_ends_with(cstr_lit big, cstr_lit small, b32 case_ins = false)
+ends_with(cstr_lit haystack, cstr_lit needle, b32 case_ins = false)
 {
-    u64 big_len = cstr_length(big);
-    u64 small_len = cstr_length(small);
+    u64 haystack_len = length(haystack);
+    u64 needle_len = length(needle);
     
-    for (u64 i = 1; i <= small_len; ++i)
+    for (u64 i = 1; i <= needle_len; ++i)
     {
-        char b = big[big_len - i];
-        char s = small[small_len - i];
+        char h = haystack[haystack_len - i];
+        char n = needle[needle_len - i];
         
-        if (case_ins)
-        {
-            b = get_lower(b);
-            s = get_lower(s);
+        if (case_ins) {
+            h = get_lower(h);
+            n = get_lower(n);
         }
         
-        if (b != s) { return false; }
+        if (h != n) {
+            return false;
+        }
     }
     
     return true;
@@ -756,7 +764,7 @@ cstr_ends_with(cstr_lit big, cstr_lit small, b32 case_ins = false)
 
 
 internal Find_Index
-cstr_find_index_from_left(cstr_lit value, char c)
+index_of(cstr_lit value, char c)
 {
     Find_Index result = {};
     for (u64 index = 0;
@@ -781,7 +789,7 @@ cstr_find_index_from_left(cstr_lit value, char c)
 
 
 internal Find_Index
-cstr_find_difference_index_from_left(cstr_lit value_a, cstr_lit value_b, b32 case_ins = false)
+index_of_difference(cstr_lit value_a, cstr_lit value_b, b32 case_ins = false)
 {
     Find_Index result = {};
     
@@ -818,7 +826,7 @@ cstr_find_difference_index_from_left(cstr_lit value_a, cstr_lit value_b, b32 cas
 
 
 internal Find_Index
-cstr_find_common_character_from_left(cstr_lit value, String character_table)
+index_of(cstr_lit value, String character_table)
 {
     Find_Index result = {};
     
@@ -854,9 +862,9 @@ cstr_find_common_character_from_left(cstr_lit value, String character_table)
 
 
 internal u64
-cstr_length_trim_white_from_right(char *cstr)
+length_trim_white_reverse(char *cstr)
 {
-    u64 len = cstr_length(cstr);
+    u64 len = length(cstr);
     for (; len > 0; --len)
     {
         if (!is_white(cstr[len-1]))
@@ -876,9 +884,8 @@ cstr_length_trim_white_from_right(char *cstr)
 
 
 // ======================= @Basic_String ======================
-
 inline String
-string_advance_str(String input, u64 distance)
+advance_str(String input, u64 distance)
 {
     distance = pick_smaller(distance, input.size);
     String result = {};
@@ -891,7 +898,7 @@ string_advance_str(String input, u64 distance)
 
 
 internal b32
-string_equal(String str_a, String str_b, b32 case_ins = false)
+equals(String str_a, String str_b, b32 case_ins = false)
 {
     b32 result = false;
     
@@ -922,85 +929,25 @@ string_equal(String str_a, String str_b, b32 case_ins = false)
 
 
 
-struct Compare_Line_Pos
-{
-    u32 line;
-    u32 column;
-    u64 index;
-    b32 is_equal;
-};
-
-internal Compare_Line_Pos
-string_compare_with_line_column(String str_a, String str_b, b32 case_ins = false)
-{
-    // TODO(f0): column counter that works with utf8
-    
-    Compare_Line_Pos result = {};
-    result.is_equal = true;
-    result.line = 1;
-    result.column = 1;
-    
-    u64 size = pick_smaller(str_a.size, str_b.size);
-    u64 i = 0;
-    for (; i < size; ++i)
-    {
-        u8 a = str_a.str[i];
-        u8 b = str_b.str[i];
-        
-        if (case_ins)
-        {
-            a = get_lower(a);
-            b = get_lower(b);
-        }
-        
-        if (a != b)
-        {
-            result.is_equal = false;
-            break;
-        }
-        
-        result.column += 1;
-        if (a == '\n')
-        {
-            result.line += 1;
-            result.column = 1;
-        }
-    }
-    
-    result.index = i;
-    
-    if (result.is_equal &&
-        str_a.size != str_b.size)
-    {
-        result.is_equal = false;
-    }
-    
-    return result;
-}
-
-
-
 
 internal b32
-string_starts_with(String big, String small, b32 case_ins = false)
+starts_with(String haystack, String needle, b32 case_ins = false)
 {
     b32 result = false;
-    if (big.size >= small.size)
+    if (haystack.size >= needle.size)
     {
         result = true;
-        for(u64 i = 0; i < small.size; ++i)
+        for(u64 i = 0; i < needle.size; ++i)
         {
-            auto b = big.str[i];
-            auto s = small.str[i];
+            u8 h = haystack.str[i];
+            u8 n = needle.str[i];
             
-            if (case_ins)
-            {
-                b = get_lower(b);
-                s = get_lower(s);
+            if (case_ins) {
+                h = get_lower(h);
+                n = get_lower(n);
             }
             
-            if (b != s)
-            {
+            if (h != n) {
                 result = false;
                 break;
             }
@@ -1012,25 +959,23 @@ string_starts_with(String big, String small, b32 case_ins = false)
 
 
 internal b32
-string_ends_with(String big, String small, b32 case_ins = false)
+ends_with(String haystack, String needle, b32 case_ins = false)
 {
     b32 result = false;
-    if (big.size >= small.size)
+    if (haystack.size >= needle.size)
     {
         result = true;
-        for(u64 i = 1; i <= small.size; ++i)
+        for(u64 i = 1; i <= needle.size; ++i)
         {
-            u8 b = big.str[big.size - i];
-            u8 s = small.str[small.size - i];
+            u8 h = haystack.str[haystack.size - i];
+            u8 n = needle.str[needle.size - i];
             
-            if (case_ins)
-            {
-                b = get_lower(b);
-                s = get_lower(s);
+            if (case_ins) {
+                h = get_lower(h);
+                n = get_lower(n);
             }
             
-            if (b != s)
-            {
+            if (h != n) {
                 result = false;
                 break;
             }
@@ -1051,19 +996,22 @@ string_ends_with(String big, String small, b32 case_ins = false)
 
 
 internal Find_Index
-string_find_index_from_left(String big, char c, b32 case_ins = false)
+index_of(String haystack, char needle, b32 case_ins = false)
 {
     Find_Index result = {};
     
-    if (case_ins) { c = get_lower(c); }
+    if (case_ins) {
+        needle = get_lower(needle);
+    }
     
-    for (u64 i = 0; i < big.size; ++i)
+    for (u64 i = 0; i < haystack.size; ++i)
     {
-        u8 b = big.str[i];
-        if (case_ins) { b = get_lower(b); }
+        u8 h = haystack.str[i];
+        if (case_ins) {
+            h = get_lower(h);
+        }
         
-        if (b == c)
-        {
+        if (h == needle) {
             result.index = i;
             result.found = true;
             break;
@@ -1076,18 +1024,18 @@ string_find_index_from_left(String big, char c, b32 case_ins = false)
 
 
 internal String
-string_find_from_right_trim_ending(String source, char trim_point)
+trim_from_index_of_reverse(String haystack, char needle)
 {
-    String result = source;
+    String result = haystack;
     
     for (u64 negative = 1;
          negative <= result.size;
          ++negative)
     {
         u64 index = result.size - negative;
-        u8 c = result.str[index];
-        if (c == trim_point)
-        {
+        u8 h = result.str[index];
+        
+        if (h == needle) {
             result.size = index;
             break;
         }
@@ -1099,7 +1047,7 @@ string_find_from_right_trim_ending(String source, char trim_point)
 
 
 internal String
-string_get_file_name_from_path(String source)
+file_name_from_path(String source)
 {
     String result = source;
     
@@ -1132,7 +1080,7 @@ struct String_Path_Split
 
 
 internal String_Path_Split
-string_split_into_directory_and_file_name_parts(String source)
+split_into_directory_and_file_name(String source)
 {
     u64 offset = 0;
     
@@ -1151,7 +1099,7 @@ string_split_into_directory_and_file_name_parts(String source)
     }
     
     String_Path_Split result = {};
-    result.file_name = string_advance_str(source, offset);
+    result.file_name = advance_str(source, offset);
     result.directory = source;
     result.directory.size = offset;
     return result;
@@ -1161,7 +1109,7 @@ string_split_into_directory_and_file_name_parts(String source)
 
 
 internal String
-string_trim_file_name_from_path(String source)
+trim_file_name_from_path(String source)
 {
     String result = source;
     
@@ -1183,20 +1131,23 @@ string_trim_file_name_from_path(String source)
 
 
 internal u64
-string_count_common_characters(String value, String character_table)
+count_of(String haystack, String needle)
 {
     u64 result = 0;
     
-    for (u64 value_index = 0;
-         value_index < value.size;
-         ++value_index)
+    for (u64 haystack_index = 0;
+         haystack_index < haystack.size;
+         ++haystack_index)
     {
-        for (u64 table_index = 0;
-             table_index < character_table.size;
-             ++table_index)
+        u8 h = haystack.str[haystack_index];
+        
+        for (u64 needle_index = 0;
+             needle_index < needle.size;
+             ++needle_index)
         {
-            if (value.str[value_index] == character_table.str[table_index])
-            {
+            u8 n = needle.str[needle_index];
+            
+            if (h == n) {
                 result += 1;
             }
         }
@@ -1207,6 +1158,59 @@ string_count_common_characters(String value, String character_table)
 
 
 
+
+
+
+struct Compare_Line_Pos
+{
+    u32 line;
+    u32 column;
+    b32 is_equal;
+};
+
+internal Compare_Line_Pos
+compare_with_line_column(String valuea, String valueb, b32 case_ins = false)
+{
+    // TODO(f0): column counter that works with utf8
+    
+    Compare_Line_Pos result = {};
+    result.is_equal = true;
+    result.line = 1;
+    result.column = 1;
+    
+    u64 size = pick_smaller(valuea.size, valueb.size);
+    u64 i = 0;
+    for (; i < size; ++i)
+    {
+        u8 a = valuea.str[i];
+        u8 b = valueb.str[i];
+        
+        if (case_ins) {
+            a = get_lower(a);
+            b = get_lower(b);
+        }
+        
+        if (a != b) {
+            result.is_equal = false;
+            break;
+        }
+        
+        result.column += 1;
+        
+        if (a == '\n') {
+            result.line += 1;
+            result.column = 1;
+        }
+    }
+    
+    if (result.is_equal &&
+        valuea.size != valueb.size)
+    {
+        result.is_equal = false;
+    }
+    
+    return result;
+}
 
 
 
@@ -1433,6 +1437,12 @@ push_bytes_clear_(Arena *arena, u64 alloc_size, u64 alignment)
 
 
 
+
+
+
+
+
+
 // ======================= @Memory_Lists ======================
 
 
@@ -1627,7 +1637,7 @@ allocate_string(Arena *arena, u64 size)
 
 
 internal String
-push_string_copy(Arena *arena, String source)
+copy_string(Arena *arena, String source)
 {
     String result = {
         push_array(arena, u8, source.size),
@@ -1639,9 +1649,9 @@ push_string_copy(Arena *arena, String source)
 
 
 internal char *
-push_cstr_copy(Arena *arena, char *source, s64 overwrite_len = -1)
+copy_cstr(Arena *arena, char *source, s64 overwrite_len = -1)
 {
-    u64 len = (u64)((overwrite_len > 0) ? overwrite_len : cstr_length(source));
+    u64 len = (u64)((overwrite_len > 0) ? overwrite_len : length(source));
     char *result = push_array(arena, char, len + 1);
     copy_array(result, source, char, len);
     result[len] = 0;
@@ -1650,7 +1660,7 @@ push_cstr_copy(Arena *arena, char *source, s64 overwrite_len = -1)
 
 
 internal char *
-push_cstr_from_string(Arena *arena, String string)
+cstr_from_string(Arena *arena, String string)
 {
     char *cstr = push_array(arena, char, string.size+1);
     copy_array(cstr, string.str, char, string.size);
@@ -1668,11 +1678,35 @@ push_cstr_from_string(Arena *arena, String string)
 
 // ===================== @Alloc_Directory =====================
 
+inline b32
+equals(Directory a, Directory b)
+{
+    b32 result = false;
+    
+    if (a.name_count == b.name_count)
+    {
+        result = true;
+        for_u64(name_index, a.name_count)
+        {
+            String name_a = a.names[name_index];
+            String name_b = b.names[name_index];
+            b32 names_equal = equals(name_a, name_b);
+            
+            if (!names_equal) {
+                result = false;
+                break;
+            }
+        }
+    }
+    
+    return result;
+}
+
 internal Directory
-push_directory_from_string(Arena *arena, String source)
+directory_from_string(Arena *arena, String source)
 {
     Directory result = {};
-    result.name_count = string_count_common_characters(source, lit2str("/\\"));
+    result.name_count = count_of(source, lit2str("/\\"));
     if (source.size > 0 && !is_slash(source.str[source.size-1]))
     {
         result.name_count += 1;
@@ -1684,7 +1718,7 @@ push_directory_from_string(Arena *arena, String source)
     for_u64(name_index, result.name_count)
     {
         u64 start_p = current_p;
-        String element = string_advance_str(source, start_p);
+        String element = advance_str(source, start_p);
         
         for (;
              current_p < source.size;
@@ -1705,7 +1739,7 @@ push_directory_from_string(Arena *arena, String source)
 
 
 internal Directory
-push_directory_append(Arena *arena, Directory parent_directory, String sub_directory_name)
+directory_append(Arena *arena, Directory parent_directory, String sub_directory_name)
 {
     Directory result = {};
     result.name_count = parent_directory.name_count + 1;
@@ -1743,8 +1777,8 @@ get_directory_string_length(Directory directory)
 
 
 internal String
-push_string_from_directory(Arena *arena, Directory directory,
-                           b32 use_windows_slash = (Native_Slash_Char == '\\'))
+string_from_directory(Arena *arena, Directory directory,
+                      b32 use_windows_slash = (Native_Slash_Char == '\\'))
 {
     u8 slash = (u8)(use_windows_slash ? '\\' : '/');
     
@@ -1768,10 +1802,10 @@ push_string_from_directory(Arena *arena, Directory directory,
 }
 
 inline char *
-push_cstr_from_directory(Arena *arena, Directory directory,
-                         b32 use_windows_slash = (Native_Slash_Char == '\\'))
+cstr_from_directory(Arena *arena, Directory directory,
+                    b32 use_windows_slash = (Native_Slash_Char == '\\'))
 {
-    String string = push_string_from_directory(arena, directory, use_windows_slash);
+    String string = string_from_directory(arena, directory, use_windows_slash);
     char *result = (char *)string.str;
     return result;
 }
@@ -1788,12 +1822,12 @@ push_cstr_from_directory(Arena *arena, Directory directory,
 // ======================== @Alloc_Path =======================
 
 internal Path
-push_path_from_string(Arena *arena, String source)
+path_from_string(Arena *arena, String source)
 {
     Path result = {};
-    String_Path_Split parts = string_split_into_directory_and_file_name_parts(source);
+    String_Path_Split parts = split_into_directory_and_file_name(source);
     
-    result.directory = push_directory_from_string(arena, parts.directory);
+    result.directory = directory_from_string(arena, parts.directory);
     result.file_name = parts.file_name;
     
     return result;
@@ -1801,31 +1835,48 @@ push_path_from_string(Arena *arena, String source)
 
 
 inline Path
-path_from_directory(Directory directory, String file_name)
+get_path(Directory directory, String file_name)
 {
     Path result = {
         directory,
         file_name
     };
     return result;
-}
-inline Path path(Directory directory, String file_name) {
-    return path_from_directory(directory, file_name);
 };
 
+
 inline Path *
-push_path_from_directory(Arena *arena, Directory directory, String file_name)
-{
+push_path(Arena *arena, Directory directory, String file_name) {
     Path *result = push_array(arena, Path, 1);
     *result = {
         directory,
         file_name
     };
     return result;
-}
-inline Path *push_path(Arena *arena, Directory directory, String file_name) {
-    return push_path_from_directory(arena, directory, file_name);
 };
+
+
+
+inline b32
+equals(Path *a, Path *b)
+{
+    assert(a);
+    assert(b);
+    b32 result = equals(a->file_name, b->file_name);
+    
+    if (result) {
+        result = equals(a->directory, b->directory);
+    }
+    
+    return result;
+}
+
+
+
+
+
+
+
 
 
 inline u64
@@ -1890,8 +1941,8 @@ fill_string_from_path(void *output, u64 output_size,
 
 
 internal String
-push_string_from_path(Arena *arena, Path *path,
-                      b32 use_windows_slash = (Native_Slash_Char == '\\'))
+string_from_path(Arena *arena, Path *path,
+                 b32 use_windows_slash = (Native_Slash_Char == '\\'))
 {
     u64 pre_len = get_path_string_length(path);
     String result = allocate_string(arena, pre_len);
@@ -1903,8 +1954,8 @@ push_string_from_path(Arena *arena, Path *path,
 }
 
 inline char *
-push_cstr_from_path(Arena *arena, Path *path,
-                    b32 use_windows_slash = (Native_Slash_Char == '\\'))
+cstr_from_path(Arena *arena, Path *path,
+               b32 use_windows_slash = (Native_Slash_Char == '\\'))
 {
     u64 pre_len = get_path_string_length(path);
     char *result = push_array(arena, char, pre_len + 1);
@@ -2100,7 +2151,7 @@ build_cstr(Arena *arena, Simple_String_Builder *builder)
 
 // ====================== @Alloc_Stringf ======================
 internal String
-push_stringf(Arena *arena, char *format, ...)
+stringf(Arena *arena, char *format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -2117,7 +2168,7 @@ push_stringf(Arena *arena, char *format, ...)
 
 // NOTE(f0): copy stuff
 internal char *
-push_cstrf(Arena *arena, char *format, ...)
+cstrf(Arena *arena, char *format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -2138,7 +2189,7 @@ push_cstrf(Arena *arena, char *format, ...)
 
 // =================== @Alloc_String_Helpers ==================
 internal String
-push_string_concatenate(Arena *arena, String first, String second)
+concatenate(Arena *arena, String first, String second)
 {
     String result = allocate_string(arena, first.size + second.size);
     copy_bytes(result.str,              first.str,  first.size);
@@ -2148,12 +2199,12 @@ push_string_concatenate(Arena *arena, String first, String second)
 
 
 internal String
-push_string_replace_file_name_extension(Arena *arena, String file_name, String new_extension)
+string_replace_file_name_extension(Arena *arena, String file_name, String new_extension)
 {
     // Example: new_extension = l2s("txt");
-    String file_name_no_extension = string_find_from_right_trim_ending(file_name, '.');
+    String file_name_no_extension = trim_from_index_of_reverse(file_name, '.');
     file_name_no_extension.size += 1;
-    String result = push_string_concatenate(arena, file_name_no_extension, new_extension);
+    String result = concatenate(arena, file_name_no_extension, new_extension);
     return result;
 }
 
@@ -2264,6 +2315,13 @@ is_valid_handle(File_Handle *file)
 {
 #if Def_Windows
     b32 result = (file->handle_ != INVALID_HANDLE_VALUE);
+#if Def_Slow
+    if (!result) {
+        s32 error_code = GetLastError();
+        debug_break();
+    }
+#endif
+    
 #else
 #error "not implt"
 #endif
@@ -2303,10 +2361,10 @@ file_open_read(cstr_lit path)
 }
 
 internal File_Handle
-file_open_read(Arena *arena, Path *path)
+file_open_read(Arena *temp_arena, Path *path)
 {
-    arena_scope(arena);
-    char *path_cstr = push_cstr_from_path(arena, path);
+    arena_scope(temp_arena);
+    char *path_cstr = cstr_from_path(temp_arena, path);
     File_Handle file = file_open_read(path_cstr);
     return file;
 }
@@ -2331,10 +2389,10 @@ file_open_write(cstr_lit path)
 }
 
 internal File_Handle
-file_open_write(Arena *arena, Path *path)
+file_open_write(Arena *temp_arena, Path *path)
 {
-    arena_scope(arena);
-    char *path_cstr = push_cstr_from_path(arena, path);
+    arena_scope(temp_arena);
+    char *path_cstr = cstr_from_path(temp_arena, path);
     File_Handle file = file_open_write(path_cstr);
     return file;
 }
@@ -2359,10 +2417,10 @@ file_open_append(cstr_lit path)
 }
 
 internal File_Handle
-file_open_append(Arena *arena, Path *path)
+file_open_append(Arena *temp_arena, Path *path)
 {
-    arena_scope(arena);
-    char *path_cstr = push_cstr_from_path(arena, path);
+    arena_scope(temp_arena);
+    char *path_cstr = cstr_from_path(temp_arena, path);
     File_Handle file = file_open_append(path_cstr);
     return file;
 }
@@ -2402,11 +2460,11 @@ file_copy(cstr_lit source, cstr_lit destination, b32 overwrite)
 }
 
 internal b32
-file_copy(Arena *arena, Path *source, Path *destination, b32 overwrite)
+file_copy(Arena *temp_arena, Path *source, Path *destination, b32 overwrite)
 {
-    arena_scope(arena);
-    char *source_cstr = push_cstr_from_path(arena, source);
-    char *destination_cstr = push_cstr_from_path(arena, destination);
+    arena_scope(temp_arena);
+    char *source_cstr = cstr_from_path(temp_arena, source);
+    char *destination_cstr = cstr_from_path(temp_arena, destination);
     b32 result = file_copy(source_cstr, destination_cstr, overwrite);
     return result;
 }
@@ -2429,11 +2487,11 @@ file_hard_link(cstr_lit source_path, cstr_lit link_path)
 }
 
 internal b32
-file_hard_link(Arena *arena, Path *source_path, Path *link_path)
+file_hard_link(Arena *temp_arena, Path *source_path, Path *link_path)
 {
-    arena_scope(arena);
-    char *link_path_cstr = push_cstr_from_path(arena, link_path);
-    char *source_path_cstr = push_cstr_from_path(arena, source_path);
+    arena_scope(temp_arena);
+    char *link_path_cstr = cstr_from_path(temp_arena, link_path);
+    char *source_path_cstr = cstr_from_path(temp_arena, source_path);
     b32 result = file_hard_link(link_path_cstr, source_path_cstr);
     return result;
 }
@@ -2456,10 +2514,10 @@ file_delete(cstr_lit path)
 }
 
 internal b32
-file_delete(Arena *arena, Path *path)
+file_delete(Arena *temp_arena, Path *path)
 {
-    arena_scope(arena);
-    char *path_cstr = push_cstr_from_path(arena, path);
+    arena_scope(temp_arena);
+    char *path_cstr = cstr_from_path(temp_arena, path);
     b32 result = file_delete(path_cstr);
     return result;
 }
@@ -2483,10 +2541,10 @@ file_exists(cstr_lit path)
 }
 
 internal b32
-file_exists(Arena *arena, Path *path)
+file_exists(Arena *temp_arena, Path *path)
 {
-    arena_scope(arena);
-    char *path_cstr = push_cstr_from_path(arena, path);
+    arena_scope(temp_arena);
+    char *path_cstr = cstr_from_path(temp_arena, path);
     b32 result = file_exists(path_cstr);
     return result;
 }
@@ -2702,10 +2760,10 @@ directory_create(cstr_lit directory_path)
 }
 
 internal b32
-directory_create(Arena *arena, Directory directory)
+directory_create(Arena *temp_arena, Directory directory)
 {
-    arena_scope(arena);
-    char *dir_cstr = push_cstr_from_directory(arena, directory);
+    arena_scope(temp_arena);
+    char *dir_cstr = cstr_from_directory(temp_arena, directory);
     b32 result = directory_create(dir_cstr);
     return result;
 }
@@ -2725,10 +2783,10 @@ directory_set_current(cstr_lit path)
 }
 
 internal b32
-directory_set_current(Arena *arena, Directory directory)
+directory_set_current(Arena *temp_arena, Directory directory)
 {
-    arena_scope(arena);
-    char *path_cstr = push_cstr_from_directory(arena, directory);
+    arena_scope(temp_arena);
+    char *path_cstr = cstr_from_directory(temp_arena, directory);
     b32 result = directory_set_current(path_cstr);
     return result;
 }
@@ -2796,12 +2854,12 @@ file_get_size(File_Handle *file)
 
 
 internal Path_List
-push_find_path_list_in_directory(Arena *arena, Directory directory)
+list_files_in_directory(Arena *arena, Directory directory)
 {
 #if Def_Windows
     Path_List result = {};
     
-    Path wildcard_path = path_from_directory(directory, lit2str("*"));
+    Path wildcard_path = get_path(directory, lit2str("*"));
     
     u64 wildcard_len = get_path_string_length(&wildcard_path);
     char *wildcard_cstr = push_stack_array(char, wildcard_len + 1);
@@ -2817,8 +2875,8 @@ push_find_path_list_in_directory(Arena *arena, Directory directory)
         {
             if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
             {
-                String file_name_string = push_string_copy(arena, string(data.cFileName));
-                *result.push_get_item(arena) = path_from_directory(directory, file_name_string);
+                String file_name_string = copy_string(arena, string(data.cFileName));
+                *result.push_get_item(arena) = get_path(directory, file_name_string);
             }
         } while (FindNextFileA(find_handle, &data) != 0);
         FindClose(find_handle);
@@ -2832,12 +2890,12 @@ push_find_path_list_in_directory(Arena *arena, Directory directory)
 
 
 internal void
-files_delete_matching(Arena *arena, Path *wildcard_file_name_path)
+files_delete_matching(Arena *temp_arena, Path *wildcard_file_name_path)
 {
-    arena_scope(arena);
+    arena_scope(temp_arena);
     
 #if Def_Windows
-    char *search_cstr = push_cstr_from_path(arena, wildcard_file_name_path);
+    char *search_cstr = cstr_from_path(temp_arena, wildcard_file_name_path);
     Path path_copy = *wildcard_file_name_path;
     
     
@@ -2848,9 +2906,8 @@ files_delete_matching(Arena *arena, Path *wildcard_file_name_path)
         do {
             if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
             {
-                arena_scope(arena);
                 path_copy.file_name = string(data.cFileName);
-                char *delete_cstr = push_cstr_from_path(arena, &path_copy);
+                char *delete_cstr = cstr_from_path(temp_arena, &path_copy);
                 DeleteFileA(delete_cstr);
             }
         } while (FindNextFileA(find_handle, &data) != 0);
@@ -2864,11 +2921,11 @@ files_delete_matching(Arena *arena, Path *wildcard_file_name_path)
 
 
 internal void
-directory_delete_all_files(Arena *arena, Directory directory)
+directory_delete_all_files(Arena *temp_arena, Directory directory)
 {
-    arena_scope(arena);
-    Path wildcard_path = path_from_directory(directory, l2s("*"));
-    files_delete_matching(arena, &wildcard_path);
+    arena_scope(temp_arena);
+    Path wildcard_path = get_path(directory, l2s("*"));
+    files_delete_matching(temp_arena, &wildcard_path);
 }
 
 
@@ -2878,14 +2935,14 @@ directory_delete_all_files(Arena *arena, Directory directory)
 
 // =============== @Platform_Directory_Functions ==============
 internal Directory
-push_current_working_directory(Arena *arena)
+current_working_directory(Arena *arena)
 {
     // NOTE(f0): ends with Native_Slash;
 #if Def_Windows
     u32 buffer_size = GetCurrentDirectory(0, nullptr);
     char *buffer = push_array(arena, char, buffer_size);
     u32 length = GetCurrentDirectory(buffer_size, buffer);
-    Directory result = push_directory_from_string(arena, string(buffer, length));
+    Directory result = directory_from_string(arena, string(buffer, length));
     
 #else
     char buffer[kilobytes(4)]; // this is lame af. Define max linux path
@@ -2906,15 +2963,15 @@ push_current_working_directory(Arena *arena)
 }
 
 internal Directory
-push_current_executable_directory(Arena *arena)
+current_executable_directory(Arena *arena)
 {
 #if Def_Windows
     char buffer[kilobytes(4)];
     DWORD len = GetModuleFileNameA(nullptr, buffer, sizeof(buffer));
-    String path = push_string_copy(arena, string(buffer, len));
+    String path = copy_string(arena, string(buffer, len));
     
-    String path_no_file_name = string_trim_file_name_from_path(path);
-    Directory result = push_directory_from_string(arena, path_no_file_name);
+    String path_no_file_name = trim_file_name_from_path(path);
+    Directory result = directory_from_string(arena, path_no_file_name);
 #else
 #error "not impl"
 #endif
@@ -2922,18 +2979,18 @@ push_current_executable_directory(Arena *arena)
 }
 
 internal Path
-push_current_executable_path(Arena *arena)
+current_executable_path(Arena *arena)
 {
 #if Def_Windows
     char buffer[kilobytes(4)];
     DWORD len = GetModuleFileNameA(nullptr, buffer, sizeof(buffer));
-    String path = push_string_copy(arena, string(buffer, len));
+    String path = copy_string(arena, string(buffer, len));
     
-    String path_no_file_name = string_trim_file_name_from_path(path);
-    Directory dir = push_directory_from_string(arena, path_no_file_name);
+    String path_no_file_name = trim_file_name_from_path(path);
+    Directory dir = directory_from_string(arena, path_no_file_name);
     
-    String file_name = string_get_file_name_from_path(path);
-    Path result = path_from_directory(dir, file_name);
+    String file_name = file_name_from_path(path);
+    Path result = get_path(dir, file_name);
         
 #else
 #error "not impl"
@@ -3024,7 +3081,7 @@ pipe_read_line(Pipe_Handle *pipe, char *buffer, s64 buffer_size)
 #if 0
 // NOTE(f0): String alloc
 internal String16
-push_string16_from_string8(Arena *arena, String source)
+string16_from_string8(Arena *arena, String source)
 {
 #if Def_Windows
     Ensure(source.size < S32_Max);
@@ -3082,7 +3139,7 @@ save_pipe_output(Arena *arena, Pipe_Handle *pipe)
     char line_buffer[1024*8];
     while (pipe_read_line(pipe, line_buffer, sizeof(line_buffer)))
     {
-        String line = push_string_copy(arena, string(line_buffer, cstr_length_trim_white_from_right(line_buffer)));
+        String line = copy_string(arena, string(line_buffer, length_trim_white_reverse(line_buffer)));
         *result.push_get_item(arena) = line;
     }
     return result;
@@ -3093,40 +3150,57 @@ save_pipe_output(Arena *arena, Pipe_Handle *pipe)
 
 
 //=============================
-internal String
-push_read_entire_file(Arena *arena, File_Handle *file)
+struct File_Content
 {
-    String result = {};
+    String content;
+    b32 no_error;
+};
+
+
+inline b32
+no_errors(File_Content *file_content)
+{
+    b32 result = file_content->no_error;
+    return result;
+}
+
+
+
+internal File_Content
+read_entire_file(Arena *arena, File_Handle *file)
+{
+    File_Content result = {};
     if (no_errors(file))
     {
-        result.size = file_get_size(file);
-        result.str = push_array(arena, u8, result.size);
-        u64 bytes_read = file_read(file, result.str, result.size);
+        result.content.size = file_get_size(file);
+        result.content.str = push_array(arena, u8, result.content.size);
+        u64 bytes_read = file_read(file, result.content.str, result.content.size);
         
-        if (bytes_read != result.size) {
+        if (bytes_read != result.content.size) {
             set_error(file, "Couldn't read whole file");
+        } else {
+            result.no_error = true;
         }
         
-        result.size = bytes_read;
+        result.content.size = bytes_read;
     }
     return result;
 }
 
-internal String
-push_read_entire_file(Arena *arena, cstr_lit file_path)
+internal File_Content
+read_entire_file(Arena *arena, cstr_lit file_path)
 {
-    String result = {};
     File_Handle file = file_open_read(file_path);
-    result = push_read_entire_file(arena, &file);
+    File_Content result = read_entire_file(arena, &file);
     file_close(&file);
     return result;
 }
 
-inline String
-push_read_entire_file(Arena *arena, Path *path)
+inline File_Content
+read_entire_file(Arena *arena, Path *path)
 {
-    char *path_cstr = push_cstr_from_path(arena, path);
-    String result = push_read_entire_file(arena, path_cstr);
+    char *path_cstr = cstr_from_path(arena, path);
+    File_Content result = read_entire_file(arena, path_cstr);
     return result;
 }
 
@@ -3135,7 +3209,7 @@ push_read_entire_file(Arena *arena, Path *path)
 
 //=============================
 internal char *
-push_read_entire_file_and_zero_terminate(Arena *arena, File_Handle *file)
+read_entire_file_and_zero_terminate(Arena *arena, File_Handle *file)
 {
     char *result = nullptr;
     if (no_errors(file))
@@ -3154,20 +3228,20 @@ push_read_entire_file_and_zero_terminate(Arena *arena, File_Handle *file)
 }
 
 internal char *
-push_read_entire_file_and_zero_terminate(Arena *arena, cstr_lit file_path)
+read_entire_file_and_zero_terminate(Arena *arena, cstr_lit file_path)
 {
     char *result = nullptr;
     File_Handle file = file_open_read(file_path);
-    result = push_read_entire_file_and_zero_terminate(arena, &file);
+    result = read_entire_file_and_zero_terminate(arena, &file);
     file_close(&file);
     return result;
 }
 
 inline char *
-push_read_entire_file_and_zero_terminate(Arena *arena, Path *path)
+read_entire_file_and_zero_terminate(Arena *arena, Path *path)
 {
-    char *path_cstr = push_cstr_from_path(arena, path);
-    char *result = push_read_entire_file_and_zero_terminate(arena, path_cstr);
+    char *path_cstr = cstr_from_path(arena, path);
+    char *result = read_entire_file_and_zero_terminate(arena, path_cstr);
     return result;
 }
 

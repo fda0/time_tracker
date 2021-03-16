@@ -54,7 +54,7 @@ session_set_error(Record_Session *session, char *message)
     session->no_errors = false;
                                                                
     Token command_token = session->current_command_token;
-    Find_Index find = cstr_find_common_character_from_left((char *)command_token.text.str, l2s("\0\n\r"));
+    Find_Index find = index_of((char *)command_token.text.str, l2s("\0\n\r"));
     String at_str = string(command_token.text.str, find.index);
     
     
@@ -583,7 +583,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
                     continue;
                 }
                 
-                b32 matches_filter = string_equal(filter, record.desc);
+                b32 matches_filter = equals(filter, record.desc);
                 
                 if (!active_start && !matches_filter) {
                     continue;
@@ -971,10 +971,10 @@ archive_current_file(Program_State *state, b32 long_format = false)
     date64 now = get_current_timestamp();
     Str128 timestamp = get_timestamp_string_for_file(now, long_format);
     
-    String file_name = push_stringf(&state->arena, "%.*s_%s.txt",
+    String file_name = stringf(&state->arena, "%.*s_%s.txt",
                                     string_expand(state->title), timestamp.str);
     
-    Path archive_path = path_from_directory(state->archive_dir, file_name);
+    Path archive_path = get_path(state->archive_dir, file_name);
     file_copy(&state->arena, &state->input_path, &archive_path, false);
     
     if (long_format) 
@@ -1013,7 +1013,7 @@ save_to_file(Program_State *state)
             {
                 Str32 day_of_week = get_day_of_the_week_string(record->date);
                 add(l2s("// "));
-                add(push_string_copy(&state->arena, string(day_of_week.str)));
+                add(copy_string(&state->arena, string(day_of_week.str)));
                 add(l2s("\n"));
             }
             
@@ -1049,14 +1049,14 @@ save_to_file(Program_State *state)
             if (is_new_day)
             {
                 Str32 date_str = get_date_string(record->date);
-                add(push_string_copy(&state->arena, string(date_str.str)));
+                add(copy_string(&state->arena, string(date_str.str)));
                 add(l2s(" "));
             }
             
             
             // print time
             Str32 time_str = get_time_string(record->value);
-            add(push_string_copy(&state->arena, string(time_str.str)));
+            add(copy_string(&state->arena, string(time_str.str)));
             
             
             // print description
@@ -1086,7 +1086,7 @@ save_to_file(Program_State *state)
                 Str128 sum_bar = get_sum_and_progress_bar_string(sum_result.sum, sum_result.missing_ending);
                 
                 add(l2s("// "));
-                add(push_string_copy(&state->arena, string(sum_bar.str)));
+                add(copy_string(&state->arena, string(sum_bar.str)));
                 add(l2s("\n\n"));
                 active_day_index = record_index + 1;
             }
@@ -1105,7 +1105,7 @@ save_to_file(Program_State *state)
     }
     else
     {
-        char *input_path_cstr = push_cstr_from_path(&state->arena, &state->input_path);
+        char *input_path_cstr = cstr_from_path(&state->arena, &state->input_path);
         printf("Failed to write to file: %s\n", input_path_cstr);
     }
     
@@ -2035,7 +2035,7 @@ process_input(Program_State *state, Record_Session *session)
                         Error_Cmd_Exclusive;
                     } else {
                         // TODO(f0): should work with Path
-                        char *input_cstr = push_cstr_from_path(&state->arena, &state->input_path);
+                        char *input_cstr = cstr_from_path(&state->arena, &state->input_path);
                         platform_open_in_default_editor(input_cstr);
                     }
                 }
@@ -2044,7 +2044,7 @@ process_input(Program_State *state, Record_Session *session)
                     if (reading_from_file) {
                         Error_Cmd_Exclusive;
                     } else {
-                        char *dir_cstr = push_cstr_from_directory(&state->arena, state->exe_path.directory);
+                        char *dir_cstr = cstr_from_directory(&state->arena, state->exe_path.directory);
                         platform_open_in_default_editor(dir_cstr);
                     }
                 }
@@ -2173,7 +2173,7 @@ load_file(Program_State *state)
          (load_tries < 5 && !load_successful);
          ++load_tries)
     {
-        char *file_content = push_read_entire_file_and_zero_terminate(&state->arena, &state->input_path);
+        char *file_content = read_entire_file_and_zero_terminate(&state->arena, &state->input_path);
         
         if (file_content)
         {
@@ -2204,7 +2204,7 @@ load_file(Program_State *state)
     {
         state->load_file_error = true;
         arena_scope(&state->arena);
-        char *file_name = push_cstr_from_path(&state->arena, &state->input_path);
+        char *file_name = cstr_from_path(&state->arena, &state->input_path);
         printf("[Critial error] Failed to load from file: %s\n", file_name);
     }
     
@@ -2315,7 +2315,7 @@ s32 main(int argument_count, char **arguments)
             }
             else if (type == Cmd_Input_File_Path)
             {
-                state.input_path = push_path_from_string(arena, string(arg));
+                state.input_path = path_from_string(arena, string(arg));
                 type = Cmd_None;
             }
             else
@@ -2332,17 +2332,17 @@ s32 main(int argument_count, char **arguments)
     //~ initialize essential state
     initialize_timezone_offset();
     
-    state.exe_path = push_current_executable_path(arena);
-    state.title = string_find_from_right_trim_ending(state.exe_path.file_name, '.');
+    state.exe_path = current_executable_path(arena);
+    state.title = trim_from_index_of_reverse(state.exe_path.file_name, '.');
     
     if (state.input_path.file_name.size == 0)
     {
         state.input_path = state.exe_path;
-        state.input_path.file_name = push_string_concatenate(arena, state.title, l2s(".txt"));
+        state.input_path.file_name = concatenate(arena, state.title, l2s(".txt"));
     }
     
     
-    state.archive_dir = push_directory_append(arena, state.exe_path.directory, l2s("archive"));
+    state.archive_dir = directory_append(arena, state.exe_path.directory, l2s("archive"));
     directory_create(arena, state.archive_dir);
     
     // NOTE: Save initial program state
@@ -2358,20 +2358,27 @@ s32 main(int argument_count, char **arguments)
     {
         arena_scope(arena);
         
-        char *input_path_cstr = push_cstr_from_path(arena, &state.input_path);
+        char *input_path_cstr = cstr_from_path(arena, &state.input_path);
         if (!file_exists(input_path_cstr))
         {
-            File_Handle file = file_open_write(input_path_cstr);
-            if (no_errors(&file)) {
-                printf("Created new file: %s\n", input_path_cstr);
+            if (!reformat_mode)
+            {
+                File_Handle file = file_open_write(input_path_cstr);
+                if (no_errors(&file)) {
+                    printf("Created new file: %s\n", input_path_cstr);
+                }
+                else
+                {
+                    printf("Failed to create new file: %s\n", input_path_cstr);
+                    exit_error();
+                }
+                file_close(&file);
             }
             else
             {
-                printf("Failed to create new file: %s\n", input_path_cstr);
-                exit_error();
+                printf("File doesn't exist: %s. Exiting.\n", input_path_cstr);
+                exit(1);
             }
-            
-            file_close(&file);
         }
     }
     
@@ -2391,7 +2398,9 @@ s32 main(int argument_count, char **arguments)
     else
     {
         if (reformat_mode) {
-            printf("Reformatting skipped due to errors. Exiting.\n");
+            printf("Reformatting skipped due to errors. Exiting with force_save.\n");
+            // TODO(f0): Change this? -r should be --test_mode? Or --format --force_save
+            save_to_file(&state);
             exit(1);
         }
     }
@@ -2415,7 +2424,7 @@ s32 main(int argument_count, char **arguments)
         {
             state.last_input_time = now;
             Record_Session session = create_record_session_no_lexer(&state.arena, &state.records, false);
-            char *input_copy = push_cstr_copy(&state.arena, thread_memory.input_buffer);
+            char *input_copy = copy_cstr(&state.arena, thread_memory.input_buffer);
             session.lexer = create_lexer(input_copy);
                                                      
             process_input(&state, &session);
