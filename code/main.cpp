@@ -40,6 +40,8 @@ print_color(Color_Code code)
 
 
 
+
+
 inline b32
 no_errors(Record_Session *session)
 {
@@ -88,6 +90,15 @@ pop_program_scope(Program_Scope *scope)
     pop_arena_scope(&scope->arena_scope);
     pop_virtual_array_scope(&scope->records_scope);
 }
+
+
+
+
+
+
+
+
+
 
 
 
@@ -236,154 +247,19 @@ are_in_same_day(Record *record_a, Record *record_b)
 
 
 
-struct Day_Sum_Result
-{
-    time32 sum;
-    Missing_Ending missing_ending;
-};
-
-internal Day_Sum_Result
-calculate_sum_for_day(Program_State *state, s64 starting_index)
-{
-    date64 range_start = 0;
-    Day_Sum_Result result = {};
-    date64 day = state->records.at(starting_index)->date;
-    
-    for (u64 index = starting_index; index < state->records.count; ++index)
-    {
-        Record *record = state->records.at(index);
-        
-        if (day != record->date && range_start == 0)
-        {
-            break;
-        }
-        
-        if (record->type == Record_TimeStop || record->type == Record_TimeStart)
-        {
-            if (range_start)
-            {
-                date64 range_end = record->date + record->value;
-                time32 delta = (time32)(range_end - range_start);
-                result.sum += delta;
-            }
-            
-            if (day != record->date)
-            {
-                range_start = 0;
-                break;
-            }
-        }
-        
-        if (record->type == Record_TimeStart)
-        {
-            range_start = record->date + record->value;
-        }
-        else if (record->type == Record_TimeStop)
-        {
-            range_start = 0;
-        }
-        else if (day == record->date)
-        {
-            if (record->type == Record_TimeDelta)
-            {
-                result.sum += record->value;
-            }
-        }
-    }
-    
-    
-    if (range_start == 0)
-    {
-        result.missing_ending = MissingEnding_None;
-    }
-    else
-    {
-        date64 now = get_current_timestamp();
-        date64 delta = now - range_start;
-        
-        if (delta > Days(1))
-        {
-            result.missing_ending = MissingEnding_Critical;
-        }
-        else
-        {
-            result.missing_ending = MissingEnding_Assumed;
-            result.sum += (time32)delta;
-        }
-    }
-    
-    return result;
-}
 
 
-inline b32
-compare_record_type_to_mask(Virtual_Array<Record> *records, u64 index, u32 type_mask)
-{
-    b32 result = false;
-    if (records->count > index && 0 < index)
-    {
-        Record *record = records->at(index);
-        result = record->type & type_mask;
-    }
-    
-    return result;
-}
 
 
-inline char
-get_sign_char_and_abs_value(s32 *value)
-{
-    char result = '+';
-    
-    if (*value < 0)
-    {
-        result = '-';
-        *value = -(*value);
-    }
-    
-    return result;
-}
 
-#if 1
-internal void
-print_record_tail(Program_State *state, s32 *sum)
-{
-    using namespace Color;
-    
-    printf("  ");
-    
-    if (*sum)
-    {
-        char sign = get_sign_char_and_abs_value(sum);
-        Str32 sum_str = get_time_string(*sum);
-        printf("  %c%s", sign, sum_str.str);
-        *sum = 0;
-    }
 
-#if 0
-    for (s64 def_index = 0; def_index < state->defered_descs.count; ++def_index)
-    {
-        Defered_Description *def = state->defered_descs.at(def_index);
-        
-        if (def->value)
-        {
-            char sign = get_sign_char_and_abs_value(&def->value);
-            Str32 val_str = get_time_string(def->value);
-            printf("  %c%s", sign, val_str.str);
-        }
-        
-        if (def->description.length)
-        {
-            printf(" %s\"%.*s\"%s", (def->value ? f_desc_delta : f_desc), def->description.length,
-                   def->description.content, f_reset);
-        }
-    }
-#endif
 
-    printf("\n");
-    //state->defered_descs.clear();
-}
-#endif
+
+
+
+
+
+
 
 
 
@@ -506,7 +382,7 @@ inline void
 print_time_delta(Record *time_delta_record)
 {
     s32 time = time_delta_record->value;
-    char sign = get_sign_char_and_abs_value(&time); // TODO(f0): Inline this here
+    char sign = (time < 0) ? '-' : '+';
     
     if (sign == '-') {
         print_color(Color_AltNegative);
@@ -514,7 +390,7 @@ print_time_delta(Record *time_delta_record)
         print_color(Color_AltPositive);
     }
     
-    Str32 time_str = get_time_string(time_delta_record->value);
+    Str32 time_str = get_time_string(time);
     printf("  %c%s", sign, time_str.str);
     print_color(Color_Reset);
     
@@ -533,10 +409,23 @@ print_defered_time_deltas(Linked_List<Record> *defered)
 
 
 
-internal void
-print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
-                      String filter,
-                      b32 alternative_colors = false)
+enum Process_Days_Options
+{
+    ProcessDays_Calculate,
+    ProcessDays_Print,
+    ProcessDays_PrintAltColor,
+};
+
+struct Time_Sum
+{
+    s32 total;
+    s32 assumed;
+};
+
+internal Time_Sum
+process_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
+                        String filter,
+                        Process_Days_Options options)
 {
 #if Def_Slow
     u32 open_start_ending_should_happen_only_once_test = 0;
@@ -552,6 +441,11 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
     Arena *arena = &state->arena;
     arena_scope(arena);
     
+    
+    b32 should_print = (options >= ProcessDays_Print);
+    
+    
+    Time_Sum result = {};
     
     b32 has_filter = (filter.size != 0);
     Range_u64 whole_range = get_index_range_for_date_range(state, date_begin, date_end);
@@ -595,7 +489,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
             }
             
             
-            if (!day_header_printed)
+            if (should_print && !day_header_printed)
             {
                 day_header_printed = true;
                 
@@ -604,7 +498,7 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
                 
                 printf("\n");
                 
-                if (alternative_colors) {
+                if (options == ProcessDays_PrintAltColor) {
                     print_color(Color_AltDate);
                 } else {
                     print_color(Color_Date);
@@ -628,30 +522,32 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
                 day_time_sum += record.value - active_start->value;
                 day_time_sum += safe_truncate_to_s32(record.date - active_start->date);
                 
-                // gray color
-                Str32 time_str = get_time_string(record.value);
-                printf("%s", time_str.str);
-                
-                print_color(Color_Dimmed);
-                if (record.date != range.date + Days(1))
+                if (should_print)
                 {
-                    Str32 date_str = get_date_string(record.date);
-                    printf(" (%s)", date_str.str);
+                    Str32 time_str = get_time_string(record.value);
+                    printf("%s", time_str.str);
+                    
+                    print_color(Color_Dimmed);
+                    if (record.date != range.date + Days(1))
+                    {
+                        Str32 date_str = get_date_string(record.date);
+                        printf(" (%s)", date_str.str);
+                    }
+                    else
+                    {
+                        printf(" (next day)");
+                    }
+                    print_color(Color_Reset);
+                    
+                    
+                    print_description(active_start);
+                    
+                    print_defered_time_deltas(&defered_time_deltas);
+                    // print all defers (TimeDelta & CountDelta) here
+                    printf("\n");
                 }
-                else
-                {
-                    printf(" (next day)");
-                }
-                print_color(Color_Reset);
                 
-                
-                print_description(active_start);
-                
-                print_defered_time_deltas(&defered_time_deltas);
-                // print all defers (TimeDelta & CountDelta) here
-                printf("\n");
-                
-                active_start = false;
+                active_start = nullptr;
             }
             else
             {
@@ -667,24 +563,29 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
                              record.type == Record_TimeStop)
                     {
                         assert(active_start);
-                        
-                        if (record.type == Record_TimeStart) {
-                            print_color(Color_Dimmed);
-                        }
-                        
-                        Str32 time_str = get_time_string(record.value);
-                        printf("%s", time_str.str);
-                        
-                        print_color(Color_Reset);
-                        
-                        
-                        print_description(active_start);
                         day_time_sum += record.value - active_start->value;
                         
                         
-                        print_defered_time_deltas(&defered_time_deltas);
-                        // print CountDelta defers on new lines
-                        printf("\n");
+                        if (should_print)
+                        {
+                            if (record.type == Record_TimeStart) {
+                                print_color(Color_Dimmed);
+                            }
+                            
+                            Str32 time_str = get_time_string(record.value);
+                            printf("%s", time_str.str);
+                            
+                            print_color(Color_Reset);
+                            
+                            
+                            print_description(active_start);
+                            
+                            
+                            print_defered_time_deltas(&defered_time_deltas);
+                            // print CountDelta defers on new lines
+                            printf("\n");
+                        }
+                        
                         
                         active_start = nullptr;
                     }
@@ -709,17 +610,23 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
                     {
                         day_time_sum += record.value;
                         
-                        printf("      ");
-                        print_time_delta(&record);
-                        printf("\n");
+                        if (should_print)
+                        {
+                            printf("      ");
+                            print_time_delta(&record);
+                            printf("\n");
+                        }
                     }
                     else if (record.type == Record_TimeStart)
                     {
-                        Str32 time_str = get_time_string(record.value);
-                        printf("%s -> ", time_str.str);
-                        
                         active_start = state->records.at(index);
                         open_state = Open;
+                        
+                        if (should_print)
+                        {
+                            Str32 time_str = get_time_string(record.value);
+                            printf("%s -> ", time_str.str);
+                        }
                     }
                     else if (record.type == Record_TimeStop)
                     {
@@ -752,35 +659,41 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
             s32 local_sum = now_time - active_start->value;
             local_sum += safe_truncate_to_s32(today - active_start->date);
             
+            
             day_time_sum += local_sum;
+            result.assumed += local_sum;
             
             
-            print_color(Color_Dimmed);
-            Str32 time_str = get_time_string(active_start->value);
-            printf("%s ", time_str.str);
-            
-            if (local_sum < Days(1)) {
-                printf("(now)");
-            } else {
-                print_color(Color_Error);
-                printf("(missing stop)");
+            if (should_print)
+            {
+                print_color(Color_Dimmed);
+                Str32 time_str = get_time_string(active_start->value);
+                printf("%s ", time_str.str);
+                
+                if (local_sum < Days(1)) {
+                    printf("(now)");
+                } else {
+                    print_color(Color_Error);
+                    printf("(missing stop)");
+                }
+                
+                print_color(Color_Reset);
+                
+                
+                print_description(active_start);
+                
+                print_defered_time_deltas(&defered_time_deltas);
+                // print CountDelta defers on new lines
+                printf("\n");
             }
             
-            print_color(Color_Reset);
-            
-            
-            print_description(active_start);
-            
-            print_defered_time_deltas(&defered_time_deltas);
-            // print CountDelta defers on new lines
-            printf("\n");
             
             active_start = nullptr;
         }
         
         
         
-        if (day_header_printed)
+        if (should_print && day_header_printed)
         {
             // TODO(f0): Figure out missing ending stuff
             Str32 time = get_time_string(day_time_sum);
@@ -795,11 +708,13 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
             print_color(Color_Reset);
             printf("\n");
         }
+        
+        
+        result.total += day_time_sum;
     }
     
-#if Def_Slow
-    open_start_ending_should_happen_only_once_test = 0;
-#endif
+    
+    return result;
 }
 
 
@@ -807,158 +722,69 @@ print_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
 
 
 
-internal void
-print_days_from_range1(Program_State *state, date64 date_begin, date64 date_end, b32 alternative_colors = false)
+
+
+
+
+
+
+
+struct Day_Sum_Result
 {
-    enum Range_State
-    {
-        Range_Open,
-        Range_Closed_PrePrint,
-        Range_Closed_PostPrint
-    };
+    time32 sum;
+    Missing_Ending missing_ending;
+};
+
+inline Day_Sum_Result
+get_day_sum(Program_State *state, date64 date)
+{
+    Time_Sum sum = process_days_from_range(state, date, date, {}, ProcessDays_Calculate);
     
+    Day_Sum_Result result = {};
+    result.sum = sum.total - sum.assumed;
     
-    // TODO: Add/Sub descriptions contained in range should push their descriptions to transient_arena
-    // and maybe exclude them from sum... example:
-    // 16:30 -> 18:30  +00:30 "Working on X" -00:15 "Tea break"
-    using namespace Color;
-    
-    
-    b32 is_new_day = true;
-    s64 active_day_index = 0;
-    time32 sum = 0;
-    
-    Range_State range_state = Range_Closed_PostPrint;
-    b32 overnight_carry = false;
-    
-    for_u64(record_index, state->records.count)
-    {
-        Record *record = state->records.at(record_index);
-        
-        // skip if not in range
-        if ((date_end) && (record->date > date_end))
-        {
-            break;
-        }
-        
-        if ((date_begin) && (record->date < date_begin))
-        {
-            active_day_index = record_index + 1;
-            continue;
-        }
-        
-        
-        
-        // print day header
-        if (is_new_day)
-        {
-            Str32 date_str = get_date_string(record->date);
-            Str32 day_of_week = get_day_of_the_week_string(record->date);
-            
-            if (alternative_colors)
-            {
-                printf("\n%s%s%s %s%s%s\n", f_black, b_date, date_str.str, day_of_week.str, f_reset, b_reset);
-            }
-            else
-            {
-                printf("\n%s%s %s%s\n", f_date, date_str.str, day_of_week.str, f_reset);
-            }
-        }
-        
-        
-        //~ print content
-        
-        Str32 time_str = get_time_string(record->value);
-        
-        if (record->type == Record_TimeStop)
-        {
-            if (overnight_carry)
-            {
-                printf(" ... ");
-                overnight_carry = false;
-            }
-            
-            printf(" -> %s", time_str.str);
-            range_state = Range_Closed_PrePrint;
-        }
-        else if (record->type == Record_TimeDelta)
-        {
-            //Description *desc = get_description(&state->desc_table, record->desc_hash); @desc
-            if (!record->desc.size)
-            {
-                sum += record->value;
-            }
-            else
-            {
-                // TODO(f0): Solve this better
-                //Defered_Description defered = {record->description, record->value};
-                //state->defered_descs.add(&defered);
-            }
-            
-            if (range_state == Range_Closed_PostPrint)
-            {
-                range_state = Range_Closed_PrePrint;
-            }
-        }
-        else if (range_state == Range_Open && record->type == Record_TimeStart)
-        {
-            if (overnight_carry)
-            {
-                printf(" ... ");
-                overnight_carry = false;
-            }
-            
-            printf("%s -> %s%s", f_dimmed, time_str.str, f_reset);
-            range_state = Range_Closed_PrePrint;
-        }
-        
-        
-        
-        if (range_state == Range_Closed_PrePrint)
-        {
-            print_record_tail(state, &sum);
-            range_state = Range_Closed_PostPrint;
-        }
-        
-        
-        if (range_state == Range_Closed_PostPrint && record->type == Record_TimeStart)
-        {
-            printf("%s", time_str.str);
-            range_state = Range_Open;
-            
-            //Defered_Description defered = {record->description};
-            //state->defered_descs.add(&defered);
-        }
-        
-        
-        
-        // __prepare next iteration + get sum___
-        Record *next_record = record + 1;
-        is_new_day = ((record_index == state->records.count - 1) || !are_in_same_day(record, next_record));
-        
-        if (is_new_day)
-        {
-            Day_Sum_Result sum_result = calculate_sum_for_day(state, active_day_index);
-            Str128 sum_bar = get_sum_and_progress_bar_string(sum_result.sum, sum_result.missing_ending);
-            
-            if (sum_result.missing_ending != MissingEnding_None)
-            {
-                printf(" ->  ... ");
-                print_record_tail(state, &sum);
-            }
-            else if (range_state == Range_Open)
-            {
-                printf(" ->  ... ");
-                print_record_tail(state, &sum);
-                overnight_carry = true;
-            }
-            
-            printf("%s%s%s\n", f_sum, sum_bar.str, f_reset);
-            
-            active_day_index = record_index + 1;
-        }
+    if (sum.assumed > Days(1)) {
+        result.missing_ending = MissingEnding_Critical;
+    } else if (sum.assumed > 0) {
+        result.missing_ending = MissingEnding_Assumed;
     }
+    
+    return result;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1082,7 +908,7 @@ save_to_file(Program_State *state)
             
             if (is_new_day)
             {
-                Day_Sum_Result sum_result = calculate_sum_for_day(state, active_day_index);
+                Day_Sum_Result sum_result = get_day_sum(state, record->date);
                 Str128 sum_bar = get_sum_and_progress_bar_string(sum_result.sum, sum_result.missing_ending);
                 
                 add(l2s("// "));
@@ -1617,11 +1443,11 @@ parse_command_show(Program_State *state, Record_Session *session)
                 range = get_max_date_range();
             } else {
                 range = get_recent_days_range(session->records);
-                message = "Showing only recent records; Use show all to see all records\n";
+                message = "Range assumed from xxxx-xx-xx to xxxx-xx-xx; Specify filter or use \"show all\" to use all records\n";
             }
         }
         
-        print_days_from_range(state, range.begin, range.end, filter);
+        process_days_from_range(state, range.begin, range.end, filter, ProcessDays_Print);
         
         if (message) {
             print_color(Color_Dimmed);
@@ -1758,7 +1584,7 @@ process_and_print_summary(Program_State *state, Granularity granularity, date64 
         // NOTE: Summing
         if (loop)
         {
-            Day_Sum_Result day_sum = calculate_sum_for_day(state, record_index);
+            Day_Sum_Result day_sum = get_day_sum(state, record->date);
             sum += day_sum.sum;
         }
         
@@ -2387,7 +2213,7 @@ s32 main(int argument_count, char **arguments)
     if (!state.load_file_error)
     {
         Date_Range_Result range = get_recent_days_range(&state.records);
-        print_days_from_range(&state, range.begin, range.end, {});
+        process_days_from_range(&state, range.begin, range.end, {}, ProcessDays_Print);
         save_to_file(&state);
         
         if (reformat_mode) {
@@ -2433,7 +2259,7 @@ s32 main(int argument_count, char **arguments)
                 if (session.change_count > 0)
                 {
                     Record *last_record = get_last_record(&session);
-                    print_days_from_range(&state, last_record->date, last_record->date, {}, true);
+                    process_days_from_range(&state, last_record->date, last_record->date, {}, ProcessDays_PrintAltColor);
                 }
             }
             
