@@ -2,31 +2,53 @@
 #include "description.h"
 #include "token.h"
 
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
-
 typedef time_t date64;
 typedef s32 time32;
 
 
-struct Stubs
+//~ NOTE: Platforms and compilers
+struct Thread_Memory
 {
-    Description description;
+    char input_buffer[256];
+    char cursor[64];
+    b32 new_data;
 };
-global Stubs global_stubs = {};
 
-struct Global_State
+
+#if Def_Windows
+#include "win32_platform.cpp"
+#else
+#error "system not defined"
+#endif
+
+
+
+
+//~ NOTE: Macros
+#define Days(Value) (Hours(Value) * 24)
+#define Hours(Value) (Minutes(Value) * 60)
+#define Minutes(Value) (Value * 60)
+
+
+
+
+//~ NOTE: Structs
+
+
+enum Granularity
 {
-    date64 timezone_offset;
-    b32 colors_disabled;
+    Granularity_Days,
+    // Granularity_Weeks,
+    Granularity_Months,
+    // Granularity_Quarters,
+    Granularity_Years
 };
-global Global_State global_state;
-
 
 enum Color_Code
 {
@@ -57,76 +79,45 @@ enum Color_Code
     Color_Count
 };
 
+
+struct Stubs
+{
+    Description description;
+};
+
+struct Global_State
+{
+    date64 timezone_offset;
+    b32 colors_disabled;
+};
+
 struct Color_Pair
 {
     Color_Code code_check; // because C++ sucks!
     char *value;
 };
 
-global Color_Pair color_pairs[Color_Count] = {
-    {Color_Empty, ""},
-    {Color_Reset, "\033[39m\033[49m"},
-    
-    {Color_Base, "\033[97m"},
-    {Color_Dimmed, "\033[90m"},
-    
-    {Color_Date, "\033[33m"},
-    {Color_AltDate, "\033[43m\033[30m"},
-    
-    {Color_Description, "\033[36m"},
-    {Color_AltDescription, "\033[96m"},
-    
-    {Color_Positive, "\033[32m"},
-    {Color_AltPositive, "\033[92m"},
-    
-    {Color_Negative, "\033[31m"},
-    {Color_AltNegative, "\033[91m"},
-    
-    {Color_Error, "\033[41m\033[97m"},
-    {Color_Warning, "\033[103m\033[30m"},
-    
-    {Color_HelpHeader, "\033[100m"},
-    {Color_Bar, "\033[34m"},
-};
-
-
-
-
-
-//~ NOTE: Platforms and compilers
-struct Thread_Memory
+enum Process_Days_Options
 {
-    char input_buffer[256];
-    char cursor[64];
-    b32 new_data;
+    ProcessDays_Calculate,
+    ProcessDays_Print,
+    ProcessDays_PrintAltColor,
 };
 
+struct Process_Days_Result
+{
+    s32 time_total;
+    s32 time_assumed;
+    
+    u64 next_day_record_index;
+};
 
-#if Def_Windows
-#include "win32_platform.cpp"
-#else
-#error "system not defined"
-#endif
-
-
-
-
-
-//~ NOTE: Macros
-#define Days(Value) (Hours(Value) * 24)
-#define Hours(Value) (Minutes(Value) * 60)
-#define Minutes(Value) (Value * 60)
-
-
-
-
-//~ NOTE: Structs
 struct Record_Range
 {
     date64 date;
     u64 first;
     u64 one_past_last;
-    u64 next_day_start_index;
+    u64 next_day_first_record_index;
 };
 
 struct Range_u64
@@ -135,14 +126,12 @@ struct Range_u64
     u64 one_past_last;
 };
 
-
 enum Missing_Ending
 {
     MissingEnding_None,
     MissingEnding_Assumed,
     MissingEnding_Critical
 };
-
 
 enum Record_Type
 {
@@ -156,10 +145,10 @@ enum Record_Type
 struct Record
 {
     Record_Type type;
-    s32 value; // 8
-    date64 date; // 16
+    s32 value;
+    date64 date;
     //u64 desc_hash;
-    String desc; // 32
+    String desc;
 };
 
 
@@ -260,8 +249,8 @@ struct Date_Range_Result
         date64 date_ranges[2];
         struct
         {
-            date64 begin;
-            date64 end; // NOTE: Inclusive end
+            date64 first;
+            date64 last; // NOTE: Inclusive end
         };
     };
     Condition condition;

@@ -1,10 +1,50 @@
 #include "main.h"
-#include "description.cpp"
 
+global Global_State global_state;
+global Stubs global_stubs = {};
+
+global Color_Pair color_pairs[Color_Count] = {
+    {Color_Empty, ""},
+    {Color_Reset, "\033[39m\033[49m"},
+    
+    {Color_Base, "\033[97m"},
+    {Color_Dimmed, "\033[90m"},
+    
+    {Color_Date, "\033[33m"},
+    {Color_AltDate, "\033[43m\033[30m"},
+    
+    {Color_Description, "\033[36m"},
+    {Color_AltDescription, "\033[96m"},
+    
+    {Color_Positive, "\033[32m"},
+    {Color_AltPositive, "\033[92m"},
+    
+    {Color_Negative, "\033[31m"},
+    {Color_AltNegative, "\033[91m"},
+    
+    {Color_Error, "\033[41m\033[97m"},
+    {Color_Warning, "\033[103m\033[30m"},
+    
+    {Color_HelpHeader, "\033[100m"},
+    {Color_Bar, "\033[34m"},
+};
+
+#include "description.cpp"
 #include "error.cpp"
 #include "lexer.cpp"
 #include "string.cpp"
 #include "time.cpp"
+
+
+
+
+
+
+
+
+
+
+
 
 
 internal void load_file(Program_State *state);
@@ -288,7 +328,6 @@ get_records_range_for_starting_date(Program_State *state, u64 start_index)
                 {
                     start_is_active = true;
                 }
-                
                 break;
             }
         }
@@ -302,12 +341,11 @@ get_records_range_for_starting_date(Program_State *state, u64 start_index)
             
             if (result.date != record->date)
             {
-                result.one_past_last = result.next_day_start_index = index;
+                result.one_past_last = result.next_day_first_record_index = index;
                 
                 if (start_is_active) {
                     result.one_past_last += 1;
                 }
-                
                 break;
             }
             
@@ -322,7 +360,7 @@ get_records_range_for_starting_date(Program_State *state, u64 start_index)
         }
         
         if (!result.one_past_last) {
-            result.one_past_last = result.next_day_start_index = state->records.count;
+            result.one_past_last = result.next_day_first_record_index = state->records.count;
         }
     }
     
@@ -355,6 +393,7 @@ get_index_range_for_date_range(Program_State *state, date64 date_begin, date64 d
         Record *record = state->records.at(index);
         if (date_end < record->date) {
             result.one_past_last = index;
+            break;
         }
     }
     
@@ -409,21 +448,11 @@ print_defered_time_deltas(Linked_List<Record> *defered)
 
 
 
-enum Process_Days_Options
-{
-    ProcessDays_Calculate,
-    ProcessDays_Print,
-    ProcessDays_PrintAltColor,
-};
 
-struct Time_Sum
-{
-    s32 total;
-    s32 assumed;
-};
-
-internal Time_Sum
-process_days_from_range(Program_State *state, date64 date_begin, date64 date_end,
+// TODO(f0): Add start index to avoid traversing whole array all the time
+internal Process_Days_Result
+process_days_from_range(Program_State *state,
+                        date64 date_begin, date64 date_end,
                         String filter,
                         Process_Days_Options options)
 {
@@ -445,15 +474,17 @@ process_days_from_range(Program_State *state, date64 date_begin, date64 date_end
     b32 should_print = (options >= ProcessDays_Print);
     
     
-    Time_Sum result = {};
+    Process_Days_Result result = {};
     
     b32 has_filter = (filter.size != 0);
     Range_u64 whole_range = get_index_range_for_date_range(state, date_begin, date_end);
     
     
-    for (Record_Range range = get_records_range_for_starting_date(state, whole_range.first);
+    Record_Range range = get_records_range_for_starting_date(state, whole_range.first);
+    
+    for (;
          range.date <= date_end && range.date != 0;
-         range = get_records_range_for_starting_date(state, range.next_day_start_index))
+         range = get_records_range_for_starting_date(state, range.next_day_first_record_index))
     {
         arena_scope(arena);
         
@@ -473,7 +504,7 @@ process_days_from_range(Program_State *state, date64 date_begin, date64 date_end
             
             if (has_filter)
             {
-                if (!active_start && index == range.next_day_start_index) {
+                if (!active_start && index == range.next_day_first_record_index) {
                     continue;
                 }
                 
@@ -661,7 +692,7 @@ process_days_from_range(Program_State *state, date64 date_begin, date64 date_end
             
             
             day_time_sum += local_sum;
-            result.assumed += local_sum;
+            result.time_assumed += local_sum;
             
             
             if (should_print)
@@ -710,10 +741,15 @@ process_days_from_range(Program_State *state, date64 date_begin, date64 date_end
         }
         
         
-        result.total += day_time_sum;
+        result.time_total += day_time_sum;
+        
+        if (range.next_day_first_record_index >= whole_range.one_past_last) {
+            break;
+        }
     }
     
     
+    result.next_day_record_index = range.next_day_first_record_index;
     return result;
 }
 
@@ -738,14 +774,14 @@ struct Day_Sum_Result
 inline Day_Sum_Result
 get_day_sum(Program_State *state, date64 date)
 {
-    Time_Sum sum = process_days_from_range(state, date, date, {}, ProcessDays_Calculate);
+    Process_Days_Result days = process_days_from_range(state, date, date, {}, ProcessDays_Calculate);
     
     Day_Sum_Result result = {};
-    result.sum = sum.total - sum.assumed;
+    result.sum = days.time_total - days.time_assumed;
     
-    if (sum.assumed > Days(1)) {
+    if (days.time_assumed > Days(1)) {
         result.missing_ending = MissingEnding_Critical;
-    } else if (sum.assumed > 0) {
+    } else if (days.time_assumed > 0) {
         result.missing_ending = MissingEnding_Assumed;
     }
     
@@ -808,6 +844,9 @@ archive_current_file(Program_State *state, b32 long_format = false)
         printf("File archived as: %.*s\n", string_expand(file_name));
     }
 }
+
+
+
 
 
 
@@ -1293,8 +1332,8 @@ get_max_date_range()
 {
     Date_Range_Result result;
     result.condition = Con_IsValid;
-    result.begin = 1;
-    result.end = S64_Max;
+    result.first = 1;
+    result.last = S64_Max;
     
     return result;
 }
@@ -1319,7 +1358,7 @@ get_date_range(Record_Session *session)
             success = is_condition_valid(date.condition);
             if (success)
             {
-                result.begin = date.date;
+                result.first = date.date;
                 advance(&session->lexer);
             }
         }
@@ -1341,7 +1380,7 @@ get_date_range(Record_Session *session)
             success = is_condition_valid(date.condition);
             if (success)
             {
-                result.end = date.date;
+                result.last = date.date;
                 advance(&session->lexer);
             }
         }
@@ -1367,8 +1406,8 @@ get_date_range(Record_Session *session)
                 result.condition = date.condition;
                 if (is_condition_valid(result.condition))
                 {
-                    result.begin = date.date;
-                    result.end = date.date;
+                    result.first = date.date;
+                    result.last = date.date;
                     advance(&session->lexer);
                 }
             }
@@ -1439,15 +1478,19 @@ parse_command_show(Program_State *state, Record_Session *session)
         char *message = nullptr;
         
         if (range.condition == Con_NoMatchigTokens) {
-            if (filter.size) {
+            if (filter.size)
+            {
                 range = get_max_date_range();
-            } else {
+            }
+            else
+            {
                 range = get_recent_days_range(session->records);
-                message = "Range assumed from xxxx-xx-xx to xxxx-xx-xx; Specify filter or use \"show all\" to use all records\n";
+                message = "Range assumed from xxxx-xx-xx to xxxx-xx-xx; "
+                    "Specify filter or use \"show all\" to use all records\n";
             }
         }
         
-        process_days_from_range(state, range.begin, range.end, filter, ProcessDays_Print);
+        process_days_from_range(state, range.first, range.last, filter, ProcessDays_Print);
         
         if (message) {
             print_color(Color_Dimmed);
@@ -1484,18 +1527,114 @@ increase_index_to_next_day(Virtual_Array<Record> *records, u64 *index)
 }
 
 
-enum Granularity // TODO: Support more granularities
-{
-    Granularity_Days,
-    // Granularity_Weeks,
-    Granularity_Months,
-    // Granularity_Quarters,
-    // Granularity_Years
-};
 
 
 internal void
-process_and_print_summary(Program_State *state, Granularity granularity, date64 date_begin, date64 date_end)
+print_summary(Program_State *state, Granularity granularity,
+              date64 date_begin, date64 date_end,
+              String filter)
+{
+    if (state->records.count > 0)
+    {
+        Record *record = state->records.at(0);
+        
+        for (;;)
+        {
+            Boundries_Result boundries = {};
+            switch (granularity)
+            {
+                case Granularity_Days: {
+                    boundries.day_count = 1;
+                    boundries.first = record->date;
+                    boundries.last = record->date;
+                } break;
+                
+                
+                case Granularity_Months: {
+                    boundries = get_month_boundries(record->date);
+                } break;
+                
+                
+                case Granularity_Years: {
+                    boundries = get_year_boundries(record->date);
+                } break;
+                
+                
+                default: {
+                    assert(0);
+                } // fall
+                
+            }
+            
+            
+            Process_Days_Result days =
+                process_days_from_range(state, boundries.first, boundries.last, filter, ProcessDays_Calculate);
+            
+            if (days.time_total)
+            {
+                s32 day_count = boundries.day_count;
+                
+                if (days.next_day_record_index == state->records.count)
+                {
+                    date64 today = get_today();
+                    s32 current_day_count = (s32)((today - boundries.first) / Days(1)) + 1;
+                    
+                    if (current_day_count > 0) {
+                        day_count = pick_smaller(day_count, current_day_count);
+                    }
+                }
+                
+                
+                Str32 date_str = get_date_string(boundries.first);
+                Str32 sum_str = get_time_string(days.time_total);
+                
+                if (day_count > 1)
+                {
+                    s32 avg = days.time_total/day_count;
+                    Str32 avg_str = get_time_string(avg);
+                    Str128 bar = get_progress_bar_string(avg, MissingEnding_None); // TODO(f0): hack
+                    
+                    printf("%s\t"
+                           "sum: %s\tavg(/%3d): "
+                           "%s\t%s\n",
+                           date_str.str,
+                           sum_str.str, day_count,
+                           avg_str.str, bar.str);
+                }
+                else
+                {
+                    Str128 bar = get_progress_bar_string(days.time_total, MissingEnding_None); // TODO(f0): hack
+                    printf("%s\t"
+                           "sum: %s\t"
+                           "%s\n",
+                           date_str.str,
+                           sum_str.str,
+                           bar.str);
+                }
+            }
+            
+            
+            if (days.next_day_record_index >= state->records.count ||
+                days.next_day_record_index == 0)
+            {
+                break;
+            }
+            
+            record = state->records.at(days.next_day_record_index);
+            if (record->date > date_end) {
+                break;
+            }
+        }
+    }
+}
+
+
+
+
+
+#if 0
+internal void
+process_and_print_summary2(Program_State *state, Granularity granularity, date64 date_begin, date64 date_end)
 {
     u64 record_index = 0;
     
@@ -1613,13 +1752,14 @@ process_and_print_summary(Program_State *state, Granularity granularity, date64 
         }
     }
 }
+#endif
 
 
 
 internal void
 parse_command_summary(Program_State *state, Record_Session *session)
 {
-    Granularity granularity = Granularity_Days;
+    Granularity granularity = Granularity_Months;
     // TODO: Pull out granularity check.
     
     {
@@ -1639,26 +1779,34 @@ parse_command_summary(Program_State *state, Record_Session *session)
                 advance(&session->lexer);
                 granularity = Granularity_Months;
             }
-#if 0
             else if (token_equals(token, "years") ||
                      token_equals(token, "y"))
             {
                 advance(&session->lexer);
                 granularity = Granularity_Years;
             }
-#endif
         }
     }
     
-    // arg - optional - time range
+    
     Date_Range_Result range = get_date_range(session);
     
-    if (range.condition == Con_NoMatchigTokens)
-    {
+    if (range.condition == Con_NoMatchigTokens) {
         range = get_max_date_range();
     }
     
-    process_and_print_summary(state, granularity, range.begin, range.end);
+    
+    String filter = {};
+    {
+        Token token = peek_token(&session->lexer, 0);
+        if (token.type == Token_String) {
+            advance(&session->lexer);
+            filter = token.text;
+        }
+    }
+    
+    
+    print_summary(state, granularity, range.first, range.last, filter);
     
     
     if (range.condition == Con_HasErrors)
@@ -2213,7 +2361,7 @@ s32 main(int argument_count, char **arguments)
     if (!state.load_file_error)
     {
         Date_Range_Result range = get_recent_days_range(&state.records);
-        process_days_from_range(&state, range.begin, range.end, {}, ProcessDays_Print);
+        process_days_from_range(&state, range.first, range.last, {}, ProcessDays_Print);
         save_to_file(&state);
         
         if (reformat_mode) {
