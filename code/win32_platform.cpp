@@ -1,21 +1,6 @@
-#include <windows.h>
-#include <shellapi.h>
-#pragma comment(lib, "shell32.lib")
 
 
-typedef FILETIME File_Time;
 
-internal void
-platform_create_directory(char *path)
-{
-    CreateDirectoryA(path, NULL);
-}
-
-internal void
-platform_copy_file(char *source, char *destination)
-{
-    CopyFileA(source, destination, TRUE);
-}
 
 inline date64
 platform_tm_to_time(tm *date)
@@ -60,92 +45,33 @@ platform_sleep(u32 miliseconds)
     Sleep(miliseconds);
 }
 
-internal void
-platform_add_ending_slash_to_path(char *path)
-{
-    u32 length = (u32)strlen(path);
-    if (path[length - 1] != '/' || path[length - 1] != '\\')
-    {
-        path[length] = '\\';
-        path[length + 1] = 0;
-    }
-}
 
 
 internal void
-platform_open_in_default_editor(char *file_name)
+initialize_colors()
 {
-    ShellExecuteA(NULL, "open", file_name, NULL, NULL, SW_SHOWNORMAL);
-}
-
-
-internal void
-platform_get_executable_path(char *output, u32 output_size)
-{
-    GetModuleFileNameA(0, output, output_size);
-}
-
-
-
-namespace Color
-{
-    global char *f_black = "\033[30m";
-    global char *f_white = "\033[97m";
-    global char *f_date = "\033[33m";
-    global char *f_sum = "\033[32m";
-    global char *f_desc = "\033[36m";
-    global char *f_dimmed = "\033[90m";
-    global char *f_desc_delta = "\033[96m";
+    b32 success = false;
     
-    global char *b_error = "\033[41m";
-    global char *b_date = "\033[43m";
-    global char *b_help_header = "\033[100m";
-    
-    global char *f_reset = "\033[39m";
-    global char *b_reset = "\033[49m";
-};
-
-internal void
-initialize_colors(bool turn_off_colors)
-{
-    if (!turn_off_colors)
+    // Set output mode to handle virtual terminal sequences
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE)
     {
-        turn_off_colors = true;
-
-        // Set output mode to handle virtual terminal sequences
-        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-        if (hOut != INVALID_HANDLE_VALUE)
+        DWORD dwMode = 0;
+        
+        if (GetConsoleMode(hOut, &dwMode))
         {
-            DWORD dwMode = 0;
-
-            if (GetConsoleMode(hOut, &dwMode))
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            
+            if (SetConsoleMode(hOut, dwMode))
             {
-                dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-
-                if (SetConsoleMode(hOut, dwMode))
-                {
-                    turn_off_colors = false;
-                }
+                success = true;
             }
         }
     }
-
-    if (turn_off_colors)
-    {
-        using namespace Color;
-        f_black = "", f_white = "";
-        f_date = "";
-        f_sum = "";
-        f_desc = "";
-        f_dimmed = "";
-        f_desc_delta = "";
-
-        b_error = "";
-        b_date = "";
-        b_help_header = "";
-
-        f_reset = "";
-        b_reset = "";
+    
+    
+    if (!success) {
+        global_state.colors_disabled = true;
     }
 }
 

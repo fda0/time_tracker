@@ -26,9 +26,10 @@ global Color_Pair color_pairs[Color_Count] = {
     {Color_Warning, "\033[103m\033[30m"},
     
     {Color_HelpHeader, "\033[100m"},
-    {Color_Bar, "\033[34m"},
 };
 
+
+#include "win32_platform.cpp"
 #include "description.cpp"
 #include "lexer.cpp"
 #include "string.cpp"
@@ -76,6 +77,109 @@ print_color(Color_Code code)
         printf("%s", color);
     }
 }
+
+internal void
+print_help_item(char *command, char *args, char *help)
+{
+    print_color(Color_Positive);
+    printf("%s\t", command);
+    
+    if (args) {
+        print_color(Color_Description);
+        printf("%s\t", args);
+    }
+    
+    print_color(Color_Reset);
+    printf("%s\n", help);
+}
+
+internal void
+print_help_header(char *text)
+{
+    print_color(Color_HelpHeader);
+    printf("%s", text);
+    print_color(Color_Reset);
+    printf("\n");
+}
+
+
+internal void
+print_help_desc(char *text)
+{
+    print_color(Color_Dimmed);
+    printf("%s\n", text);
+    print_color(Color_Reset);
+}
+
+
+inline void
+print_description(Record *record, Color_Code color = Color_Description)
+{
+    String desc = record->desc;
+    if (desc.size)
+    {
+        print_color(color);
+        printf(" \"%.*s\"", string_expand(desc));
+        print_color(Color_Reset);
+    }
+}
+
+inline void
+print_time_delta(Record *time_delta_record)
+{
+    s32 time = time_delta_record->value;
+    char sign = (time < 0) ? '-' : '+';
+    
+    if (sign == '-') {
+        print_color(Color_AltNegative);
+    } else {
+        print_color(Color_AltPositive);
+    }
+    
+    Str32 time_str = get_time_string(time);
+    printf("  %c%s", sign, time_str.str);
+    print_color(Color_Reset);
+    
+    print_description(time_delta_record, Color_AltDescription);
+}
+
+inline void
+print_defered_time_deltas(Linked_List<Record> *defered)
+{
+    for_linked_list_ptr(node, defered)
+    {
+        Record record = node->item;
+        print_time_delta(&record);
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -403,47 +507,6 @@ get_index_range_for_date_range(Program_State *state, date64 date_begin, date64 d
     return result;
 }
 
-
-inline void
-print_description(Record *record, Color_Code color = Color_Description)
-{
-    String desc = record->desc;
-    if (desc.size)
-    {
-        print_color(color);
-        printf(" \"%.*s\"", string_expand(desc));
-        print_color(Color_Reset);
-    }
-}
-
-inline void
-print_time_delta(Record *time_delta_record)
-{
-    s32 time = time_delta_record->value;
-    char sign = (time < 0) ? '-' : '+';
-    
-    if (sign == '-') {
-        print_color(Color_AltNegative);
-    } else {
-        print_color(Color_AltPositive);
-    }
-    
-    Str32 time_str = get_time_string(time);
-    printf("  %c%s", sign, time_str.str);
-    print_color(Color_Reset);
-    
-    print_description(time_delta_record, Color_AltDescription);
-}
-
-inline void
-print_defered_time_deltas(Linked_List<Record> *defered)
-{
-    for_linked_list_ptr(node, defered)
-    {
-        Record record = node->item;
-        print_time_delta(&record);
-    }
-}
 
 
 
@@ -1904,8 +1967,8 @@ process_input(Program_State *state, Record_Session *session)
                         Error_Cmd_Exclusive;
                     } else {
                         date64 now = get_current_timestamp();
-                        Str128 now_str = get_timestamp_string(now);
-                        printf("Current time: %s\n", now_str.str);
+                        String now_str = get_timestamp_string(&state->arena, now);
+                        printf("Current time: %.*s\n", string_expand(now_str));
                     }
                 }
                 else if (token_equals(token, "edit"))
@@ -1913,9 +1976,7 @@ process_input(Program_State *state, Record_Session *session)
                     if (reading_from_file) {
                         Error_Cmd_Exclusive;
                     } else {
-                        // TODO(f0): should work with Path
-                        char *input_cstr = cstr_from_path(&state->arena, &state->input_path);
-                        platform_open_in_default_editor(input_cstr);
+                        path_open_in_default_program(&state->arena, &state->input_path);
                     }
                 }
                 else if (token_equals(token, "dir"))
@@ -1923,8 +1984,7 @@ process_input(Program_State *state, Record_Session *session)
                     if (reading_from_file) {
                         Error_Cmd_Exclusive;
                     } else {
-                        char *dir_cstr = cstr_from_directory(&state->arena, state->exe_path.directory);
-                        platform_open_in_default_editor(dir_cstr);
+                        directory_open_in_default_program(&state->arena, state->exe_path.directory);
                     }
                 }
                 else if (token_equals(token, "clear"))
@@ -2146,7 +2206,6 @@ s32 main(int argument_count, char **arguments)
     b32 reformat_mode = false;
     { 
         Cmd_Arugment_Type type = Cmd_None;
-        b32 disable_colors = false;
         
         for (s32 argument_index = 1; argument_index < argument_count; ++argument_index)
         {
@@ -2178,7 +2237,7 @@ s32 main(int argument_count, char **arguments)
                     }
                     else if (arg[1] == 'm')
                     {
-                        disable_colors = true;
+                        global_state.colors_disabled = true;
                     }
                     else if (arg[1] == 'r')
                     {
@@ -2202,7 +2261,9 @@ s32 main(int argument_count, char **arguments)
             }
         }
         
-        initialize_colors(disable_colors);
+        if (!global_state.colors_disabled) {
+            initialize_colors();
+        }
     }
     
     
@@ -2210,7 +2271,7 @@ s32 main(int argument_count, char **arguments)
     //~ initialize essential state
     initialize_timezone_offset();
     
-    state.exe_path = current_executable_path(arena);
+    state.exe_path = get_this_executable_path(arena);
     state.title = trim_from_index_of_reverse(state.exe_path.file_name, '.');
     
     if (state.input_path.file_name.size == 0)

@@ -1,6 +1,8 @@
 #include "stf0.h"
 #include "description.h"
 #include "lexer.h"
+#include "win32_platform.h"
+
 
 #include <stdint.h>
 #include <stdio.h>
@@ -19,15 +21,6 @@ struct Thread_Memory
     char cursor[64];
     b32 new_data;
 };
-
-
-#if Def_Windows
-#include "win32_platform.cpp"
-#else
-#error "system not defined"
-#endif
-
-
 
 
 //~ NOTE: Macros
@@ -74,7 +67,6 @@ enum Color_Code
     Color_Warning,
     
     Color_HelpHeader,
-    Color_Bar,
     
     Color_Count
 };

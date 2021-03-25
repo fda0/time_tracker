@@ -122,6 +122,7 @@ manual but may be guessed if not specified:
 #    define WIN32_LEAN_AND_MEAN
 #    include <Windows.h>
 #    include <timeapi.h>
+#    include <shellapi.h>
 #    undef small
 #endif
 
@@ -133,6 +134,7 @@ manual but may be guessed if not specified:
 // ========================= Platform =========================
 #if Stf0_Level >= 50
 #    pragma comment(lib, "winmm.lib")
+#    pragma comment(lib, "shell32.lib")
 #endif
 
 #pragma warning(pop)
@@ -2877,6 +2879,26 @@ file_get_size(File_Handle *file)
 
 
 
+inline void
+path_open_in_default_program(cstr_lit path_cstr)
+{
+    ShellExecuteA(NULL, "open", path_cstr, NULL, NULL, SW_SHOWNORMAL);
+}
+
+inline void
+path_open_in_default_program(Arena *temp_arena, Path *path)
+{
+    char *path_cstr = cstr_from_path(temp_arena, path);
+    path_open_in_default_program(path_cstr);
+}
+
+inline void
+directory_open_in_default_program(Arena *temp_arena, Directory directory)
+{
+    char *directory_cstr = cstr_from_directory(temp_arena, directory);
+    path_open_in_default_program(directory_cstr);
+}
+
 
 
 
@@ -2965,7 +2987,7 @@ directory_delete_all_files(Arena *temp_arena, Directory directory)
 
 // =============== @Platform_Directory_Functions ==============
 internal Directory
-current_working_directory(Arena *arena)
+get_current_working_directory(Arena *arena)
 {
     // NOTE(f0): ends with Native_Slash;
 #if Def_Windows
@@ -2993,7 +3015,7 @@ current_working_directory(Arena *arena)
 }
 
 internal Directory
-current_executable_directory(Arena *arena)
+get_this_executable_directory(Arena *arena)
 {
 #if Def_Windows
     char buffer[kilobytes(4)];
@@ -3009,7 +3031,7 @@ current_executable_directory(Arena *arena)
 }
 
 internal Path
-current_executable_path(Arena *arena)
+get_this_executable_path(Arena *arena)
 {
 #if Def_Windows
     char buffer[kilobytes(4)];

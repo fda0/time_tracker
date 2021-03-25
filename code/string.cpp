@@ -15,15 +15,13 @@ struct StrMaxPath
 };
 
 
-internal Str128
-get_timestamp_string(date64 time)
+internal String
+get_timestamp_string(Arena *arena, date64 time)
 {
     tm *date = gmtime(&time);
     
-    Str128 result;
-    snprintf(result.str, sizeof(result.str), "%04d-%02d-%02d %02d:%02d", date->tm_year + 1900, date->tm_mon + 1,
-             date->tm_mday, date->tm_hour, date->tm_min);
-    
+    String result = stringf(arena, "%04d-%02d-%02d %02d:%02d", date->tm_year + 1900, date->tm_mon + 1,
+                            date->tm_mday, date->tm_hour, date->tm_min);
     return result;
 }
 
@@ -222,33 +220,3 @@ get_day_of_the_week_string(date64 timestamp)
     return result;
 }
 
-
-
-//~ NOTE: Print functions
-
-internal void
-print_help_item(char *command, char *args, char *help)
-{
-    using namespace Color;
-    printf("%s%s\t", f_sum, command);
-    if (args)
-    {
-        printf("%s%s\t", f_desc, args);
-    }
-    printf("%s%s\n", f_reset, help);
-}
-
-internal void
-print_help_header(char *text)
-{
-    using namespace Color;
-    printf("%s%s%s%s%s\n", b_help_header, f_white, text, b_reset, f_reset);
-}
-
-
-internal void
-print_help_desc(char *text)
-{
-    using namespace Color;
-    printf("%s%s%s\n", f_dimmed, text, f_reset);
-}
