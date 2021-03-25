@@ -1,6 +1,6 @@
 #include "stf0.h"
 #include "description.h"
-#include "token.h"
+#include "lexer.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -168,6 +168,7 @@ struct Record_Session
     Lexer lexer;
     Token current_command_token;
     u32 change_count;
+    u32 add_records_call_count;
     b32 no_errors;
     b32 reading_from_file;
     b32 load_file_unresolved_errors;

@@ -30,7 +30,6 @@ global Color_Pair color_pairs[Color_Count] = {
 };
 
 #include "description.cpp"
-#include "error.cpp"
 #include "lexer.cpp"
 #include "string.cpp"
 #include "time.cpp"
@@ -488,7 +487,7 @@ process_days_from_range(Program_State *state,
     {
         arena_scope(arena);
         
-        Linked_List<Record> defered_time_deltas = {};
+        Linked_List<Record> defered_time_deltas = {}; // NOTE: for prints only
         Record *active_start = nullptr;
         Open_State open_state = Closed_PostPrint;
         s32 day_time_sum = 0;
@@ -587,8 +586,12 @@ process_days_from_range(Program_State *state,
                     if (record.type == Record_TimeDelta)
                     {
                         day_time_sum += record.value;
-                        // NOTE: case: this needs to be printed _after_ we print "stop"
-                        *defered_time_deltas.append(arena) = record;
+                        
+                        if (should_print)
+                        {
+                            // NOTE: case: this needs to be printed _after_ we print "stop"
+                            *defered_time_deltas.append(arena) = record;
+                        }
                     }
                     else if (record.type == Record_TimeStart ||
                              record.type == Record_TimeStop)
@@ -614,8 +617,16 @@ process_days_from_range(Program_State *state,
                             
                             print_defered_time_deltas(&defered_time_deltas);
                             // print CountDelta defers on new lines
+                            
                             printf("\n");
+                            
+                            
+                            // NOTE: In case of "start 1; start 2; assumed end time"
+                            // this defered_time_deltas would get printed twice
+                            // (additional print for assumed time range)
+                            defered_time_deltas = {};
                         }
+                        
                         
                         
                         active_start = nullptr;
@@ -698,7 +709,7 @@ process_days_from_range(Program_State *state,
             if (should_print)
             {
                 print_color(Color_Dimmed);
-                Str32 time_str = get_time_string(active_start->value);
+                Str32 time_str = get_time_string(now_time);
                 printf("%s ", time_str.str);
                 
                 if (local_sum < Days(1)) {
@@ -984,6 +995,8 @@ save_to_file(Program_State *state)
 internal void
 add_record(Record_Session *session, Record *record)
 {
+    session->add_records_call_count += 1;
+    
     if (no_errors(session) && session->load_file_unresolved_errors) {
         session_set_error(session, "New records can't be added because file has unresolved errors");
     }
@@ -1102,6 +1115,11 @@ add_record(Record_Session *session, Record *record)
     }
 }
 
+
+
+
+
+
 internal b32
 fill_date_optional(Record_Session *session, Record *record)
 {
@@ -1144,6 +1162,9 @@ fill_date_optional(Record_Session *session, Record *record)
     return success;
 }
 
+
+
+
 internal b32
 fill_time_optional(Record_Session *session, Record *record)
 {
@@ -1174,6 +1195,8 @@ fill_time_optional(Record_Session *session, Record *record)
 }
 
 
+
+
 internal b32
 fill_time_required(Record_Session *session, Record *record)
 {
@@ -1195,6 +1218,10 @@ fill_time_required(Record_Session *session, Record *record)
     return success;
 }
 
+
+
+
+
 internal void
 fill_description_optional(Record_Session *session, Record *record)
 {
@@ -1207,6 +1234,9 @@ fill_description_optional(Record_Session *session, Record *record)
         record->desc = token.text;
     }
 }
+
+
+
 
 
 internal void
@@ -1237,6 +1267,7 @@ prase_command_start(Record_Session *session)
                           "start [yyyy-MM-dd] (hh:mm) [\"description\"]");
     }
 }
+
 
 
 internal void
@@ -1486,7 +1517,7 @@ parse_command_show(Program_State *state, Record_Session *session)
             {
                 range = get_recent_days_range(session->records);
                 message = "Range assumed from xxxx-xx-xx to xxxx-xx-xx; "
-                    "Specify filter or use \"show all\" to use all records\n";
+                    "To use all records specify filter or use \"show all\"\n";
             }
         }
         
@@ -1627,132 +1658,6 @@ print_summary(Program_State *state, Granularity granularity,
         }
     }
 }
-
-
-
-
-
-#if 0
-internal void
-process_and_print_summary2(Program_State *state, Granularity granularity, date64 date_begin, date64 date_end)
-{
-    u64 record_index = 0;
-    
-    // NOTE: Skip record before date_begin
-    for (;
-         record_index < state->records.count;
-         ++record_index)
-    {
-        Record *record = state->records.at(record_index);
-        if (date_begin <= record->date)
-        {
-            break;
-        }
-    }
-    
-    
-    time32 sum = 0;
-    Boundries_Result boundries = {};
-    b32 loop = true;
-    Record *record = state->records.at(record_index);
-    
-    while (loop)
-    {
-        loop = increase_index_to_next_day(&state->records, &record_index);
-        
-        if (loop)
-        {
-            record = state->records.at(record_index);
-            if (date_end < record->date)
-            {
-                loop = false;
-            }
-        }
-        
-        
-        
-        b32 past_boundary = loop && (record->date >= boundries.one_day_past_end);
-        
-        
-        // NOTE: Print line
-        if (!loop || past_boundary)
-        {
-            s32 day_count = (s32)boundries.day_count;
-            if (day_count > 0)
-            {
-                Str32 date_str = get_date_string(boundries.begin);
-                
-                date64 today = get_today();
-                if (today < boundries.one_day_past_end && today >= boundries.begin)
-                {
-                    day_count = (s32)(today / (Days(1))) - (s32)(boundries.begin / (Days(1)));
-                    
-                    if (day_count <= 0)
-                    {
-                        day_count = 1;
-                    }
-                }
-                
-                time32 time_avg = sum / day_count;
-                
-                Str32 sum_str = get_time_string(sum);
-                Str128 avg_bar = get_progress_bar_string(time_avg, MissingEnding_None);
-                
-                Str128 sum_bar;
-                if (day_count >= 2)
-                {
-                    Str32 avg_str = get_time_string(time_avg);
-                    
-                    snprintf(sum_bar.str, sizeof(sum_bar.str), "sum: %s\tavg(/%d): %s\t%s", sum_str.str, day_count,
-                             avg_str.str, avg_bar.str);
-                }
-                else
-                {
-                    snprintf(sum_bar.str, sizeof(sum_bar.str), "sum: %s\t%s", sum_str.str, avg_bar.str);
-                }
-                
-                using namespace Color;
-                printf("%s%s\t%s%s%s\n", f_date, date_str.str, f_sum, sum_bar.str, f_reset);
-            }
-            
-            // NOTE: Clear sum
-            sum = 0;
-        }
-        
-        
-        // NOTE: Summing
-        if (loop)
-        {
-            Day_Sum_Result day_sum = get_day_sum(state, record->date);
-            sum += day_sum.sum;
-        }
-        
-        
-        // NOTE: Update boundary
-        if (loop && past_boundary)
-        {
-            switch (granularity)
-            {
-                case Granularity_Months: {
-                    boundries = get_month_boundries(record->date);
-                }
-                break;
-                
-                default: {
-                    assert(0);
-                } // fall
-                
-                case Granularity_Days: {
-                    boundries.day_count = 1;
-                    boundries.begin = record->date;
-                    boundries.one_day_past_end = record->date + Days(1);
-                }
-                break;
-            }
-        }
-    }
-}
-#endif
 
 
 
@@ -2116,22 +2021,19 @@ process_input(Program_State *state, Record_Session *session)
     }
     else
     {
-        print_color(Color_Warning);
-        printf("[Warning] Records not added due to errors");
-        print_color(Color_Reset);
-        printf("\n");
+        if (session->add_records_call_count > 0)
+        {
+            print_color(Color_Warning);
+            printf("[Warning] Records not added due to errors");
+            print_color(Color_Reset);
+            printf("\n");
+        }
+        
         pop_program_scope(&session->scope);
     }
 }
 
 
-internal void
-clear_program_state(Program_State *state)
-{
-    // TODO(f0): Don't leak memory!
-    clear_table(&state->desc_table);
-    state->records.reset_memory();
-}
 
 
 
@@ -2185,6 +2087,8 @@ load_file(Program_State *state)
     
     state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
 }
+
+
 
 
 internal void
@@ -2436,3 +2340,5 @@ s32 main(int argument_count, char **arguments)
         }
     }
 }
+
+

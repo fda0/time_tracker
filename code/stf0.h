@@ -2347,6 +2347,7 @@ is_valid_handle(File_Handle *file)
 #if Def_Slow
     if (!result) {
         s32 error_code = GetLastError();
+        printf("[log] File handle error: %d; ", error_code);
         debug_break();
     }
 #endif
