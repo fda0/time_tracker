@@ -118,13 +118,6 @@ struct Range_u64
     u64 one_past_last;
 };
 
-enum Missing_Ending
-{
-    MissingEnding_None,
-    MissingEnding_Assumed,
-    MissingEnding_Critical
-};
-
 enum Record_Type
 {
     Record_Empty,

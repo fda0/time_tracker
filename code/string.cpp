@@ -59,7 +59,7 @@ get_date_string(Arena *arena, date64 timestamp)
 
 
 internal String
-get_progress_bar_string(Arena *arena, time32 time, Missing_Ending missing_ending)
+get_progress_bar_string(Arena *arena, time32 time, b32 closed_range_ending)
 {
     // TODO(f0): clean this function up
     String result = allocate_string(arena, 128); // TODO(f0): what is actual max size
@@ -78,15 +78,6 @@ get_progress_bar_string(Arena *arena, time32 time, Missing_Ending missing_ending
     s32 signs_printed = 0;
     b32 printed_separator_recently = true;
     s32 print_align_spaces = (4 - (signs_to_print % 4)) % 4;
-    
-    char *close_bracket_string;
-    if (missing_ending == MissingEnding_None) {
-        close_bracket_string = "]";
-    } else if (missing_ending == MissingEnding_Assumed) {
-        close_bracket_string = ")";
-    } else {
-        close_bracket_string = "> stop is missing!";
-    }
     
     
     for_u32(index, result.size)
@@ -122,10 +113,11 @@ get_progress_bar_string(Arena *arena, time32 time, Missing_Ending missing_ending
             result.str[index] = ' ';
             --print_align_spaces;
         }
-        else if (*close_bracket_string)
+        else if (closed_range_ending)
         {
-            result.str[index] = *close_bracket_string;
-            ++close_bracket_string;
+            result.str[index] = ']';
+            result.size = index + 1;
+            break;
         }
         else
         {
@@ -141,10 +133,10 @@ get_progress_bar_string(Arena *arena, time32 time, Missing_Ending missing_ending
 
 
 internal String
-get_sum_and_progress_bar_string(Arena *arena, time32 sum, Missing_Ending missing_ending)
+get_sum_and_progress_bar_string(Arena *arena, time32 sum, b32 closed_range_ending)
 {
     String time = get_time_string(arena, sum);
-    String bar = get_progress_bar_string(arena, sum, missing_ending);
+    String bar = get_progress_bar_string(arena, sum, closed_range_ending);
     
     char *minus = (sum < 0) ? "-" : "";
     

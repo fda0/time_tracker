@@ -804,7 +804,7 @@ process_days_from_range(Program_State *state,
         {
             // TODO(f0): Figure out missing ending stuff
             String time = get_time_string(arena, day_time_sum);
-            String bar = get_progress_bar_string(arena, day_time_sum, MissingEnding_None);
+            String bar = get_progress_bar_string(arena, day_time_sum, (result.time_assumed == 0));
             
             print_color(Color_Dimmed);
             print_color(Color_Positive);
@@ -844,7 +844,7 @@ process_days_from_range(Program_State *state,
 struct Day_Sum_Result
 {
     time32 sum;
-    Missing_Ending missing_ending;
+    b32 closed_range_ending;
 };
 
 inline Day_Sum_Result
@@ -854,12 +854,7 @@ get_day_sum(Program_State *state, date64 date)
     
     Day_Sum_Result result = {};
     result.sum = days.time_total - days.time_assumed;
-    
-    if (days.time_assumed > Days(1)) {
-        result.missing_ending = MissingEnding_Critical;
-    } else if (days.time_assumed > 0) {
-        result.missing_ending = MissingEnding_Assumed;
-    }
+    result.closed_range_ending = (days.time_assumed == 0);
     
     return result;
 }
@@ -1027,7 +1022,7 @@ save_to_file(Program_State *state)
             if (is_new_day)
             {
                 Day_Sum_Result sum_result = get_day_sum(state, record->date);
-                String sum_bar = get_sum_and_progress_bar_string(arena, sum_result.sum, sum_result.missing_ending);
+                String sum_bar = get_sum_and_progress_bar_string(arena, sum_result.sum, sum_result.closed_range_ending);
                 
                 add(l2s("// "));
                 add(sum_bar);
@@ -1635,6 +1630,7 @@ print_summary(Program_State *state, Granularity granularity,
 {
     Arena *arena = &state->arena;
     arena_scope(arena);
+    date64 today = get_today();
     
     if (state->records.count > 0)
     {
@@ -1672,13 +1668,14 @@ print_summary(Program_State *state, Granularity granularity,
             Process_Days_Result days =
                 process_days_from_range(state, boundries.first, boundries.last, filter, ProcessDays_Calculate);
             
+            b32 boundry_ended_before_today = (boundries.last < today);
+            
             if (days.time_total)
             {
                 s32 day_count = boundries.day_count;
                 
                 if (days.next_day_record_index == state->records.count)
                 {
-                    date64 today = get_today();
                     s32 current_day_count = (s32)((today - boundries.first) / Days(1)) + 1;
                     
                     if (current_day_count > 0) {
@@ -1694,7 +1691,7 @@ print_summary(Program_State *state, Granularity granularity,
                 {
                     s32 avg = days.time_total/day_count;
                     String avg_str = get_time_string(arena, avg);
-                    String bar = get_progress_bar_string(arena, avg, MissingEnding_None); // TODO(f0): hack
+                    String bar = get_progress_bar_string(arena, avg, boundry_ended_before_today);
                     
                     printf("%.*s\t"
                            "sum: %.*s\tavg(/%3d): "
@@ -1705,7 +1702,7 @@ print_summary(Program_State *state, Granularity granularity,
                 }
                 else
                 {
-                    String bar = get_progress_bar_string(arena, days.time_total, MissingEnding_None); // TODO(f0): hack
+                    String bar = get_progress_bar_string(arena, days.time_total, boundry_ended_before_today);
                     printf("%.*s\t"
                            "sum: %.*s\t"
                            "%.*s\n",
