@@ -36,18 +36,18 @@ global Color_Pair color_pairs[Color_Count] = {
 #include "time.cpp"
 
 
-
-
-
-
-
-
-
-
-
-
-
 internal void load_file(Program_State *state);
+
+
+
+
+
+
+
+
+
+
+
 
 
 inline char *
@@ -125,8 +125,10 @@ print_description(Record *record, Color_Code color = Color_Description)
 }
 
 inline void
-print_time_delta(Record *time_delta_record)
+print_time_delta(Arena *temp_arena, Record *time_delta_record)
 {
+    arena_scope(temp_arena);
+    
     s32 time = time_delta_record->value;
     char sign = (time < 0) ? '-' : '+';
     
@@ -136,20 +138,20 @@ print_time_delta(Record *time_delta_record)
         print_color(Color_AltPositive);
     }
     
-    Str32 time_str = get_time_string(time);
-    printf("  %c%s", sign, time_str.str);
+    String time_str = get_time_string(temp_arena, time);
+    printf("  %c%.*s", sign, string_expand(time_str));
     print_color(Color_Reset);
     
     print_description(time_delta_record, Color_AltDescription);
 }
 
 inline void
-print_defered_time_deltas(Linked_List<Record> *defered)
+print_defered_time_deltas(Arena *temp_arena, Linked_List<Record> *defered)
 {
     for_linked_list_ptr(node, defered)
     {
         Record record = node->item;
-        print_time_delta(&record);
+        print_time_delta(temp_arena, &record);
     }
 }
 
@@ -586,8 +588,8 @@ process_days_from_range(Program_State *state,
             {
                 day_header_printed = true;
                 
-                Str32 date_str = get_date_string(range.date);
-                Str32 day_of_week = get_day_of_the_week_string(range.date);
+                String date_str = get_date_string(arena, range.date);
+                String day_of_week = get_day_of_the_week_string(arena, range.date);
                 
                 printf("\n");
                 
@@ -597,7 +599,7 @@ process_days_from_range(Program_State *state,
                     print_color(Color_Date);
                 }
                 
-                printf("%s %s", date_str.str, day_of_week.str);
+                printf("%.*s %.*s", string_expand(date_str), string_expand(day_of_week));
                 
                 print_color(Color_Reset);
                 printf("\n");
@@ -617,14 +619,14 @@ process_days_from_range(Program_State *state,
                 
                 if (should_print)
                 {
-                    Str32 time_str = get_time_string(record.value);
-                    printf("%s", time_str.str);
+                    String time_str = get_time_string(arena, record.value);
+                    printf("%.*s", string_expand(time_str));
                     
                     print_color(Color_Dimmed);
                     if (record.date != range.date + Days(1))
                     {
-                        Str32 date_str = get_date_string(record.date);
-                        printf(" (%s)", date_str.str);
+                        String date_str = get_date_string(arena, record.date);
+                        printf(" (%.*s)", string_expand(date_str));
                     }
                     else
                     {
@@ -635,7 +637,7 @@ process_days_from_range(Program_State *state,
                     
                     print_description(active_start);
                     
-                    print_defered_time_deltas(&defered_time_deltas);
+                    print_defered_time_deltas(arena, &defered_time_deltas);
                     // print all defers (TimeDelta & CountDelta) here
                     printf("\n");
                 }
@@ -669,8 +671,8 @@ process_days_from_range(Program_State *state,
                                 print_color(Color_Dimmed);
                             }
                             
-                            Str32 time_str = get_time_string(record.value);
-                            printf("%s", time_str.str);
+                            String time_str = get_time_string(arena, record.value);
+                            printf("%.*s", string_expand(time_str));
                             
                             print_color(Color_Reset);
                             
@@ -678,7 +680,7 @@ process_days_from_range(Program_State *state,
                             print_description(active_start);
                             
                             
-                            print_defered_time_deltas(&defered_time_deltas);
+                            print_defered_time_deltas(arena, &defered_time_deltas);
                             // print CountDelta defers on new lines
                             
                             printf("\n");
@@ -718,7 +720,7 @@ process_days_from_range(Program_State *state,
                         if (should_print)
                         {
                             printf("      ");
-                            print_time_delta(&record);
+                            print_time_delta(arena, &record);
                             printf("\n");
                         }
                     }
@@ -729,8 +731,8 @@ process_days_from_range(Program_State *state,
                         
                         if (should_print)
                         {
-                            Str32 time_str = get_time_string(record.value);
-                            printf("%s -> ", time_str.str);
+                            String time_str = get_time_string(arena, record.value);
+                            printf("%.*s -> ", string_expand(time_str));
                         }
                     }
                     else if (record.type == Record_TimeStop)
@@ -772,8 +774,8 @@ process_days_from_range(Program_State *state,
             if (should_print)
             {
                 print_color(Color_Dimmed);
-                Str32 time_str = get_time_string(now_time);
-                printf("%s ", time_str.str);
+                String time_str = get_time_string(arena, now_time);
+                printf("%.*s ", string_expand(time_str));
                 
                 if (local_sum < Days(1)) {
                     printf("(now)");
@@ -787,7 +789,7 @@ process_days_from_range(Program_State *state,
                 
                 print_description(active_start);
                 
-                print_defered_time_deltas(&defered_time_deltas);
+                print_defered_time_deltas(arena, &defered_time_deltas);
                 // print CountDelta defers on new lines
                 printf("\n");
             }
@@ -801,14 +803,14 @@ process_days_from_range(Program_State *state,
         if (should_print && day_header_printed)
         {
             // TODO(f0): Figure out missing ending stuff
-            Str32 time = get_time_string(day_time_sum);
-            Str128 bar = get_progress_bar_string(day_time_sum, MissingEnding_None);
+            String time = get_time_string(arena, day_time_sum);
+            String bar = get_progress_bar_string(arena, day_time_sum, MissingEnding_None);
             
             print_color(Color_Dimmed);
             print_color(Color_Positive);
-            printf("Time total: %s  ", time.str);
+            printf("Time total: %.*s  ", string_expand(time));
             
-            printf("%s", bar.str);
+            printf("%.*s", string_expand(bar));
             
             print_color(Color_Reset);
             printf("\n");
@@ -902,19 +904,21 @@ get_day_sum(Program_State *state, date64 date)
 internal void
 archive_current_file(Program_State *state, b32 long_format = false)
 {
+    Arena *arena = &state->arena;
+    arena_scope(arena);
+    
     // TODO(f0): calculate hash of the whole file for file_name
     
     date64 now = get_current_timestamp();
-    Str128 timestamp = get_timestamp_string_for_file(now, long_format);
+    String timestamp = get_timestamp_string_for_file(arena, now, long_format);
     
-    String file_name = stringf(&state->arena, "%.*s_%s.txt",
-                                    string_expand(state->title), timestamp.str);
+    String file_name = stringf(arena, "%.*s_%s.txt",
+                               string_expand(state->title), timestamp.str);
     
     Path archive_path = get_path(state->archive_dir, file_name);
-    file_copy(&state->arena, &state->input_path, &archive_path, false);
+    file_copy(arena, &state->input_path, &archive_path, false);
     
-    if (long_format) 
-    {
+    if (long_format) {
         printf("File archived as: %.*s\n", string_expand(file_name));
     }
 }
@@ -927,17 +931,18 @@ archive_current_file(Program_State *state, b32 long_format = false)
 internal b32
 save_to_file(Program_State *state)
 {
-    arena_scope(&state->arena);
+    Arena *arena = &state->arena;
+    arena_scope(arena);
     archive_current_file(state);
     
     b32 success = false;
     
-    File_Handle file = file_open_write(&state->arena, &state->input_path);
+    File_Handle file = file_open_write(arena, &state->input_path);
     if (no_errors(&file))
     {
         Simple_String_Builder builder = {};
         auto add = [&](String string) {
-            builder_add(&state->arena, &builder, string);
+            builder_add(arena, &builder, string);
         };
         
         b32 is_new_day = true;
@@ -950,9 +955,9 @@ save_to_file(Program_State *state)
             // print day header comment
             if (is_new_day)
             {
-                Str32 day_of_week = get_day_of_the_week_string(record->date);
+                String day_of_week = get_day_of_the_week_string(arena, record->date);
                 add(l2s("// "));
-                add(copy_string(&state->arena, string(day_of_week.str)));
+                add(day_of_week);
                 add(l2s("\n"));
             }
             
@@ -987,15 +992,15 @@ save_to_file(Program_State *state)
             // print date
             if (is_new_day)
             {
-                Str32 date_str = get_date_string(record->date);
-                add(copy_string(&state->arena, string(date_str.str)));
+                String date_str = get_date_string(arena, record->date);
+                add(date_str);
                 add(l2s(" "));
             }
             
             
             // print time
-            Str32 time_str = get_time_string(record->value);
-            add(copy_string(&state->arena, string(time_str.str)));
+            String time_str = get_time_string(arena, record->value);
+            add(time_str);
             
             
             // print description
@@ -1022,10 +1027,10 @@ save_to_file(Program_State *state)
             if (is_new_day)
             {
                 Day_Sum_Result sum_result = get_day_sum(state, record->date);
-                Str128 sum_bar = get_sum_and_progress_bar_string(sum_result.sum, sum_result.missing_ending);
+                String sum_bar = get_sum_and_progress_bar_string(arena, sum_result.sum, sum_result.missing_ending);
                 
                 add(l2s("// "));
-                add(copy_string(&state->arena, string(sum_bar.str)));
+                add(sum_bar);
                 add(l2s("\n\n"));
                 active_day_index = record_index + 1;
             }
@@ -1628,6 +1633,9 @@ print_summary(Program_State *state, Granularity granularity,
               date64 date_begin, date64 date_end,
               String filter)
 {
+    Arena *arena = &state->arena;
+    arena_scope(arena);
+    
     if (state->records.count > 0)
     {
         Record *record = state->records.at(0);
@@ -1679,31 +1687,31 @@ print_summary(Program_State *state, Granularity granularity,
                 }
                 
                 
-                Str32 date_str = get_date_string(boundries.first);
-                Str32 sum_str = get_time_string(days.time_total);
+                String date_str = get_date_string(arena, boundries.first);
+                String sum_str = get_time_string(arena, days.time_total);
                 
                 if (day_count > 1)
                 {
                     s32 avg = days.time_total/day_count;
-                    Str32 avg_str = get_time_string(avg);
-                    Str128 bar = get_progress_bar_string(avg, MissingEnding_None); // TODO(f0): hack
+                    String avg_str = get_time_string(arena, avg);
+                    String bar = get_progress_bar_string(arena, avg, MissingEnding_None); // TODO(f0): hack
                     
-                    printf("%s\t"
-                           "sum: %s\tavg(/%3d): "
-                           "%s\t%s\n",
-                           date_str.str,
-                           sum_str.str, day_count,
-                           avg_str.str, bar.str);
+                    printf("%.*s\t"
+                           "sum: %.*s\tavg(/%3d): "
+                           "%.*s\t%.*s\n",
+                           string_expand(date_str),
+                           string_expand(sum_str), day_count,
+                           string_expand(avg_str), string_expand(bar));
                 }
                 else
                 {
-                    Str128 bar = get_progress_bar_string(days.time_total, MissingEnding_None); // TODO(f0): hack
-                    printf("%s\t"
-                           "sum: %s\t"
-                           "%s\n",
-                           date_str.str,
-                           sum_str.str,
-                           bar.str);
+                    String bar = get_progress_bar_string(arena, days.time_total, MissingEnding_None); // TODO(f0): hack
+                    printf("%.*s\t"
+                           "sum: %.*s\t"
+                           "%.*s\n",
+                           string_expand(date_str),
+                           string_expand(sum_str),
+                           string_expand(bar));
                 }
             }
             

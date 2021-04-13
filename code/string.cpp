@@ -1,19 +1,3 @@
-struct Str32
-{
-    char str[32];
-};
-
-
-struct Str128
-{
-    char str[128];
-};
-
-struct StrMaxPath
-{
-    char str[MAX_PATH];
-};
-
 
 internal String
 get_timestamp_string(Arena *arena, date64 time)
@@ -25,22 +9,22 @@ get_timestamp_string(Arena *arena, date64 time)
     return result;
 }
 
-internal Str128
-get_timestamp_string_for_file(date64 time, b32 long_format)
+internal String
+get_timestamp_string_for_file(Arena *arena, date64 time, b32 long_format)
 {
     tm *date = gmtime(&time);
     
-    Str128 result;
+    String result;
     
     if (long_format)
     {
-        snprintf(result.str, sizeof(result.str), "%04d-%02d-%02d_%02d-%02d-%02d", date->tm_year + 1900,
-                 date->tm_mon + 1, date->tm_mday, date->tm_hour, date->tm_min, date->tm_sec);
+        result = stringf(arena, "%04d-%02d-%02d_%02d-%02d-%02d", date->tm_year + 1900,
+                         date->tm_mon + 1, date->tm_mday, date->tm_hour, date->tm_min, date->tm_sec);
     }
     else
     {
-        snprintf(result.str, sizeof(result.str), "%04d-%02d-%02d_%02d-%02d", date->tm_year + 1900, date->tm_mon + 1,
-                 date->tm_mday, date->tm_hour, date->tm_min);
+        result = stringf(arena, "%04d-%02d-%02d_%02d-%02d", date->tm_year + 1900, date->tm_mon + 1,
+                         date->tm_mday, date->tm_hour, date->tm_min);
     }
     
     return result;
@@ -48,8 +32,8 @@ get_timestamp_string_for_file(date64 time, b32 long_format)
 
 
 
-internal Str32
-get_time_string(time32 time)
+internal String
+get_time_string(Arena *arena, time32 time)
 {
     time = abs(time);
     
@@ -58,33 +42,31 @@ get_time_string(time32 time)
     s32 minutes_in_hour = 60;
     s32 minutes = (s32)((time / Minutes(1)) % minutes_in_hour);
     
-    Str32 result;
-    snprintf(result.str, sizeof(result.str), "%02d:%02d", hours, minutes);
+    String result = stringf(arena, "%02d:%02d", hours, minutes);
     return result;
 }
 
 
-internal Str32
-get_date_string(date64 timestamp)
+internal String
+get_date_string(Arena *arena, date64 timestamp)
 {
     tm *date = gmtime(&timestamp);
     
-    Str32 result;
-    snprintf(result.str, sizeof(result.str), "%04d-%02d-%02d", date->tm_year + 1900, date->tm_mon + 1, date->tm_mday);
+    String result = stringf(arena, "%04d-%02d-%02d", date->tm_year + 1900, date->tm_mon + 1, date->tm_mday);
     return result;
 }
 
 
 
-internal Str128
-get_progress_bar_string(time32 time, Missing_Ending missing_ending)
+internal String
+get_progress_bar_string(Arena *arena, time32 time, Missing_Ending missing_ending)
 {
-    Str128 result;
-    char *output = result.str;
-    s32 output_size = sizeof(result.str);
+    // TODO(f0): clean this function up
+    String result = allocate_string(arena, 128); // TODO(f0): what is actual max size
     
-    if (time > Days(1))
+    if (time > Days(1)) {
         time = Days(1);
+    }
     
     s32 hours = (s32)(time / Hours(1) % (Days(1) / Hours(1)));
     s32 minutes = (s32)(time / Minutes(1)) % (Hours(1) / Minutes(1));
@@ -98,26 +80,27 @@ get_progress_bar_string(time32 time, Missing_Ending missing_ending)
     s32 print_align_spaces = (4 - (signs_to_print % 4)) % 4;
     
     char *close_bracket_string;
-    if (missing_ending == MissingEnding_None)
+    if (missing_ending == MissingEnding_None) {
         close_bracket_string = "]";
-    else if (missing_ending == MissingEnding_Assumed)
+    } else if (missing_ending == MissingEnding_Assumed) {
         close_bracket_string = ")";
-    else
+    } else {
         close_bracket_string = "> stop is missing!";
+    }
     
     
-    for (s32 index = 0; index < output_size; ++index)
+    for_u32(index, result.size)
     {
         if (print_open_bracket)
         {
-            output[index] = '[';
+            result.str[index] = '[';
             print_open_bracket = false;
         }
         else if (signs_printed < signs_to_print)
         {
             if (!printed_separator_recently && (signs_printed % 4 == 0))
             {
-                output[index] = ' ';
+                result.str[index] = ' ';
                 printed_separator_recently = true;
             }
             else
@@ -129,94 +112,68 @@ get_progress_bar_string(time32 time, Missing_Ending missing_ending)
                     sign = '+';
                 
                 
-                output[index] = sign;
+                result.str[index] = sign;
                 ++signs_printed;
                 printed_separator_recently = false;
             }
         }
         else if (print_align_spaces > 0)
         {
-            output[index] = ' ';
+            result.str[index] = ' ';
             --print_align_spaces;
         }
         else if (*close_bracket_string)
         {
-            output[index] = *close_bracket_string;
+            result.str[index] = *close_bracket_string;
             ++close_bracket_string;
         }
         else
         {
-            output[index] = 0;
+            result.size = index;
             break;
         }
     }
     
-    output[output_size - 1] = 0;
     
     return result;
 }
 
 
 
-internal Str128
-get_sum_and_progress_bar_string(time32 sum, Missing_Ending missing_ending)
+internal String
+get_sum_and_progress_bar_string(Arena *arena, time32 sum, Missing_Ending missing_ending)
 {
-    Str32 time = get_time_string(sum);
-    
-    Str128 bar = get_progress_bar_string(sum, missing_ending);
+    String time = get_time_string(arena, sum);
+    String bar = get_progress_bar_string(arena, sum, missing_ending);
     
     char *minus = (sum < 0) ? "-" : "";
-    Str128 result;
-    snprintf(result.str, sizeof(result.str), "sum: %s%s       %s", minus, time.str, bar.str);
+    
+    String result = stringf(arena, "sum: %s%.*s       %.*s",
+                            minus, string_expand(time), string_expand(bar));
+    
     return result;
 }
 
 
-internal Str32
-get_day_of_the_week_string(date64 timestamp)
+internal String
+get_day_of_the_week_string(Arena *arena, date64 timestamp)
 {
     tm *date = gmtime(&timestamp);
     
-    char *day_str = NULL;
+    char *day_str;
     switch (date->tm_wday)
     {
-        case 0: {
-            day_str = "Sunday";
-            break;
-        }
-        case 1: {
-            day_str = "Monday";
-            break;
-        }
-        case 2: {
-            day_str = "Tuesday";
-            break;
-        }
-        case 3: {
-            day_str = "Wednesday";
-            break;
-        }
-        case 4: {
-            day_str = "Thursday";
-            break;
-        }
-        case 5: {
-            day_str = "Friday";
-            break;
-        }
-        case 6: {
-            day_str = "Saturday";
-            break;
-        }
-        default: {
-            day_str = "???";
-            break;
-        }
+        case 0:  { day_str = "Sunday";    } break;
+        case 1:  { day_str = "Monday";    } break;
+        case 2:  { day_str = "Tuesday";   } break;
+        case 3:  { day_str = "Wednesday"; } break;
+        case 4:  { day_str = "Thursday";  } break;
+        case 5:  { day_str = "Friday";    } break;
+        case 6:  { day_str = "Saturday";  } break;
+        default: { day_str = "???";       } break;
     }
     
-    Str32 result;
-    snprintf(result.str, sizeof(result.str), day_str);
-    
+    String result = stringf(arena, "%s", day_str);
     return result;
 }
 
