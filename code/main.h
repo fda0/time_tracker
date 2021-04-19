@@ -39,7 +39,7 @@ enum Granularity
     Granularity_Days,
     // Granularity_Weeks,
     Granularity_Months,
-    // Granularity_Quarters,
+    Granularity_Quarters,
     Granularity_Years
 };
 
@@ -189,17 +189,17 @@ struct Program_State
 };
 
 
-enum Condition
+enum Status
 {
-    Con_NoMatchigTokens,
-    Con_HasErrors,
-    Con_IsValid,
+    Status_NoMatchigTokens,
+    Status_HasErrors,
+    Status_Valid,
 };
 
 inline b32
-is_condition_valid(Condition condition)
+is_valid(Status status)
 {
-    b32 result = (condition == Con_IsValid);
+    b32 result = (status == Status_Valid);
     return result;
 }
 
@@ -212,18 +212,18 @@ struct Parse_Date_Result
 struct Parse_Complex_Date_Result
 {
     date64 date;
-    Condition condition;
+    Status status;
 };
 
 struct Parse_Time_Result
 {
-    s32 time;
+    s32 value;
     b32 is_valid;
 };
 
 struct Parse_Number_Result
 {
-    s32 number;
+    s32 value;
     b32 is_valid;
 };
 
@@ -239,5 +239,6 @@ struct Date_Range_Result
             date64 last; // NOTE: Inclusive end
         };
     };
-    Condition condition;
+    
+    Status status;
 };

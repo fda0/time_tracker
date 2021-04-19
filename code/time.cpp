@@ -58,18 +58,21 @@ initialize_timezone_offset()
 }
 
 
-struct Boundries_Result
+struct Boundaries_Result
 {
-    s32 day_count;
-    
     date64 first;
     date64 last;
+
+    char *description;
+    s32 day_count;
 };
 
-internal Boundries_Result
-get_month_boundries(date64 timestamp)
+
+
+internal Boundaries_Result
+get_month_boundaries(date64 timestamp)
 {
-    Boundries_Result result = {};
+    Boundaries_Result result = {};
     
     tm *date = gmtime(&timestamp);
     date->tm_sec = 0;
@@ -81,16 +84,53 @@ get_month_boundries(date64 timestamp)
     
     date->tm_mon += 1;
     result.last = platform_tm_to_time(date) - Days(1);
-    result.day_count = safe_truncate_to_s32((result.last / Days(1)) - (result.first / Days(1))) + 1;
+    result.day_count = safe_truncate_to_s32(((result.last - result.first) / Days(1)) + 1);
     
     return result;
 }
 
 
-internal Boundries_Result
-get_year_boundries(date64 timestamp)
+internal Boundaries_Result
+get_quarter_boundaries(date64 timestamp)
 {
-    Boundries_Result result = {};
+    Boundaries_Result result = {};
+    
+    s32 months_in_quarter = 3;
+    
+    tm *date = gmtime(&timestamp);
+    date->tm_sec = 0;
+    date->tm_min = 0;
+    date->tm_hour = 0;
+    date->tm_mday = 1;
+    
+    s32 quarter = (date->tm_mon/months_in_quarter);
+    date->tm_mon =  quarter*months_in_quarter;
+    
+    if (quarter == 0) {
+        result.description = "Q1";
+    } else if (quarter == 1) {
+        result.description = "Q2";
+    } else if (quarter == 2) {
+        result.description = "Q3";
+    } else if (quarter == 3) {
+        result.description = "Q4";
+    }
+    
+    result.first = platform_tm_to_time(date);
+    
+    date->tm_mon += months_in_quarter;
+        
+    result.last = platform_tm_to_time(date) - Days(1);
+    result.day_count = safe_truncate_to_s32(((result.last - result.first) / Days(1)) + 1);
+    
+    return result;
+}
+
+
+internal Boundaries_Result
+get_year_boundaries(date64 timestamp)
+{
+    Boundaries_Result result = {};
     
     tm *date = gmtime(&timestamp);
     date->tm_sec = 0;
@@ -103,7 +143,7 @@ get_year_boundries(date64 timestamp)
     
     date->tm_year += 1;
     result.last = platform_tm_to_time(date) - Days(1);
-    result.day_count = safe_truncate_to_s32((result.last / Days(1)) - (result.first / Days(1))) + 1;
+    result.day_count = safe_truncate_to_s32(((result.last - result.first) / Days(1)) + 1);
     
     return result;
 }

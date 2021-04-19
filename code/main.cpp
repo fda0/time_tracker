@@ -262,28 +262,65 @@ get_last_record(Record_Session *session)
 }
 
 
-
-
 internal Parse_Number_Result
-parse_number(u8 *src, s32 count)
+parse_number(u8 *src, u64 count)
 {
     Parse_Number_Result result = {};
     
-    s32 multiplier = 1;
-    for (s32 index = count - 1; index >= 0; --index, multiplier *= 10)
+    s32 sign = 1;
+    if (count > 0 &&
+        (src[0] == '+' || src[0] == '-'))
     {
-        if (!(src[index] >= '0' && src[index] <= '9'))
-        {
-            return result;
+        if (src[0] == '-') {
+            sign = -1;
         }
         
-        s32 to_add = (src[index] - '0') * multiplier;
-        result.number += to_add;
+        src += 1;
+        count -= 1;
     }
     
+    u64 leading_spaces = 0;
+    for_u64(index, count)
+    {
+        u8 character = src[index];
+        if (character == ' ') {
+            leading_spaces += 1;
+        } else {
+            break;
+        }
+    }
+    src += leading_spaces;
+    count -= leading_spaces;
+    
+    
+    s32 multiplier = 1;
+    for_u64(index, count)
+    {
+        u64 reverse_index = count-index-1;
+        u8 character = src[reverse_index];
+        
+        if (!((character >= '0') && (character <= '9'))) {
+            return result; // invalid
+        }
+        
+        s32 to_add = (character - '0') * multiplier;
+        result.value += to_add;
+        
+        multiplier *= 10;
+    }
+    
+    result.value *= sign;
     result.is_valid = true;
     return result;
 }
+
+inline Parse_Number_Result
+parse_number(Token token)
+{
+    Parse_Number_Result result = parse_number(token.text.str, token.text.size);
+    return result;
+}
+
 
 internal Parse_Date_Result
 parse_date(Record_Session *session, Token token)
@@ -300,21 +337,21 @@ parse_date(Record_Session *session, Token token)
         
         // year
         auto year = parse_number(text, 4);
-        date.tm_year = year.number - 1900;
+        date.tm_year = year.value - 1900;
         text += 4;
         
         b32 dash1 = is_date_separator(*text++);
         
         // month
         auto month = parse_number(text, 2);
-        date.tm_mon = month.number - 1;
+        date.tm_mon = month.value - 1;
         text += 2;
         
         b32 dash2 = is_date_separator(*text++);
         
         // day
         auto day = parse_number(text, 2);
-        date.tm_mday = day.number;
+        date.tm_mday = day.value;
         
         
         result.date = platform_tm_to_time(&date);
@@ -352,7 +389,7 @@ parse_time(Record_Session *session, Token token)
                     digit_value *= 60;
                 }
                 
-                result.time += digit_value;
+                result.value += digit_value;
                 multiplier *= 10;
             }
             else if (is_time_separator(c))
@@ -424,7 +461,8 @@ get_records_range_for_starting_date(Program_State *state, u64 start_index)
              ++index)
         {
             Record *record = state->records.at(index);
-            if (date_begin <= record->date)
+            if (date_begin <= record->date &&
+                record->type != Record_TimeStop)
             {
                 result.date = record->date;
                 result.first = index;
@@ -735,13 +773,10 @@ process_days_from_range(Program_State *state,
                             printf("%.*s -> ", string_expand(time_str));
                         }
                     }
-                    else if (record.type == Record_TimeStop)
-                    {
-                        // NOTE: case where day starts with stop (that ends start from previous day)
-                    }
                     else
                     {
                         // print count\n
+                        assert(record.type != Record_TimeStop);
                         assert(0);
                     }
                 }
@@ -773,8 +808,8 @@ process_days_from_range(Program_State *state,
             
             if (should_print)
             {
-                print_color(Color_Dimmed);
                 String time_str = get_time_string(arena, now_time);
+                print_color(Color_HelpHeader);
                 printf("%.*s ", string_expand(time_str));
                 
                 if (local_sum < Days(1)) {
@@ -785,10 +820,7 @@ process_days_from_range(Program_State *state,
                 }
                 
                 print_color(Color_Reset);
-                
-                
                 print_description(active_start);
-                
                 print_defered_time_deltas(arena, &defered_time_deltas);
                 // print CountDelta defers on new lines
                 printf("\n");
@@ -837,10 +869,6 @@ process_days_from_range(Program_State *state,
 
 
 
-
-
-
-
 struct Day_Sum_Result
 {
     time32 sum;
@@ -868,6 +896,77 @@ get_day_sum(Program_State *state, date64 date)
 
 
 
+
+
+
+
+
+
+
+
+
+
+internal Parse_Complex_Date_Result
+get_complex_date(Record_Session *session)
+{
+    Parse_Complex_Date_Result result = {};
+    
+    {
+        Token token = peek_token(&session->lexer, 0);
+        
+        if (token.type == Token_Date)
+        {
+            Parse_Date_Result parse = parse_date(session, token);
+            result.date = parse.date;
+            result.status = (parse.is_valid) ? Status_Valid : Status_HasErrors;
+            advance(&session->lexer);
+        }
+        else if (token.type == Token_Identifier)
+        {
+            if (!session->reading_from_file)
+            {
+                if (token_equals(token, "today") ||
+                    (token_equals(token, "now")))
+                {
+                    result.date = get_today();
+                    result.status = Status_Valid;
+                    advance(&session->lexer);
+                }
+                else if (token_equals(token, "yesterday"))
+                {
+                    result.date = get_today()-Days(1);
+                    result.status = Status_Valid;
+                    advance(&session->lexer);
+                }
+                else if (token_equals(token, "tomorrow"))
+                {
+                    result.date = get_today()+Days(1);
+                    result.status = Status_Valid;
+                    advance(&session->lexer);
+                }
+            }
+        }
+    }
+    
+    if (result.status == Status_Valid)
+    {
+        Token token = peek_token(&session->lexer, 0);
+        if (token.type == Token_Offset)
+        {
+            Parse_Number_Result offset = parse_number(token);
+            if (!offset.is_valid) {
+                result.status = Status_HasErrors;
+            } else {
+                result.date += offset.value*Days(1);
+            }
+            
+            advance(&session->lexer);
+        }
+    }
+    
+    
+    return result;
+}
 
 
 
@@ -1184,23 +1283,17 @@ add_record(Record_Session *session, Record *record)
 
 
 internal b32
-fill_date_optional(Record_Session *session, Record *record)
+fill_complex_date_optional(Record_Session *session, Record *record)
 {
     b32 success = false;
-    Token token = peek_token(&session->lexer, 0);
     
-    if (token.type == Token_Date)
+    Parse_Complex_Date_Result parsed_date = get_complex_date(session);
+    if (parsed_date.status == Status_Valid)
     {
-        advance(&session->lexer);
-        
-        Parse_Date_Result parsed_date = parse_date(session, token);
-        if (parsed_date.is_valid)
-        {
-            record->date = parsed_date.date;
-            success = true;
-        }
+        record->date = parsed_date.date;
+        success = true;
     }
-    else
+    else if (parsed_date.status == Status_NoMatchigTokens)
     {
         if (!session->reading_from_file)
         {
@@ -1210,17 +1303,15 @@ fill_date_optional(Record_Session *session, Record *record)
         else
         {
             Record *last_record = get_last_record(session);
-            if (last_record)
-            {
+            if (last_record) {
                 record->date = last_record->date;
                 success = true;
-            }
-            else
-            {
+            } else {
                 session_set_error(session, "First record needs to specify date");
             }
         }
     }
+    
     
     return success;
 }
@@ -1241,21 +1332,53 @@ fill_time_optional(Record_Session *session, Record *record)
         Parse_Time_Result parsed_time = parse_time(session, token);
         if (parsed_time.is_valid)
         {
-            record->value = parsed_time.time;
+            record->value = parsed_time.value;
             success = true;
         }
     }
-    else
+    else if (!session->reading_from_file)
     {
-        if (!session->reading_from_file)
-        {
-            record->value = get_time();
-            success = true;
-        }
+        record->value = get_time();
+        success = true;
     }
     
     return success;
 }
+
+internal b32
+fill_complex_date_time_optional(Record_Session *session, Record *record)
+{
+    b32 success = false;
+    Token token = peek_token(&session->lexer, 0);
+    
+    if (token.type == Token_Identifier &&
+        token_equals(token, "now"))
+    {
+        advance(&session->lexer);
+        success = true;
+        date64 now = get_current_timestamp();
+        
+        token = peek_token(&session->lexer, 0);
+        if (token.type == Token_Offset)
+        {
+            advance(&session->lexer);
+            Parse_Number_Result offset = parse_number(token);
+            success = offset.is_valid;
+            now += offset.value*Minutes(1);
+        }
+        
+        record->date = truncate_to_date(now);
+        record->value = truncate_to_time(now);
+    }
+    else
+    {
+        success = (fill_complex_date_optional(session, record) &&
+                   fill_time_optional(session, record));
+    }
+    
+    return success;
+}
+
 
 
 
@@ -1273,7 +1396,7 @@ fill_time_required(Record_Session *session, Record *record)
         Parse_Time_Result parsed_time = parse_time(session, token);
         if (parsed_time.is_valid)
         {
-            record->value = parsed_time.time;
+            record->value = parsed_time.value;
             success = true;
         }
     }
@@ -1303,29 +1426,20 @@ fill_description_optional(Record_Session *session, Record *record)
 
 
 internal void
-prase_command_start(Record_Session *session)
+parse_command_start(Record_Session *session)
 {
     Record record = {};
     record.type = Record_TimeStart;
     
-    b32 success = fill_date_optional(session, &record);
+    b32 success = fill_complex_date_time_optional(session, &record);
     
-    if (success)
-    {
-        success = fill_time_optional(session, &record);
-    }
-    
-    if (success)
-    {
+    if (success) {
         fill_description_optional(session, &record);
     }
     
-    if (success)
-    {
+    if (success) {
         add_record(session, &record);
-    }
-    else
-    {
+    } else {
         session_set_error(session, "Incorect command usage. Use:\n"
                           "start [yyyy-MM-dd] (hh:mm) [\"description\"]");
     }
@@ -1334,24 +1448,16 @@ prase_command_start(Record_Session *session)
 
 
 internal void
-prase_command_stop(Record_Session *session)
+parse_command_stop(Record_Session *session)
 {
     Record record = {};
     record.type = Record_TimeStop;
     
-    b32 success = fill_date_optional(session, &record);
+    b32 success = fill_complex_date_time_optional(session, &record);
     
-    if (success)
-    {
-        success = fill_time_optional(session, &record);
-    }
-    
-    if (success)
-    {
+    if (success) {
         add_record(session, &record);
-    }
-    else
-    {
+    } else {
         session_set_error(session, "Incorect command usage. Use:\n"
                           "start [yyyy-MM-dd] (hh:mm)");
     }
@@ -1365,22 +1471,22 @@ parse_command_add_sub(Record_Session *session, b32 is_add)
     Record record = {};
     record.type = Record_TimeDelta;
     
-    b32 success = fill_date_optional(session, &record);
+    b32 success = fill_complex_date_optional(session, &record);
     
     if (success)
     {
         success = fill_time_required(session, &record);
-        if (!is_add) record.value *= -1;
+        if (!is_add) {
+            record.value *= -1;
+        }
         
-        if (success && record.value == 0)
-        {
+        if (success && record.value == 0) {
             session_set_error(session, "Time equal to zero!");
             return;
         }
     }
     
-    if (success)
-    {
+    if (success) {
         fill_description_optional(session, &record);
     }
     
@@ -1402,30 +1508,12 @@ parse_command_add_sub(Record_Session *session, b32 is_add)
 
 
 
-internal Parse_Complex_Date_Result
-parse_complex_date(Record_Session *session, Token token)
-{
-    // NOTE: Allows to use keywords like today, yesterday + normal date formats
-    // TODO: ^ today+1 yesterday-4
-    
-    Parse_Complex_Date_Result result = {};
-    
-    if (token.type == Token_Date)
-    {
-        Parse_Date_Result parse = parse_date(session, token);
-        result.date = parse.date;
-        result.condition = (parse.is_valid) ? Con_IsValid : Con_HasErrors;
-    }
-    
-    return result;
-}
-
 
 internal Date_Range_Result
-get_max_date_range()
+get_max_date_range(b32 valid_status)
 {
     Date_Range_Result result;
-    result.condition = Con_IsValid;
+    result.status = (valid_status ? Status_Valid : Status_NoMatchigTokens);
     result.first = 1;
     result.last = S64_Max;
     
@@ -1435,7 +1523,7 @@ get_max_date_range()
 internal Date_Range_Result
 get_date_range(Record_Session *session)
 {
-    Date_Range_Result result = {};
+    Date_Range_Result result = get_max_date_range(false);
     b32 success = true;
     b32 has_matching_token = false;
     
@@ -1445,19 +1533,14 @@ get_date_range(Record_Session *session)
         if (token.type == Token_Identifier &&
             token_equals(token, "from"))
         {
-            advance(&session->lexer);
             has_matching_token = true;
+            advance(&session->lexer);
             
-            Parse_Complex_Date_Result date = parse_complex_date(session, token);
-            success = is_condition_valid(date.condition);
-            if (success)
-            {
-                result.first = date.date;
-                advance(&session->lexer);
-            }
+            Parse_Complex_Date_Result date = get_complex_date(session);
+            success = is_valid(date.status);
+            result.first = date.date;
         }
     }
-    
     
     
     if (success)
@@ -1467,16 +1550,12 @@ get_date_range(Record_Session *session)
         if (token.type == Token_Identifier &&
             token_equals(token, "to"))
         {
-            advance(&session->lexer);
             has_matching_token = true;
+            advance(&session->lexer);
             
-            Parse_Complex_Date_Result date = parse_complex_date(session, token);
-            success = is_condition_valid(date.condition);
-            if (success)
-            {
-                result.last = date.date;
-                advance(&session->lexer);
-            }
+            Parse_Complex_Date_Result date = get_complex_date(session);
+            success = is_valid(date.status);
+            result.last = date.date;
         }
     }
     
@@ -1491,34 +1570,35 @@ get_date_range(Record_Session *session)
             if (token_equals(token, "all"))
             {
                 has_matching_token = true;
-                result = get_max_date_range();
+                result = get_max_date_range(true);
                 advance(&session->lexer);
             }
             else
             {
-                Parse_Complex_Date_Result date = parse_complex_date(session, token);
-                result.condition = date.condition;
-                if (is_condition_valid(result.condition))
-                {
-                    result.first = date.date;
-                    result.last = date.date;
-                    advance(&session->lexer);
-                }
+                Parse_Complex_Date_Result date = get_complex_date(session);
+                result.status = date.status; // may return no matching token
+                result.first = date.date;
+                result.last = date.date;
             }
         }
         else
         {
-            result.condition = Con_IsValid;
+            result.status = Status_Valid;
         }
     }
     else
     {
-        result.condition = Con_HasErrors;
+        result.status = Status_HasErrors;
     }
     
     
     return result;
 }
+
+
+
+
+
 
 
 internal Date_Range_Result
@@ -1549,9 +1629,10 @@ get_recent_days_range(Virtual_Array<Record> *records)
         }
     }
     
-    Date_Range_Result result = {start, today, Con_IsValid};
+    Date_Range_Result result = {start, today, Status_Valid};
     return result;
 }
+
 
 
 internal void
@@ -1559,7 +1640,7 @@ parse_command_show(Program_State *state, Record_Session *session)
 {
     Date_Range_Result range = get_date_range(session);
     
-    if (range.condition != Con_HasErrors)
+    if (range.status != Status_HasErrors)
     {
         String filter = {};
         
@@ -1571,10 +1652,11 @@ parse_command_show(Program_State *state, Record_Session *session)
         
         char *message = nullptr;
         
-        if (range.condition == Con_NoMatchigTokens) {
+        if (range.status == Status_NoMatchigTokens)
+        {
             if (filter.size)
             {
-                range = get_max_date_range();
+                range = get_max_date_range(true);
             }
             else
             {
@@ -1638,45 +1720,41 @@ print_summary(Program_State *state, Granularity granularity,
         
         for (;;)
         {
-            Boundries_Result boundries = {};
+            Boundaries_Result boundary = {};
             switch (granularity)
             {
                 case Granularity_Days: {
-                    boundries.day_count = 1;
-                    boundries.first = record->date;
-                    boundries.last = record->date;
+                    boundary.day_count = 1;
+                    boundary.first = record->date;
+                    boundary.last = record->date;
                 } break;
                 
-                
+                default: { assert(0); } // fall
                 case Granularity_Months: {
-                    boundries = get_month_boundries(record->date);
+                    boundary = get_month_boundaries(record->date);
                 } break;
                 
+                case Granularity_Quarters: {
+                    boundary = get_quarter_boundaries(record->date);
+                } break;
                 
                 case Granularity_Years: {
-                    boundries = get_year_boundries(record->date);
+                    boundary = get_year_boundaries(record->date);
                 } break;
-                
-                
-                default: {
-                    assert(0);
-                } // fall
-                
             }
             
             
-            Process_Days_Result days =
-                process_days_from_range(state, boundries.first, boundries.last, filter, ProcessDays_Calculate);
+            Process_Days_Result days = process_days_from_range(state, boundary.first, boundary.last,
+                                                               filter, ProcessDays_Calculate);
             
-            b32 boundry_ended_before_today = (boundries.last < today);
             
             if (days.time_total)
             {
-                s32 day_count = boundries.day_count;
+                s32 day_count = boundary.day_count;
                 
                 if (days.next_day_record_index == state->records.count)
                 {
-                    s32 current_day_count = (s32)((today - boundries.first) / Days(1)) + 1;
+                    s32 current_day_count = (s32)((today - boundary.first) / Days(1)) + 1;
                     
                     if (current_day_count > 0) {
                         day_count = pick_smaller(day_count, current_day_count);
@@ -1684,38 +1762,43 @@ print_summary(Program_State *state, Granularity granularity,
                 }
                 
                 
-                String date_str = get_date_string(arena, boundries.first);
+                String date_str = get_date_string(arena, boundary.first);
                 String sum_str = get_time_string(arena, days.time_total);
                 
+                print_color(Color_Date);
+                
+                printf("%.*s", string_expand(date_str));
+                
+                if (boundary.description) {
+                    printf(" (%s)", boundary.description);
+                }
+                
+                print_color(Color_Positive);
+                
+                printf("\tsum: %.*s\t", string_expand(sum_str));
+                
+                
+                b32 is_range_closed = (boundary.last < today);
+                
+                String bar = {};
                 if (day_count > 1)
                 {
-                    s32 avg = days.time_total/day_count;
+                    s32 avg = days.time_total / day_count;
                     String avg_str = get_time_string(arena, avg);
-                    String bar = get_progress_bar_string(arena, avg, boundry_ended_before_today);
+                    printf("avg(/%3d): %.*s\t", day_count, string_expand(avg_str));
                     
-                    printf("%.*s\t"
-                           "sum: %.*s\tavg(/%3d): "
-                           "%.*s\t%.*s\n",
-                           string_expand(date_str),
-                           string_expand(sum_str), day_count,
-                           string_expand(avg_str), string_expand(bar));
+                    bar = get_progress_bar_string(arena, avg, is_range_closed);
                 }
                 else
                 {
-                    String bar = get_progress_bar_string(arena, days.time_total, boundry_ended_before_today);
-                    printf("%.*s\t"
-                           "sum: %.*s\t"
-                           "%.*s\n",
-                           string_expand(date_str),
-                           string_expand(sum_str),
-                           string_expand(bar));
+                    bar = get_progress_bar_string(arena, days.time_total, is_range_closed);
                 }
+                
+                printf("%.*s\n", string_expand(bar));
             }
             
             
-            if (days.next_day_record_index >= state->records.count ||
-                days.next_day_record_index == 0)
-            {
+            if (days.next_day_record_index >= state->records.count || days.next_day_record_index == 0) {
                 break;
             }
             
@@ -1725,7 +1808,12 @@ print_summary(Program_State *state, Granularity granularity,
             }
         }
     }
+    
+    print_color(Color_Reset);
 }
+
+
+
 
 
 
@@ -1752,6 +1840,12 @@ parse_command_summary(Program_State *state, Record_Session *session)
                 advance(&session->lexer);
                 granularity = Granularity_Months;
             }
+            else if (token_equals(token, "quarters") ||
+                     token_equals(token, "q"))
+            {
+                advance(&session->lexer);
+                granularity = Granularity_Quarters;
+            }
             else if (token_equals(token, "years") ||
                      token_equals(token, "y"))
             {
@@ -1764,8 +1858,8 @@ parse_command_summary(Program_State *state, Record_Session *session)
     
     Date_Range_Result range = get_date_range(session);
     
-    if (range.condition == Con_NoMatchigTokens) {
-        range = get_max_date_range();
+    if (range.status == Status_NoMatchigTokens) {
+        range = get_max_date_range(true);
     }
     
     
@@ -1782,7 +1876,7 @@ parse_command_summary(Program_State *state, Record_Session *session)
     print_summary(state, granularity, range.first, range.last, filter);
     
     
-    if (range.condition == Con_HasErrors)
+    if (range.status == Status_HasErrors)
     {
         session_set_error(session, "Incorect command usage. Use:\n"
                           "summary [granularity]\n"
@@ -1885,6 +1979,10 @@ process_input(Program_State *state, Record_Session *session)
     
     while (parsing)
     {
+        if (!no_errors(session)) {
+            break;
+        }
+        
         Token token = peek_token(&session->lexer, 0);
         advance(&session->lexer);
         session->current_command_token = token;
@@ -1894,11 +1992,11 @@ process_input(Program_State *state, Record_Session *session)
             case Token_Identifier: {
                 if (token_equals(token, "start"))
                 {
-                    prase_command_start(session);
+                    parse_command_start(session);
                 }
                 else if (token_equals(token, "stop"))
                 {
-                    prase_command_stop(session);
+                    parse_command_stop(session);
                 }
                 else if (token_equals(token, "add"))
                 {
@@ -2074,6 +2172,10 @@ process_input(Program_State *state, Record_Session *session)
             break;
         }
     }
+    
+    
+    
+    
     
     
     if (no_errors(session))

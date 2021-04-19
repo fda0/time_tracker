@@ -97,11 +97,13 @@ fetch_token(Lexer *lx)
         case '-':
         case '+': {
             token.type = Token_Offset;
-            token.text.str = lx->at;
-            do
-            {
+            token.text.str = lx->at-1;
+            
+            eat_all_whitespace(lx);
+            
+            while (lx->at[0] && is_number(lx->at[0])) {
                 ++lx->at;
-            } while (lx->at[0] && is_number(lx->at[0]));
+            }
             
             token.text.size = lx->at - token.text.str;
         } break;
