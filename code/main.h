@@ -2,7 +2,7 @@
 #include "description.h"
 #include "lexer.h"
 #include "win32_platform.h"
-
+#include "print.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -10,8 +10,10 @@
 #include <string.h>
 #include <time.h>
 
+
 typedef time_t date64;
 typedef s32 time32;
+
 
 
 //~ NOTE: Platforms and compilers
@@ -32,8 +34,6 @@ struct Thread_Memory
 
 
 //~ NOTE: Structs
-
-
 enum Granularity
 {
     Granularity_Days,
@@ -41,34 +41,6 @@ enum Granularity
     Granularity_Months,
     Granularity_Quarters,
     Granularity_Years
-};
-
-enum Color_Code
-{
-    Color_Empty,
-    Color_Reset,
-    
-    Color_Base,
-    Color_Dimmed,
-    
-    Color_Date,
-    Color_AltDate,
-    
-    Color_Description,
-    Color_AltDescription,
-    
-    Color_Positive,
-    Color_AltPositive,
-    
-    Color_Negative,
-    Color_AltNegative,
-    
-    Color_Error,
-    Color_Warning,
-    
-    Color_HelpHeader,
-    
-    Color_Count
 };
 
 
@@ -164,8 +136,6 @@ struct Record_Session
 
 
 
-// TODO: Pull out char[MAX_PATH] to StrMaxPath?
-
 struct Program_State
 {
     // NOTE: These require special initialization:
@@ -189,6 +159,8 @@ struct Program_State
 };
 
 
+
+
 enum Status
 {
     Status_NoMatchigTokens,
@@ -202,30 +174,6 @@ is_valid(Status status)
     b32 result = (status == Status_Valid);
     return result;
 }
-
-struct Parse_Date_Result
-{
-    date64 date;
-    b32 is_valid;
-};
-
-struct Parse_Complex_Date_Result
-{
-    date64 date;
-    Status status;
-};
-
-struct Parse_Time_Result
-{
-    s32 value;
-    b32 is_valid;
-};
-
-struct Parse_Number_Result
-{
-    s32 value;
-    b32 is_valid;
-};
 
 
 
@@ -242,3 +190,12 @@ struct Date_Range_Result
     
     Status status;
 };
+
+
+
+inline void session_set_error(Record_Session *session, char *message);
+internal void load_file(Program_State *state);
+
+//~
+#include "parse.h"
+
