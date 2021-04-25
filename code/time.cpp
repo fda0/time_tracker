@@ -64,7 +64,6 @@ struct Boundaries_Result
     date64 last;
 
     char *description;
-    s32 day_count;
 };
 
 
@@ -84,7 +83,6 @@ get_month_boundaries(date64 timestamp)
     
     date->tm_mon += 1;
     result.last = platform_tm_to_time(date) - Days(1);
-    result.day_count = safe_truncate_to_s32(((result.last - result.first) / Days(1)) + 1);
     
     return result;
 }
@@ -119,9 +117,7 @@ get_quarter_boundaries(date64 timestamp)
     result.first = platform_tm_to_time(date);
     
     date->tm_mon += months_in_quarter;
-        
     result.last = platform_tm_to_time(date) - Days(1);
-    result.day_count = safe_truncate_to_s32(((result.last - result.first) / Days(1)) + 1);
     
     return result;
 }
@@ -143,7 +139,6 @@ get_year_boundaries(date64 timestamp)
     
     date->tm_year += 1;
     result.last = platform_tm_to_time(date) - Days(1);
-    result.day_count = safe_truncate_to_s32(((result.last - result.first) / Days(1)) + 1);
     
     return result;
 }

@@ -1714,17 +1714,28 @@ print_summary(Program_State *state, Granularity granularity,
     arena_scope(arena);
     date64 today = get_today();
     
-    if (state->records.count > 0)
+    
+    Record *record = nullptr;
+    for_u64(record_index, state->records.count)
     {
-        Record *record = state->records.at(0);
-        
+        Record *record_test = state->records.at(record_index);
+        if (record_test->date >= date_begin)
+        {
+            record = record_test;
+            break;
+        }
+    }
+    
+    
+    
+    if (record && (record->date <= date_end))
+    {
         for (;;)
         {
             Boundaries_Result boundary = {};
             switch (granularity)
             {
                 case Granularity_Days: {
-                    boundary.day_count = 1;
                     boundary.first = record->date;
                     boundary.last = record->date;
                 } break;
@@ -1744,43 +1755,46 @@ print_summary(Program_State *state, Granularity granularity,
             }
             
             
-            Process_Days_Result days = process_days_from_range(state, boundary.first, boundary.last,
+            date64 first_date = pick_bigger(date_begin, boundary.first);
+            date64 last_date = pick_smaller(date_end, boundary.last);
+            Process_Days_Result days = process_days_from_range(state, first_date, last_date,
                                                                filter, ProcessDays_Calculate);
+            
+            String test_start_date = get_date_string(&state->arena, first_date);
+            String test_last_date = get_date_string(&state->arena, last_date);
+            
             
             
             if (days.time_total)
             {
-                s32 day_count = boundary.day_count;
+                s32 day_count = safe_truncate_to_s32(((last_date - first_date) / Days(1)) + 1);
                 
                 if (days.next_day_record_index == state->records.count)
                 {
-                    s32 current_day_count = (s32)((today - boundary.first) / Days(1)) + 1;
+                    s32 current_day_count = safe_truncate_to_s32(((today - first_date) / Days(1)) + 1);
                     
-                    if (current_day_count > 0) {
-                        day_count = pick_smaller(day_count, current_day_count);
-                    }
+                    assert(current_day_count > 0);
+                    assert(current_day_count <= day_count);
+                    day_count = current_day_count;
                 }
                 
                 
-                String date_str = get_date_string(arena, boundary.first);
-                String sum_str = get_time_string(arena, days.time_total);
-                
+                String date_str = get_date_string(arena, first_date);
                 print_color(Color_Date);
-                
                 printf("%.*s", string_expand(date_str));
                 
                 if (boundary.description) {
                     printf(" (%s)", boundary.description);
                 }
                 
+                String sum_str = get_time_string(arena, days.time_total);
                 print_color(Color_Positive);
-                
                 printf("\tsum: %.*s\t", string_expand(sum_str));
                 
                 
-                b32 is_range_closed = (boundary.last < today);
-                
+                b32 is_range_closed = !(today <= last_date);
                 String bar = {};
+                
                 if (day_count > 1)
                 {
                     s32 avg = days.time_total / day_count;
