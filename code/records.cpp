@@ -146,29 +146,33 @@ process_days_from_range(Program_State *state, u64 starting_index,
     u32 open_start_ending_should_happen_only_once_test = 0;
 #endif
     
-    enum Open_State
-    {
+    enum Open_State {
         Open,
         Closed_PrePrint,
         Closed_PostPrint,
     };
     
-    Arena *arena = &state->arena;
-    arena_scope(arena);
-    
     b32 should_print = (flags & ProcessDays_Print) != 0;
     b32 alt_color = (flags & ProcessDays_AltColor) != 0;
     b32 has_filter = (filter.size != 0);
+    b32 generate_top = (flags & ProcessDays_GenerateTopRanking) != 0;
     
+    Arena *arena = &state->arena;
     Process_Days_Result result = {};
+    
+    if (generate_top) {
+        result.top_table = create_desc_table(arena, state->records.count);
+    }
     
     
     
     Record_Index_Pair start_pair = get_record_and_index_for_starting_date(state, date_begin, starting_index);
     if (start_pair.record && start_pair.record->date <= date_end)
     {
-        Record_Range range = get_day_range_for_record_index(state, start_pair.index);
+        arena_scope(arena);
         
+        
+        Record_Range range = get_day_range_for_record_index(state, start_pair.index);
         for (;
              range.date <= date_end && range.date != 0;
              range = get_day_range_for_record_index(state, range.next_day_record_index))
@@ -242,8 +246,15 @@ process_days_from_range(Program_State *state, u64 starting_index,
                     assert(record.type == Record_TimeStop || record.type == Record_TimeStart);
                     assert(active_start);
                     
-                    day_time_sum += record.value - active_start->value;
-                    day_time_sum += safe_truncate_to_s32(record.date - active_start->date);
+                    s32 time_to_add = ((record.value - active_start->value) +
+                                       safe_truncate_to_s32(record.date - active_start->date));
+                    
+                    day_time_sum += time_to_add;
+                    
+                    if (generate_top) {
+                        add_desc_data(&result.top_table, active_start->desc, time_to_add);
+                    }
+                    
                     
                     if (should_print)
                     {
@@ -277,7 +288,22 @@ process_days_from_range(Program_State *state, u64 starting_index,
                     {
                         if (record.type == Record_TimeDelta)
                         {
+                            assert(active_start);
+                            
                             day_time_sum += record.value;
+                            
+                            
+                            if (generate_top)
+                            {
+                                if (!(!record.desc.size && active_start)) {
+                                    // avoid counting add/sub commands without description
+                                    // if they happen to be inside active start
+                                    add_desc_data(&result.top_table, record.desc, record.value);
+                                }
+                                
+                                add_desc_data(&result.top_table, active_start->desc, record.value);
+                            }
+                            
                             
                             if (should_print) {
                                 // NOTE: case: this needs to be printed _after_ we print "stop"
@@ -288,7 +314,13 @@ process_days_from_range(Program_State *state, u64 starting_index,
                                  record.type == Record_TimeStop)
                         {
                             assert(active_start);
-                            day_time_sum += record.value - active_start->value;
+                            
+                            s32 time_to_add = record.value - active_start->value;
+                            day_time_sum += time_to_add;
+                            
+                            if (generate_top) {
+                                add_desc_data(&result.top_table, active_start->desc, time_to_add);
+                            }
                             
                             
                             if (should_print)
@@ -343,6 +375,11 @@ process_days_from_range(Program_State *state, u64 starting_index,
                         {
                             day_time_sum += record.value;
                             
+                            if (generate_top) {
+                                add_desc_data(&result.top_table, record.desc, record.value);
+                            }
+                            
+                            
                             if (should_print)
                             {
                                 printf("      ");
@@ -394,6 +431,12 @@ process_days_from_range(Program_State *state, u64 starting_index,
                 
                 day_time_sum += local_sum;
                 result.time_assumed += local_sum;
+                
+                
+                if (generate_top) {
+                    add_desc_data(&result.top_table, active_start->desc, local_sum);
+                }
+                
                 
                 
                 if (should_print)
@@ -584,12 +627,48 @@ print_top(Program_State *state,
           date64 date_begin, date64 date_end,
           String filter)
 {
+    Arena *arena = &state->arena;
+    arena_scope(arena);
+    
     Record_Index_Pair starting_pair = get_record_and_index_for_starting_date(state, date_begin, 0);
     Record *record = starting_pair.record;
     u64 start_index = starting_pair.index;
     
     if (record && (record->date <= date_end))
     {
+        Process_Days_Result days = process_days_from_range(state, 0, date_begin, date_end, filter,
+                                                           ProcessDays_GenerateTopRanking);
         
+        u32 miss_count = 0;
+        u32 hit_count = 0;
+        
+        for_u64(entry_index, days.top_table.entry_count)
+        {
+            arena_scope(arena);
+            
+            Description_Entry *entry = days.top_table.entries + entry_index;
+            if (entry->hash) {
+                print_color(Color_Positive);
+                String time = get_time_string(arena, entry->time_sum);
+                printf("%.*s\t\t", string_expand(time));
+                
+                printf("(%d)  ", entry->count);
+                
+                
+                print_color(Color_Description);
+                printf("\"%.*s\"", entry->text_size, entry->text);
+                
+                printf("\n");
+                
+                hit_count += 1;
+            }
+            else
+            {
+                miss_count += 1;
+            }
+        }
+        print_color(Color_Reset);
+        
+        printf("hit: %u, miss: %u\n", hit_count, miss_count);
     }
 }

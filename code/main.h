@@ -1,8 +1,8 @@
 #include "stf0.h"
-#include "description.h"
 #include "lexer.h"
 #include "win32_platform.h"
 #include "print.h"
+#include "description_hash_table.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -44,11 +44,6 @@ enum Granularity
 };
 
 
-struct Stubs
-{
-    Description description;
-};
-
 struct Global_State
 {
     date64 timezone_offset;
@@ -65,6 +60,7 @@ enum Process_Days_Flags
 {
     ProcessDays_Print = (1 << 0),
     ProcessDays_AltColor = (1 << 1),
+    ProcessDays_GenerateTopRanking = (1 << 2),
 };
 
 struct Process_Days_Result
@@ -73,6 +69,8 @@ struct Process_Days_Result
     s32 time_assumed;
     
     u64 next_day_record_index;
+    
+    Description_Table top_table;
 };
 
 struct Record_Range
@@ -140,8 +138,6 @@ struct Program_State
     // NOTE: These require special initialization:
     Arena arena;
     Virtual_Array<Record> records;
-    Description_Table desc_table;
-    
     
     // NOTE: These can be zero initialized
     String title;

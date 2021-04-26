@@ -10,7 +10,6 @@
 #include "main.h"
 
 global Global_State global_state;
-global Stubs global_stubs = {};
 
 global Color_Pair color_pairs[Color_Count] = {
     {Color_Empty, ""},
@@ -39,7 +38,7 @@ global Color_Pair color_pairs[Color_Count] = {
 
 
 #include "win32_platform.cpp"
-#include "description.cpp"
+#include "description_hash_table.cpp"
 #include "lexer.cpp"
 #include "string.cpp"
 #include "time.cpp"
@@ -204,7 +203,6 @@ save_to_file(Program_State *state)
             
             
             // print description
-            //Description *desc = get_description(&state->desc_table, record->desc_hash); @desc
             if (record->desc.size)
             {
                 add(l2s(" \""));
@@ -502,6 +500,14 @@ process_input(Program_State *state, Record_Session *session)
                         process_command_summary(state, session);
                     }
                 }
+                else if (token_equals(token, "top"))
+                {
+                    if (reading_from_file) {
+                        Error_Cmd_Exclusive;
+                    } else {
+                        process_command_top(state, session);
+                    }
+                }
                 else if (token_equals(token, "exit"))
                 {
                     if (reading_from_file) {
@@ -782,7 +788,6 @@ s32 main(int argument_count, char **arguments)
     Program_State state = {};
     state.arena = create_virtual_arena();
     state.records = create_virtual_array<Record>();
-    state.desc_table = create_description_table(4096);
     //clear_memory(&state);
     Arena *arena = &state.arena;
     
@@ -979,9 +984,8 @@ s32 main(int argument_count, char **arguments)
         
         
         s32 input_time_delta = (s32)now.t - (s32)state.last_input_time.t;
-        if (input_time_delta > 1000*5)
         {
-            u32 sleep_duration = input_time_delta / 8192;
+            u32 sleep_duration = (input_time_delta / 8192) + 1;
             sleep_duration = pick_smaller(sleep_duration, 100);
             platform_sleep(sleep_duration);
         }
