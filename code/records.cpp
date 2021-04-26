@@ -619,6 +619,61 @@ print_summary(Program_State *state, Granularity granularity,
 }
 
 
+internal void
+merge_sort(Arena *arena, Description_Entry *entries, u64 count)
+{
+    if (count == 1) {
+        return;
+    }
+    
+    u64 half0_count = count / 2;
+    u64 half1_count = count - half0_count;
+    
+    Description_Entry *half0_array = push_array_copy(arena, entries, Description_Entry, half0_count);
+    Description_Entry *half1_array = push_array_copy(arena, entries + half0_count, Description_Entry, half1_count);
+    
+    merge_sort(arena, half0_array, half0_count);
+    merge_sort(arena, half1_array, half1_count);
+    
+    u64 index0 = 0;
+    u64 index1 = 0;
+    
+    for_u64 (entry_index, count)
+    {
+        Description_Entry *e0 = half0_array + index0;
+        Description_Entry *e1 = half1_array + index1;
+        Description_Entry *out = entries + entry_index;
+        
+        if (index0 >= half0_count)
+        {
+            *out = *e1;
+            index1 += 1;
+        }
+        else if (index1 >= half1_count)
+        {
+            *out = *e0;
+            index0 += 1;
+        }
+        else
+        {
+            assert(index0 < half0_count);
+            assert(index1 < half1_count);
+            
+            if (e0->time_sum > e1->time_sum)
+            {
+                *out = *e0;
+                index0 += 1;
+            }
+            else
+            {
+                *out = *e1;
+                index1 += 1;
+            }
+        }
+    }
+}
+
+
 //
 //~ Top
 //
@@ -639,36 +694,45 @@ print_top(Program_State *state,
         Process_Days_Result days = process_days_from_range(state, 0, date_begin, date_end, filter,
                                                            ProcessDays_GenerateTopRanking);
         
-        u32 miss_count = 0;
-        u32 hit_count = 0;
+        Description_Entry *desc_array = push_array(arena, Description_Entry, days.top_table.unique_count);
+        u64 desc_count = 0;
         
-        for_u64(entry_index, days.top_table.entry_count)
+        for_u64(entry_index, days.top_table.entry_max_count)
         {
-            arena_scope(arena);
-            
             Description_Entry *entry = days.top_table.entries + entry_index;
-            if (entry->hash) {
-                print_color(Color_Positive);
-                String time = get_time_string(arena, entry->time_sum);
-                printf("%.*s\t\t", string_expand(time));
-                
-                printf("(%d)  ", entry->count);
-                
-                
-                print_color(Color_Description);
-                printf("\"%.*s\"", entry->text_size, entry->text);
-                
-                printf("\n");
-                
-                hit_count += 1;
-            }
-            else
+            if (entry->hash)
             {
-                miss_count += 1;
+                desc_array[desc_count] = *entry;
+                desc_count += 1;
             }
         }
-        print_color(Color_Reset);
         
-        printf("hit: %u, miss: %u\n", hit_count, miss_count);
+        assert(desc_count == days.top_table.unique_count);
+        
+        {
+            arena_scope(arena);
+            merge_sort(arena, desc_array, desc_count);
+        }
+        
+        
+        for_u64(desc_index, desc_count)
+        {
+            arena_scope(arena);
+            Description_Entry *desc = desc_array + desc_index;
+            
+            print_color(Color_Positive);
+            String time = get_time_string(arena, desc->time_sum);
+            printf("%.*s\t\t", string_expand(time));
+            
+            printf("(%d)\t\t", desc->count);
+            
+            
+            print_color(Color_Description);
+            printf("\"%.*s\"", desc->text_size, desc->text);
+            
+            printf("\n");
+        }
+        
+        print_color(Color_Reset);
     }
 }

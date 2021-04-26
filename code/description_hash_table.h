@@ -14,7 +14,7 @@ struct Description_Entry
 struct Description_Table
 {
     Description_Entry *entries;
-    u64 entry_count;
+    u64 entry_max_count;
     u64 mask;
     
     u64 unique_count;

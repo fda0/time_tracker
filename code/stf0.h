@@ -1312,8 +1312,16 @@ struct Automatic_Arena_Scope
 #define push_array_clear_align(ArenaPtr, Type, Count, Align)\
 (Type *)push_bytes_clear_((ArenaPtr), (sizeof(Type)*(Count)), Align)
 
+///////////////////////////////
+#define push_array_copy(ArenaPtr, Source, Type, Count)\
+(Type *)push_bytes_and_copy_((ArenaPtr), (Source), sizeof(Type)*(Count), alignof(Type))
+
+
+
+
 // ====================== @Memory_Alloca ======================
 #define push_stack_array(Type, Count) (Type *)alloca(sizeof(Type)*Count)
+
 
 
 
@@ -1436,7 +1444,13 @@ push_bytes_clear_(Arena *arena, u64 alloc_size, u64 alignment)
     return result;
 }
 
-
+inline void *
+push_bytes_and_copy_(Arena *arena, void *source, u64 alloc_size, u64 alignment)
+{
+    void *mem = push_bytes_(arena, alloc_size, alignment);
+    copy_bytes(mem, source, alloc_size);
+    return mem;
+}
 
 
 
