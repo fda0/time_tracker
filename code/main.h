@@ -61,11 +61,10 @@ struct Color_Pair
     char *value;
 };
 
-enum Process_Days_Options
+enum Process_Days_Flags
 {
-    ProcessDays_Calculate,
-    ProcessDays_Print,
-    ProcessDays_PrintAltColor,
+    ProcessDays_Print = (1 << 0),
+    ProcessDays_AltColor = (1 << 1),
 };
 
 struct Process_Days_Result

@@ -140,7 +140,7 @@ internal Process_Days_Result
 process_days_from_range(Program_State *state, u64 starting_index,
                         date64 date_begin, date64 date_end,
                         String filter,
-                        Process_Days_Options options)
+                        u32 flags)
 {
 #if Def_Slow
     u32 open_start_ending_should_happen_only_once_test = 0;
@@ -156,7 +156,8 @@ process_days_from_range(Program_State *state, u64 starting_index,
     Arena *arena = &state->arena;
     arena_scope(arena);
     
-    b32 should_print = (options >= ProcessDays_Print);
+    b32 should_print = (flags & ProcessDays_Print) != 0;
+    b32 alt_color = (flags & ProcessDays_AltColor) != 0;
     b32 has_filter = (filter.size != 0);
     
     Process_Days_Result result = {};
@@ -220,7 +221,7 @@ process_days_from_range(Program_State *state, u64 starting_index,
                     
                     printf("\n");
                     
-                    if (options == ProcessDays_PrintAltColor) {
+                    if (alt_color) {
                         print_color(Color_AltDate);
                     } else {
                         print_color(Color_Date);
@@ -263,7 +264,6 @@ process_days_from_range(Program_State *state, u64 starting_index,
                         
                         
                         print_description(active_start);
-                        
                         print_defered_time_deltas(arena, &defered_time_deltas);
                         // print all defers (TimeDelta & CountDelta) here
                         printf("\n");
@@ -279,8 +279,7 @@ process_days_from_range(Program_State *state, u64 starting_index,
                         {
                             day_time_sum += record.value;
                             
-                            if (should_print)
-                            {
+                            if (should_print) {
                                 // NOTE: case: this needs to be printed _after_ we print "stop"
                                 *defered_time_deltas.push_get_item(arena) = record;
                             }
@@ -376,6 +375,8 @@ process_days_from_range(Program_State *state, u64 starting_index,
                     }
                 }
             }
+            
+            
             
             
             if (active_start)
@@ -503,8 +504,7 @@ print_summary(Program_State *state, Granularity granularity,
             
             date64 first_date = pick_bigger(date_begin, boundary.first);
             date64 last_date = pick_smaller(date_end, boundary.last);
-            Process_Days_Result days = process_days_from_range(state, start_index, first_date, last_date,
-                                                               filter, ProcessDays_Calculate);
+            Process_Days_Result days = process_days_from_range(state, start_index, first_date, last_date, filter, 0);
             
             start_index = days.next_day_record_index;
             

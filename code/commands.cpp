@@ -1,11 +1,11 @@
 
 internal void
-process_command_start(Record_Session *session)
+process_command_start(Program_State *state, Record_Session *session)
 {
     Record record = {};
     record.type = Record_TimeStart;
     
-    b32 success = fill_complex_date_time_optional(session, &record);
+    b32 success = fill_complex_date_time_optional(state, session, &record);
     
     if (success) {
         fill_description_optional(session, &record);
@@ -22,12 +22,12 @@ process_command_start(Record_Session *session)
 
 
 internal void
-process_command_stop(Record_Session *session)
+process_command_stop(Program_State *state, Record_Session *session)
 {
     Record record = {};
     record.type = Record_TimeStop;
     
-    b32 success = fill_complex_date_time_optional(session, &record);
+    b32 success = fill_complex_date_time_optional(state, session, &record);
     
     if (success) {
         add_record(session, &record);
@@ -40,12 +40,12 @@ process_command_stop(Record_Session *session)
 
 
 internal void
-process_command_add_sub(Record_Session *session, b32 is_add)
+process_command_add_sub(Program_State *state, Record_Session *session, b32 is_add)
 {
     Record record = {};
     record.type = Record_TimeDelta;
     
-    b32 success = fill_complex_date_optional(session, &record);
+    b32 success = fill_complex_date_optional(state, session, &record, true);
     
     if (success)
     {

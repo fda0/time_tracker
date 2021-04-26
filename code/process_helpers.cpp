@@ -81,8 +81,33 @@ get_complex_date(Record_Session *session)
 }
 
 
+inline date64
+get_recent_date_or_today(Program_State *state)
+{
+    date64 result = get_today();
+    
+    for (u64 record_index_from_start = 0;
+         record_index_from_start < state->records.count;
+         ++record_index_from_start)
+    {
+        u64 record_index = state->records.count - record_index_from_start - 1;
+        Record *record = state->records.at(record_index);
+        
+        if (record->type == Record_TimeStop) {
+            break;
+        } else if (record->type == Record_TimeStart) {
+            result = record->date;
+            break;
+        }
+    }
+    
+    return result;
+}
+
+
 internal b32
-fill_complex_date_optional(Record_Session *session, Record *record)
+fill_complex_date_optional(Program_State *state, Record_Session *session, Record *record,
+                           b32 assume_recent_date)
 {
     b32 success = false;
     
@@ -96,7 +121,12 @@ fill_complex_date_optional(Record_Session *session, Record *record)
     {
         if (!session->reading_from_file)
         {
-            record->date = get_today();
+            if (assume_recent_date) {
+                record->date = get_recent_date_or_today(state);
+            } else {
+                record->date = get_today();
+            }
+            
             success = true;
         }
         else
@@ -142,7 +172,7 @@ fill_time_optional(Record_Session *session, Record *record)
 }
 
 internal b32
-fill_complex_date_time_optional(Record_Session *session, Record *record)
+fill_complex_date_time_optional(Program_State *state, Record_Session *session, Record *record)
 {
     b32 success = false;
     Token token = peek_token(&session->lexer, 0);
@@ -168,7 +198,7 @@ fill_complex_date_time_optional(Record_Session *session, Record *record)
     }
     else
     {
-        success = (fill_complex_date_optional(session, record) &&
+        success = (fill_complex_date_optional(state, session, record, false) &&
                    fill_time_optional(session, record));
     }
     

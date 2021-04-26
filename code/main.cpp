@@ -227,8 +227,7 @@ save_to_file(Program_State *state)
             if (is_new_day)
             {
                 date64 date = record->date;
-                Process_Days_Result days = process_days_from_range(state, active_day_index,
-                                                                   date, date, {}, ProcessDays_Calculate);
+                Process_Days_Result days = process_days_from_range(state, active_day_index, date, date, {}, 0);
                 
                 s32 non_assumed_time = days.time_total - days.time_assumed;
                 b32 closed_range_ending = (days.time_assumed == 0);
@@ -473,19 +472,19 @@ process_input(Program_State *state, Record_Session *session)
             case Token_Identifier: {
                 if (token_equals(token, "start"))
                 {
-                    process_command_start(session);
+                    process_command_start(state, session);
                 }
                 else if (token_equals(token, "stop"))
                 {
-                    process_command_stop(session);
+                    process_command_stop(state, session);
                 }
                 else if (token_equals(token, "add"))
                 {
-                    process_command_add_sub(session, true);
+                    process_command_add_sub(state, session, true);
                 }
                 else if (token_equals(token, "subtract") || token_equals(token, "sub"))
                 {
-                    process_command_add_sub(session, false);
+                    process_command_add_sub(state, session, false);
                 }
                 else if (token_equals(token, "show"))
                 {
@@ -958,7 +957,8 @@ s32 main(int argument_count, char **arguments)
                 if (session.change_count > 0)
                 {
                     Record *last_record = get_last_record(&session);
-                    process_days_from_range(&state, 0, last_record->date, last_record->date, {}, ProcessDays_PrintAltColor);
+                    process_days_from_range(&state, 0, last_record->date, last_record->date, {}, 
+                                            ProcessDays_Print|ProcessDays_AltColor);
                 }
             }
             
