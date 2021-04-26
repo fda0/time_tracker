@@ -152,10 +152,10 @@ fetch_token(Lexer *lx)
 
 
 internal Lexer
-create_lexer(char *input_text)
+create_lexer(u8 *input_text)
 {
     Lexer lexer = {};
-    lexer.at = (u8 *)input_text;
+    lexer.at = input_text;
     lexer.line_row = 1;
     
     for_u32(i, array_count(lexer.tokens))
@@ -165,6 +165,11 @@ create_lexer(char *input_text)
 
     return lexer;
 }
+inline Lexer
+create_lexer(char *input_text) {
+    return create_lexer((u8 *)input_text);
+}
+
 
 
 inline Token

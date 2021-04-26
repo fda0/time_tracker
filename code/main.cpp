@@ -1,3 +1,12 @@
+/* TODO:
+  [ ] Unify help messages for incorrect inputs & help command
+  [?] ??Group commands, its function pointers, help items all in one array? Could be used for "help summary / help all"
+  -> [ ] Could be used to identify errors in previous command (bad parameter order?)
+  
+  [ ] Unexpected indentifer error should print _LINE_ with error (and maybe idenfiter should be highlighted)
+*/
+
+
 #include "main.h"
 
 global Global_State global_state;
@@ -218,12 +227,13 @@ save_to_file(Program_State *state)
             if (is_new_day)
             {
                 date64 date = record->date;
-                Process_Days_Result days = process_days_from_range(state, date, date, {}, ProcessDays_Calculate);
+                Process_Days_Result days = process_days_from_range(state, active_day_index,
+                                                                   date, date, {}, ProcessDays_Calculate);
                 
                 s32 non_assumed_time = days.time_total - days.time_assumed;
                 b32 closed_range_ending = (days.time_assumed == 0);
-                String sum_bar = get_sum_and_progress_bar_string(arena, non_assumed_time, closed_range_ending);
                 
+                String sum_bar = get_sum_and_progress_bar_string(arena, non_assumed_time, closed_range_ending);
                 add(l2s("// "));
                 add(sum_bar);
                 add(l2s("\n\n"));
@@ -427,7 +437,7 @@ create_record_session_no_lexer(Arena *arena, Virtual_Array<Record> *records,
 
 internal Record_Session
 create_record_session(Arena *arena, Virtual_Array<Record> *records,
-                      b32 reading_from_file, char *content)
+                      b32 reading_from_file, u8 *content)
 {
     Record_Session result = create_record_session_no_lexer(arena, records, reading_from_file);
     result.lexer = create_lexer(content);
@@ -550,7 +560,7 @@ process_input(Program_State *state, Record_Session *session)
                     if (reading_from_file) {
                         Error_Cmd_Exclusive;
                     } else {
-                        path_open_in_default_program(&state->arena, &state->input_path);
+                        open_in_default_program(&state->arena, &state->input_path);
                     }
                 }
                 else if (token_equals(token, "dir"))
@@ -558,7 +568,7 @@ process_input(Program_State *state, Record_Session *session)
                     if (reading_from_file) {
                         Error_Cmd_Exclusive;
                     } else {
-                        directory_open_in_default_program(&state->arena, state->exe_path.directory);
+                        open_in_default_program(&state->arena, state->exe_path.directory);
                     }
                 }
                 else if (token_equals(token, "clear"))
@@ -685,11 +695,11 @@ load_file(Program_State *state)
          (load_tries < 5 && !load_successful);
          ++load_tries)
     {
-        char *file_content = read_entire_file_and_zero_terminate(&state->arena, &state->input_path);
+        File_Content file_content = read_entire_file_and_zero_terminate(&state->arena, &state->input_path);
         
-        if (file_content)
+        if (no_errors(&file_content))
         {
-            Record_Session session = create_record_session(&state->arena, &state->records, true, file_content);
+            Record_Session session = create_record_session(&state->arena, &state->records, true, file_content.content.str);
             process_input(state, &session);
             
             if (no_errors(&session))
@@ -847,7 +857,7 @@ s32 main(int argument_count, char **arguments)
     //~ initialize essential state
     initialize_timezone_offset();
     
-    state.exe_path = get_this_executable_path(arena);
+    state.exe_path = current_executable_path(arena);
     state.title = trim_from_index_of_reverse(state.exe_path.file_name, '.');
     
     if (state.input_path.file_name.size == 0)
@@ -902,7 +912,7 @@ s32 main(int argument_count, char **arguments)
     if (!state.load_file_error)
     {
         Date_Range_Result range = get_recent_days_range(&state.records);
-        process_days_from_range(&state, range.first, range.last, {}, ProcessDays_Print);
+        process_days_from_range(&state, 0, range.first, range.last, {}, ProcessDays_Print);
         save_to_file(&state);
         
         if (reformat_mode) {
@@ -948,7 +958,7 @@ s32 main(int argument_count, char **arguments)
                 if (session.change_count > 0)
                 {
                     Record *last_record = get_last_record(&session);
-                    process_days_from_range(&state, last_record->date, last_record->date, {}, ProcessDays_PrintAltColor);
+                    process_days_from_range(&state, 0, last_record->date, last_record->date, {}, ProcessDays_PrintAltColor);
                 }
             }
             

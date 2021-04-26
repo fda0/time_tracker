@@ -25,11 +25,11 @@ add_summary(Tests_Summary *summary, b32 success, String message, String file_nam
     if (success)
     {
         summary->success_count += 1;
-        pair = summary->messages.append(&summary->arena);
+        pair = summary->messages.push_get_item(&summary->arena);
     }
     else
     {
-        pair = summary->messages.prepend(&summary->arena);
+        pair = summary->messages.push_get_item(&summary->arena);
     }
     
     pair->message = copy_string(&summary->arena, message);
@@ -77,7 +77,7 @@ s32 main()
     Arena arena_ = create_virtual_arena();
     Arena *arena = &arena_;
     
-    Directory cw_dir = get_current_working_directory(arena);
+    Directory cw_dir = current_working_directory(arena);
     Directory out_dir = directory_append(arena, cw_dir, l2s("output"));
     directory_delete_all_files(arena, out_dir);
     

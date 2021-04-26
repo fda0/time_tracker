@@ -1,5 +1,10 @@
-
-
+struct Boundaries_Result
+{
+    date64 first;
+    date64 last;
+    
+    char *description;
+};
 
 
 inline date64
@@ -57,14 +62,6 @@ initialize_timezone_offset()
     global_state.timezone_offset = offset;
 }
 
-
-struct Boundaries_Result
-{
-    date64 first;
-    date64 last;
-
-    char *description;
-};
 
 
 

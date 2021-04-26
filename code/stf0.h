@@ -119,11 +119,15 @@ manual but may be guessed if not specified:
 
 // ========================== Memory ==========================
 #if Stf0_Level >= 30
+
 #    define WIN32_LEAN_AND_MEAN
 #    include <Windows.h>
 #    include <timeapi.h>
 #    include <shellapi.h>
-#    undef small
+//#    include <debugapi.h>
+
+#undef near
+
 #endif
 
 // =========================== Alloc ==========================
@@ -281,13 +285,14 @@ debug_break(); force_halt(); exit(1);\
 //=============================
 #if Def_Slow
 // TODO(f0): other compilers
-#    define debug_break() do{if(IsDebuggerPresent()) {\
-fflush(stdout); __debugbreak();\
-}}while(0)
+#    define debug_break() do{if(IsDebuggerPresent()) {fflush(stdout); __debugbreak();}}while(0)
 #    define assert(Expression) assert_always(Expression)
+#    define break_at(Expression) do{if((Expression)){debug_break();}}while(0)
+
 #else
 #    define debug_break()
 #    define assert(Expression)
+#    define break_at(Expression)
 #endif
 
 
@@ -1171,7 +1176,7 @@ struct Compare_Line_Pos
 };
 
 internal Compare_Line_Pos
-compare_with_line_column(String valuea, String valueb, b32 case_ins = false)
+compare_with_line_column(String value_a, String value_b, b32 case_ins = false)
 {
     // TODO(f0): column counter that works with utf8
     
@@ -1180,12 +1185,12 @@ compare_with_line_column(String valuea, String valueb, b32 case_ins = false)
     result.line = 1;
     result.column = 1;
     
-    u64 size = pick_smaller(valuea.size, valueb.size);
+    u64 size = pick_smaller(value_a.size, value_b.size);
     u64 i = 0;
     for (; i < size; ++i)
     {
-        u8 a = valuea.str[i];
-        u8 b = valueb.str[i];
+        u8 a = value_a.str[i];
+        u8 b = value_b.str[i];
         
         if (case_ins) {
             a = get_lower(a);
@@ -1206,7 +1211,7 @@ compare_with_line_column(String valuea, String valueb, b32 case_ins = false)
     }
     
     if (result.is_equal &&
-        valuea.size != valueb.size)
+        value_a.size != value_b.size)
     {
         result.is_equal = false;
     }
@@ -1559,7 +1564,7 @@ struct Linked_List
     Linked_List_Node<T> *last;
     u64 node_count;
     
-    inline Linked_List_Node<T> *append_get_node(Arena *arena)
+    inline Linked_List_Node<T> *push_get_node(Arena *arena)
     {
         if (node_count)
         {
@@ -1579,40 +1584,11 @@ struct Linked_List
         return last;
     }
     
-    inline T *append(Arena *arena)
+    inline T *push_get_item(Arena *arena)
     {
-        auto result = append_get_node(arena);
+        auto result = push_get_node(arena);
         return &result->item;
     }
-    
-    
-    
-    inline Linked_List_Node<T> *prepend_get_node(Arena *arena)
-    {
-        if (node_count)
-        {
-            assert(first);
-            assert(last);
-            Linked_List_Node<T> *new_first = push_array(arena, Linked_List_Node<T>, 1);
-            new_first->next = first;
-            first = new_first;
-        }
-        else
-        {
-            first = push_array(arena, Linked_List_Node<T>, 1);
-            last = first;
-        }
-        
-        ++node_count;
-        return last;
-    }
-    
-    inline T *prepend(Arena *arena)
-    {
-        auto result = prepend_get_node(arena);
-        return &result->item;
-    }
-    
 };
 
 
@@ -2041,7 +2017,7 @@ internal Separator_String_Builder_Item *
 builder_add(Arena *arena, Separator_String_Builder *builder,
             String string, b32 skip_following_separator = false)
 {
-    Separator_String_Builder_Item *item = builder->list.append(arena);
+    Separator_String_Builder_Item *item = builder->list.push_get_item(arena);
     item->string = string;
     item->skip_following_separator = skip_following_separator;
     
@@ -2131,7 +2107,7 @@ builder_recalculate_length(Simple_String_Builder *builder)
 internal Simple_String_Builder_Item *
 builder_add(Arena *arena, Simple_String_Builder *builder, String string)
 {
-    Simple_String_Builder_Item *item = builder->list.append(arena);
+    Simple_String_Builder_Item *item = builder->list.push_get_item(arena);
     item->string = string;
     builder->string_length_sum += string.size;
     return item;
@@ -2349,7 +2325,6 @@ is_valid_handle(File_Handle *file)
 #if Def_Slow
     if (!result) {
         s32 error_code = GetLastError();
-        printf("[log] File handle error: %d; ", error_code);
         debug_break();
     }
 #endif
@@ -2878,26 +2853,28 @@ file_get_size(File_Handle *file)
 
 
 
-
 inline void
-path_open_in_default_program(cstr_lit path_cstr)
+open_in_default_program(cstr_lit path_cstr)
 {
     ShellExecuteA(NULL, "open", path_cstr, NULL, NULL, SW_SHOWNORMAL);
 }
 
 inline void
-path_open_in_default_program(Arena *temp_arena, Path *path)
+open_in_default_program(Arena *temp_arena, Path *path)
 {
+    arena_scope(temp_arena);
     char *path_cstr = cstr_from_path(temp_arena, path);
-    path_open_in_default_program(path_cstr);
+    open_in_default_program(path_cstr);
 }
 
 inline void
-directory_open_in_default_program(Arena *temp_arena, Directory directory)
+open_in_default_program(Arena *temp_arena, Directory directory)
 {
+    arena_scope(temp_arena);
     char *directory_cstr = cstr_from_directory(temp_arena, directory);
-    path_open_in_default_program(directory_cstr);
+    open_in_default_program(directory_cstr);
 }
+
 
 
 
@@ -2928,7 +2905,7 @@ list_files_in_directory(Arena *arena, Directory directory)
             if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
             {
                 String file_name_string = copy_string(arena, string(data.cFileName));
-                *result.append(arena) = get_path(directory, file_name_string);
+                *result.push_get_item(arena) = get_path(directory, file_name_string);
             }
         } while (FindNextFileA(find_handle, &data) != 0);
         FindClose(find_handle);
@@ -2987,7 +2964,7 @@ directory_delete_all_files(Arena *temp_arena, Directory directory)
 
 // =============== @Platform_Directory_Functions ==============
 internal Directory
-get_current_working_directory(Arena *arena)
+current_working_directory(Arena *arena)
 {
     // NOTE(f0): ends with Native_Slash;
 #if Def_Windows
@@ -3015,7 +2992,7 @@ get_current_working_directory(Arena *arena)
 }
 
 internal Directory
-get_this_executable_directory(Arena *arena)
+current_executable_directory(Arena *arena)
 {
 #if Def_Windows
     char buffer[kilobytes(4)];
@@ -3031,7 +3008,7 @@ get_this_executable_directory(Arena *arena)
 }
 
 internal Path
-get_this_executable_path(Arena *arena)
+current_executable_path(Arena *arena)
 {
 #if Def_Windows
     char buffer[kilobytes(4)];
@@ -3129,42 +3106,6 @@ pipe_read_line(Pipe_Handle *pipe, char *buffer, s64 buffer_size)
 
 
 
-
-#if 0
-// NOTE(f0): String alloc
-internal String16
-string16_from_string8(Arena *arena, String source)
-{
-#if Def_Windows
-    Ensure(source.size < S32_Max);
-    s32 count1 = MultiByteToWideChar(CP_UTF8, 0, (char *)source.str, (s32)source.size, 0, 0);
-    
-    Ensure(count1 != ERROR_INSUFFICIENT_BUFFER && count1 != ERROR_INVALID_FLAGS &&
-           count1 != ERROR_INVALID_PARAMETER && count1 != ERROR_NO_UNICODE_TRANSLATION);
-    
-    String16 result = alloc_string(arena, u16, count1);
-    s32 count2 = MultiByteToWideChar(CP_UTF8, 0, (char *)source.str, (s32)source.size,
-                                     (wchar *)result.str, (s32)result.size);
-    
-    Ensure(count2 != ERROR_INSUFFICIENT_BUFFER && count2 != ERROR_INVALID_FLAGS &&
-           count2 != ERROR_INVALID_PARAMETER && count2 != ERROR_NO_UNICODE_TRANSLATION);
-    Ensure(count1 == count2);
-    
-#else
-#error "not impl"
-#endif
-    
-    return result;
-}
-#endif
-
-
-
-
-
-
-
-
 // =================== @Platform_Console_App ==================
 
 #define ensure(Condition) do{\
@@ -3184,6 +3125,34 @@ exit_error();\
 
 
 
+
+
+#if Stf0_Wide_Char
+internal wchar_t *
+wchar_from_char(Arena *arena, char *cstr)
+{
+    s32 count1 = MultiByteToWideChar(CP_UTF8, 0, cstr, -1, 0, 0);
+    ensure(count1 != ERROR_INSUFFICIENT_BUFFER && count1 != ERROR_INVALID_FLAGS &&
+           count1 != ERROR_INVALID_PARAMETER && count1 != ERROR_NO_UNICODE_TRANSLATION);
+    
+    wchar_t *result = push_array(arena, wchar_t, count1);
+    
+    s32 count2 = MultiByteToWideChar(CP_UTF8, 0, cstr, -1, result, count1);
+    ensure(count2 != ERROR_INSUFFICIENT_BUFFER && count2 != ERROR_INVALID_FLAGS &&
+           count2 != ERROR_INVALID_PARAMETER && count2 != ERROR_NO_UNICODE_TRANSLATION);
+    ensure(count1 == count2);
+    
+    return result;
+}
+#endif
+
+
+
+
+
+
+
+
 internal String_List
 save_pipe_output(Arena *arena, Pipe_Handle *pipe)
 {
@@ -3192,7 +3161,7 @@ save_pipe_output(Arena *arena, Pipe_Handle *pipe)
     while (pipe_read_line(pipe, line_buffer, sizeof(line_buffer)))
     {
         String line = copy_string(arena, string(line_buffer, length_trim_white_reverse(line_buffer)));
-        *result.append(arena) = line;
+        *result.push_get_item(arena) = line;
     }
     return result;
 }
@@ -3208,11 +3177,10 @@ struct File_Content
     b32 no_error;
 };
 
-
 inline b32
-no_errors(File_Content *file_content)
+no_errors(File_Content *content)
 {
-    b32 result = file_content->no_error;
+    b32 result = content->no_error;
     return result;
 }
 
@@ -3260,40 +3228,45 @@ read_entire_file(Arena *arena, Path *path)
 
 
 //=============================
-internal char *
+internal File_Content
 read_entire_file_and_zero_terminate(Arena *arena, File_Handle *file)
 {
-    char *result = nullptr;
+    File_Content result = {};
+    result.content.size = file_get_size(file) + 1;
+    result.content.str = push_array(arena, u8, result.content.size);
+    
     if (no_errors(file))
     {
-        u64 length = file_get_size(file);
-        result = push_array(arena, char, length + 1);
-        u64 bytes_read = file_read(file, result, length);
+        u64 bytes_read = file_read(file, result.content.str, result.content.size);
         
-        if (bytes_read != length) {
-            set_error(file, "Couldn't read whole file and zero terminate");
+        if (bytes_read != result.content.size-1) {
+            set_error(file, "Couldn't read whole file (zero terminate version)");
+        } else {
+            result.no_error = true;
+            result.content.size -= 1;
+            result.content.str[result.content.size] = 0;
         }
         
-        result[length] = 0;
+        assert(result.content.size >= bytes_read);
     }
+    
     return result;
 }
 
-internal char *
+internal File_Content
 read_entire_file_and_zero_terminate(Arena *arena, cstr_lit file_path)
 {
-    char *result = nullptr;
     File_Handle file = file_open_read(file_path);
-    result = read_entire_file_and_zero_terminate(arena, &file);
+    File_Content result = read_entire_file_and_zero_terminate(arena, &file);
     file_close(&file);
     return result;
 }
 
-inline char *
+inline File_Content 
 read_entire_file_and_zero_terminate(Arena *arena, Path *path)
 {
     char *path_cstr = cstr_from_path(arena, path);
-    char *result = read_entire_file_and_zero_terminate(arena, path_cstr);
+    File_Content result = read_entire_file_and_zero_terminate(arena, path_cstr);
     return result;
 }
 

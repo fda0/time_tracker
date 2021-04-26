@@ -204,7 +204,6 @@ fill_description_optional(Record_Session *session, Record *record)
     if (token.type == Token_String)
     {
         advance(&session->lexer);
-        //record->desc_hash = add_description(&session->desc_table, forward->token); @desc
         record->desc = token.text;
     }
 }
@@ -259,7 +258,6 @@ get_date_range(Record_Session *session)
             result.last = date.date;
         }
     }
-    
     
     
     if (success)

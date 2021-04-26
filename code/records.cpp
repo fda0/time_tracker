@@ -1,6 +1,12 @@
+struct Record_Index_Pair
+{
+    Record *record;
+    u64 index;
+};
+
 
 internal Record_Range
-get_records_range_for_starting_date(Program_State *state, u64 start_index)
+get_day_range_for_record_index(Program_State *state, u64 start_index)
 {
     Record_Range result = {};
     b32 start_is_active = false;
@@ -38,7 +44,7 @@ get_records_range_for_starting_date(Program_State *state, u64 start_index)
             
             if (result.date != record->date)
             {
-                result.one_past_last = result.next_day_first_record_index = index;
+                result.one_past_last = result.next_day_record_index = index;
                 
                 if (start_is_active) {
                     result.one_past_last += 1;
@@ -57,7 +63,7 @@ get_records_range_for_starting_date(Program_State *state, u64 start_index)
         }
         
         if (!result.one_past_last) {
-            result.one_past_last = result.next_day_first_record_index = state->records.count;
+            result.one_past_last = result.next_day_record_index = state->records.count;
         }
     }
     
@@ -66,11 +72,12 @@ get_records_range_for_starting_date(Program_State *state, u64 start_index)
 
 
 internal Range_u64
-get_index_range_for_date_range(Program_State *state, date64 date_begin, date64 date_end)
+get_index_range_for_date_range(Program_State *state, u64 starting_index,
+                               date64 date_begin, date64 date_end)
 {
     Range_u64 result = {};
     
-    u64 index = 0;
+    u64 index = starting_index;
     for (;
          index < state->records.count;
          ++index)
@@ -103,11 +110,34 @@ get_index_range_for_date_range(Program_State *state, date64 date_begin, date64 d
 
 
 
+inline Record_Index_Pair
+get_record_and_index_for_starting_date(Program_State *state, date64 date_begin, u64 starting_index)
+{
+    Record_Index_Pair result = {};
+    
+    for (u64 record_index = starting_index;
+         record_index < state->records.count;
+         ++record_index)
+    {
+        Record *record_test = state->records.at(record_index);
+        if (record_test->date >= date_begin)
+        {
+            result.record = record_test;
+            result.index = record_index;
+            break;
+        }
+    }
+    
+    return result;
+}
 
 
-// TODO(f0): Add start index to avoid traversing whole array all the time
+
+
+
+
 internal Process_Days_Result
-process_days_from_range(Program_State *state,
+process_days_from_range(Program_State *state, u64 starting_index,
                         date64 date_begin, date64 date_end,
                         String filter,
                         Process_Days_Options options)
@@ -126,292 +156,302 @@ process_days_from_range(Program_State *state,
     Arena *arena = &state->arena;
     arena_scope(arena);
     
-    
     b32 should_print = (options >= ProcessDays_Print);
-    
+    b32 has_filter = (filter.size != 0);
     
     Process_Days_Result result = {};
     
-    b32 has_filter = (filter.size != 0);
-    Range_u64 whole_range = get_index_range_for_date_range(state, date_begin, date_end);
     
     
-    Record_Range range = get_records_range_for_starting_date(state, whole_range.first);
-    
-    for (;
-         range.date <= date_end && range.date != 0;
-         range = get_records_range_for_starting_date(state, range.next_day_first_record_index))
+    Record_Index_Pair start_pair = get_record_and_index_for_starting_date(state, date_begin, starting_index);
+    if (start_pair.record && start_pair.record->date <= date_end)
     {
-        arena_scope(arena);
+        Record_Range range = get_day_range_for_record_index(state, start_pair.index);
         
-        Linked_List<Record> defered_time_deltas = {}; // NOTE: for prints only
-        Record *active_start = nullptr;
-        Open_State open_state = Closed_PostPrint;
-        s32 day_time_sum = 0;
-        b32 day_header_printed = false;
-        
-        
-        
-        for (u64 index = range.first;
-             index < range.one_past_last;
-             ++index)
+        for (;
+             range.date <= date_end && range.date != 0;
+             range = get_day_range_for_record_index(state, range.next_day_record_index))
         {
-            Record record = *state->records.at(index);
+            arena_scope(arena);
             
-            if (has_filter)
+            Linked_List<Record> defered_time_deltas = {}; // NOTE: for prints only
+            Record *active_start = nullptr;
+            Open_State open_state = Closed_PostPrint;
+            s32 day_time_sum = 0;
+            b32 day_header_printed = false;
+            
+            
+            
+            for (u64 index = range.first;
+                 index < range.one_past_last;
+                 ++index)
             {
-                if (!active_start && index == range.next_day_first_record_index) {
-                    continue;
+                Record record = *state->records.at(index);
+                
+                if (!active_start && record.date > date_end) {
+                    goto escape_all_loops_label;
                 }
                 
-                b32 matches_filter = equals(filter, record.desc);
                 
-                if (!active_start && !matches_filter) {
-                    continue;
-                }
-                
-                if (active_start && record.type == Record_TimeStart) {
-                    record.type = Record_TimeStop;
-                }
-            }
-            
-            
-            if (should_print && !day_header_printed)
-            {
-                day_header_printed = true;
-                
-                String date_str = get_date_string(arena, range.date);
-                String day_of_week = get_day_of_the_week_string(arena, range.date);
-                
-                printf("\n");
-                
-                if (options == ProcessDays_PrintAltColor) {
-                    print_color(Color_AltDate);
-                } else {
-                    print_color(Color_Date);
-                }
-                
-                printf("%.*s %.*s", string_expand(date_str), string_expand(day_of_week));
-                
-                print_color(Color_Reset);
-                printf("\n");
-            }
-            
-            
-            
-            if (record.date != range.date &&
-                active_start)
-            {
-                // NOTE: case: "start" ends on next/another day   
-                assert(record.type == Record_TimeStop || record.type == Record_TimeStart);
-                assert(active_start);
-                
-                day_time_sum += record.value - active_start->value;
-                day_time_sum += safe_truncate_to_s32(record.date - active_start->date);
-                
-                if (should_print)
+                if (has_filter)
                 {
-                    String time_str = get_time_string(arena, record.value);
-                    printf("%.*s", string_expand(time_str));
+                    if (!active_start && index == range.next_day_record_index) {
+                        continue;
+                    }
                     
-                    print_color(Color_Dimmed);
-                    if (record.date != range.date + Days(1))
-                    {
-                        String date_str = get_date_string(arena, record.date);
-                        printf(" (%.*s)", string_expand(date_str));
+                    b32 matches_filter = equals(filter, record.desc);
+                    
+                    if (!active_start && !matches_filter) {
+                        continue;
                     }
-                    else
-                    {
-                        printf(" (next day)");
+                    
+                    if (active_start && record.type == Record_TimeStart) {
+                        record.type = Record_TimeStop;
                     }
+                }
+                
+                
+                if (should_print && !day_header_printed)
+                {
+                    day_header_printed = true;
+                    
+                    String date_str = get_date_string(arena, range.date);
+                    String day_of_week = get_day_of_the_week_string(arena, range.date);
+                    
+                    printf("\n");
+                    
+                    if (options == ProcessDays_PrintAltColor) {
+                        print_color(Color_AltDate);
+                    } else {
+                        print_color(Color_Date);
+                    }
+                    
+                    printf("%.*s %.*s", string_expand(date_str), string_expand(day_of_week));
+                    
                     print_color(Color_Reset);
-                    
-                    
-                    print_description(active_start);
-                    
-                    print_defered_time_deltas(arena, &defered_time_deltas);
-                    // print all defers (TimeDelta & CountDelta) here
                     printf("\n");
                 }
                 
-                active_start = nullptr;
-            }
-            else
-            {
-                if (open_state == Open)
+                
+                
+                if (record.date != range.date &&
+                    active_start)
                 {
-                    if (record.type == Record_TimeDelta)
+                    // NOTE: case: "start" ends on next/another day   
+                    assert(record.type == Record_TimeStop || record.type == Record_TimeStart);
+                    assert(active_start);
+                    
+                    day_time_sum += record.value - active_start->value;
+                    day_time_sum += safe_truncate_to_s32(record.date - active_start->date);
+                    
+                    if (should_print)
                     {
-                        day_time_sum += record.value;
+                        String time_str = get_time_string(arena, record.value);
+                        printf("%.*s", string_expand(time_str));
                         
-                        if (should_print)
+                        print_color(Color_Dimmed);
+                        if (record.date != range.date + Days(1))
                         {
-                            // NOTE: case: this needs to be printed _after_ we print "stop"
-                            *defered_time_deltas.append(arena) = record;
+                            String date_str = get_date_string(arena, record.date);
+                            printf(" (%.*s)", string_expand(date_str));
                         }
-                    }
-                    else if (record.type == Record_TimeStart ||
-                             record.type == Record_TimeStop)
-                    {
-                        assert(active_start);
-                        day_time_sum += record.value - active_start->value;
-                        
-                        
-                        if (should_print)
+                        else
                         {
-                            if (record.type == Record_TimeStart) {
-                                print_color(Color_Dimmed);
+                            printf(" (next day)");
+                        }
+                        print_color(Color_Reset);
+                        
+                        
+                        print_description(active_start);
+                        
+                        print_defered_time_deltas(arena, &defered_time_deltas);
+                        // print all defers (TimeDelta & CountDelta) here
+                        printf("\n");
+                    }
+                    
+                    active_start = nullptr;
+                }
+                else
+                {
+                    if (open_state == Open)
+                    {
+                        if (record.type == Record_TimeDelta)
+                        {
+                            day_time_sum += record.value;
+                            
+                            if (should_print)
+                            {
+                                // NOTE: case: this needs to be printed _after_ we print "stop"
+                                *defered_time_deltas.push_get_item(arena) = record;
+                            }
+                        }
+                        else if (record.type == Record_TimeStart ||
+                                 record.type == Record_TimeStop)
+                        {
+                            assert(active_start);
+                            day_time_sum += record.value - active_start->value;
+                            
+                            
+                            if (should_print)
+                            {
+                                if (record.type == Record_TimeStart) {
+                                    print_color(Color_Dimmed);
+                                }
+                                
+                                String time_str = get_time_string(arena, record.value);
+                                printf("%.*s", string_expand(time_str));
+                                
+                                print_color(Color_Reset);
+                                
+                                
+                                print_description(active_start);
+                                
+                                
+                                print_defered_time_deltas(arena, &defered_time_deltas);
+                                // print CountDelta defers on new lines
+                                
+                                printf("\n");
+                                
+                                
+                                // NOTE: In case of "start 1; start 2; assumed end time"
+                                // this defered_time_deltas would get printed twice
+                                // (additional print for assumed time range)
+                                defered_time_deltas = {};
                             }
                             
-                            String time_str = get_time_string(arena, record.value);
-                            printf("%.*s", string_expand(time_str));
-                            
-                            print_color(Color_Reset);
                             
                             
-                            print_description(active_start);
-                            
-                            
-                            print_defered_time_deltas(arena, &defered_time_deltas);
-                            // print CountDelta defers on new lines
-                            
-                            printf("\n");
-                            
-                            
-                            // NOTE: In case of "start 1; start 2; assumed end time"
-                            // this defered_time_deltas would get printed twice
-                            // (additional print for assumed time range)
-                            defered_time_deltas = {};
+                            active_start = nullptr;
+                        }
+                        else
+                        {
+                            // defer2 counts?
+                            assert(0);
                         }
                         
                         
-                        
-                        active_start = nullptr;
+                        if (record.type == Record_TimeStart) {
+                            open_state = Closed_PostPrint;
+                        } else if (record.type == Record_TimeStop) {
+                            open_state = Closed_PrePrint;
+                        }
                     }
-                    else
+                    
+                    
+                    if (open_state == Closed_PostPrint)
                     {
-                        // defer2 counts?
-                        assert(0);
+                        if (record.type == Record_TimeDelta)
+                        {
+                            day_time_sum += record.value;
+                            
+                            if (should_print)
+                            {
+                                printf("      ");
+                                print_time_delta(arena, &record);
+                                printf("\n");
+                            }
+                        }
+                        else if (record.type == Record_TimeStart)
+                        {
+                            active_start = state->records.at(index);
+                            open_state = Open;
+                            
+                            if (should_print)
+                            {
+                                String time_str = get_time_string(arena, record.value);
+                                printf("%.*s -> ", string_expand(time_str));
+                            }
+                        }
+                        else
+                        {
+                            // print count\n
+                            assert(record.type != Record_TimeStop);
+                            assert(0);
+                        }
                     }
                     
                     
-                    if (record.type == Record_TimeStart) {
+                    if (open_state == Closed_PrePrint) {
                         open_state = Closed_PostPrint;
-                    } else if (record.type == Record_TimeStop) {
-                        open_state = Closed_PrePrint;
                     }
-                }
-                
-                
-                if (open_state == Closed_PostPrint)
-                {
-                    if (record.type == Record_TimeDelta)
-                    {
-                        day_time_sum += record.value;
-                        
-                        if (should_print)
-                        {
-                            printf("      ");
-                            print_time_delta(arena, &record);
-                            printf("\n");
-                        }
-                    }
-                    else if (record.type == Record_TimeStart)
-                    {
-                        active_start = state->records.at(index);
-                        open_state = Open;
-                        
-                        if (should_print)
-                        {
-                            String time_str = get_time_string(arena, record.value);
-                            printf("%.*s -> ", string_expand(time_str));
-                        }
-                    }
-                    else
-                    {
-                        // print count\n
-                        assert(record.type != Record_TimeStop);
-                        assert(0);
-                    }
-                }
-                
-                
-                if (open_state == Closed_PrePrint) {
-                    open_state = Closed_PostPrint;
                 }
             }
-        }
-        
-        
-        if (active_start)
-        {
-#if Def_Slow
-            open_start_ending_should_happen_only_once_test += 1;
-            assert(open_start_ending_should_happen_only_once_test < 2);
-#endif
-            date64 today = get_today();
-            s32 now_time = get_time();
-            
-            s32 local_sum = now_time - active_start->value;
-            local_sum += safe_truncate_to_s32(today - active_start->date);
             
             
-            day_time_sum += local_sum;
-            result.time_assumed += local_sum;
-            
-            
-            if (should_print)
+            if (active_start)
             {
-                String time_str = get_time_string(arena, now_time);
-                print_color(Color_HelpHeader);
-                printf("%.*s ", string_expand(time_str));
+#if Def_Slow
+                open_start_ending_should_happen_only_once_test += 1;
+                assert(open_start_ending_should_happen_only_once_test < 2);
+#endif
+                date64 today = get_today();
+                s32 now_time = get_time();
                 
-                if (local_sum < Days(1)) {
-                    printf("(now)");
-                } else {
-                    print_color(Color_Error);
-                    printf("(missing stop)");
+                s32 local_sum = now_time - active_start->value;
+                local_sum += safe_truncate_to_s32(today - active_start->date);
+                
+                
+                day_time_sum += local_sum;
+                result.time_assumed += local_sum;
+                
+                
+                if (should_print)
+                {
+                    String time_str = get_time_string(arena, now_time);
+                    print_color(Color_HelpHeader);
+                    printf("%.*s ", string_expand(time_str));
+                    
+                    if (local_sum < Days(1)) {
+                        printf("(now)");
+                    } else {
+                        print_color(Color_Error);
+                        printf("(missing stop)");
+                    }
+                    
+                    print_color(Color_Reset);
+                    print_description(active_start);
+                    print_defered_time_deltas(arena, &defered_time_deltas);
+                    // print CountDelta defers on new lines
+                    printf("\n");
                 }
                 
+                
+                active_start = nullptr;
+            }
+            
+            
+            
+            if (should_print && day_header_printed)
+            {
+                // TODO(f0): Figure out missing ending stuff
+                String time = get_time_string(arena, day_time_sum);
+                String bar = get_progress_bar_string(arena, day_time_sum, (result.time_assumed == 0));
+                
+                print_color(Color_Dimmed);
+                print_color(Color_Positive);
+                printf("Time total: %.*s  ", string_expand(time));
+                
+                printf("%.*s", string_expand(bar));
+                
                 print_color(Color_Reset);
-                print_description(active_start);
-                print_defered_time_deltas(arena, &defered_time_deltas);
-                // print CountDelta defers on new lines
                 printf("\n");
             }
             
             
-            active_start = nullptr;
+            result.time_total += day_time_sum;
+            
+            if (range.next_day_record_index >= state->records.count) {
+                goto escape_all_loops_label;
+            }
         }
         
         
+        escape_all_loops_label:
         
-        if (should_print && day_header_printed)
-        {
-            // TODO(f0): Figure out missing ending stuff
-            String time = get_time_string(arena, day_time_sum);
-            String bar = get_progress_bar_string(arena, day_time_sum, (result.time_assumed == 0));
-            
-            print_color(Color_Dimmed);
-            print_color(Color_Positive);
-            printf("Time total: %.*s  ", string_expand(time));
-            
-            printf("%.*s", string_expand(bar));
-            
-            print_color(Color_Reset);
-            printf("\n");
-        }
-        
-        
-        result.time_total += day_time_sum;
-        
-        if (range.next_day_first_record_index >= whole_range.one_past_last) {
-            break;
-        }
+        result.next_day_record_index = range.next_day_record_index;
     }
     
     
-    result.next_day_record_index = range.next_day_first_record_index;
     return result;
 }
 
@@ -420,10 +460,6 @@ process_days_from_range(Program_State *state,
 //
 //~ Summary
 //
-
-
-
-
 internal void
 print_summary(Program_State *state, Granularity granularity,
               date64 date_begin, date64 date_end,
@@ -433,18 +469,9 @@ print_summary(Program_State *state, Granularity granularity,
     arena_scope(arena);
     date64 today = get_today();
     
-    
-    Record *record = nullptr;
-    for_u64(record_index, state->records.count)
-    {
-        Record *record_test = state->records.at(record_index);
-        if (record_test->date >= date_begin)
-        {
-            record = record_test;
-            break;
-        }
-    }
-    
+    Record_Index_Pair starting_pair = get_record_and_index_for_starting_date(state, date_begin, 0);
+    Record *record = starting_pair.record;
+    u64 start_index = starting_pair.index;
     
     
     if (record && (record->date <= date_end))
@@ -476,8 +503,11 @@ print_summary(Program_State *state, Granularity granularity,
             
             date64 first_date = pick_bigger(date_begin, boundary.first);
             date64 last_date = pick_smaller(date_end, boundary.last);
-            Process_Days_Result days = process_days_from_range(state, first_date, last_date,
+            Process_Days_Result days = process_days_from_range(state, start_index, first_date, last_date,
                                                                filter, ProcessDays_Calculate);
+            
+            start_index = days.next_day_record_index;
+            
             
             String test_start_date = get_date_string(&state->arena, first_date);
             String test_last_date = get_date_string(&state->arena, last_date);
@@ -546,3 +576,20 @@ print_summary(Program_State *state, Granularity granularity,
 }
 
 
+//
+//~ Top
+//
+internal void
+print_top(Program_State *state,
+          date64 date_begin, date64 date_end,
+          String filter)
+{
+    Record_Index_Pair starting_pair = get_record_and_index_for_starting_date(state, date_begin, 0);
+    Record *record = starting_pair.record;
+    u64 start_index = starting_pair.index;
+    
+    if (record && (record->date <= date_end))
+    {
+        
+    }
+}

@@ -81,7 +81,7 @@ struct Record_Range
     date64 date;
     u64 first;
     u64 one_past_last;
-    u64 next_day_first_record_index;
+    u64 next_day_record_index;
 };
 
 struct Range_u64

@@ -91,7 +91,6 @@ process_command_show(Program_State *state, Record_Session *session)
     if (range.status != Status_HasErrors)
     {
         String filter = {};
-        
         Token token = peek_token(&session->lexer, 0);
         if (token.type == Token_String) {
             advance(&session->lexer);
@@ -99,7 +98,6 @@ process_command_show(Program_State *state, Record_Session *session)
         }
         
         char *message = nullptr;
-        
         if (range.status == Status_NoMatchigTokens)
         {
             if (filter.size)
@@ -114,7 +112,7 @@ process_command_show(Program_State *state, Record_Session *session)
             }
         }
         
-        process_days_from_range(state, range.first, range.last, filter, ProcessDays_Print);
+        process_days_from_range(state, 0, range.first, range.last, filter, ProcessDays_Print);
         
         if (message) {
             print_color(Color_Dimmed);
@@ -136,9 +134,8 @@ process_command_show(Program_State *state, Record_Session *session)
 internal void
 process_command_summary(Program_State *state, Record_Session *session)
 {
+    // TODO: Pull out granularity input?
     Granularity granularity = Granularity_Months;
-    // TODO: Pull out granularity check.
-    
     {
         Token token = peek_token(&session->lexer, 0);
         
@@ -238,3 +235,48 @@ process_command_exit(Program_State *state, Record_Session *session)
         }
     }
 }
+
+
+internal void
+process_command_top(Program_State *state, Record_Session *session)
+{
+    Date_Range_Result range = get_date_range(session);
+    
+    if (range.status != Status_HasErrors)
+    {
+        String filter = {};
+        Token token = peek_token(&session->lexer, 0);
+        if (token.type == Token_String) {
+            advance(&session->lexer);
+            filter = token.text;
+        }
+        
+        char *message = nullptr;
+        if (range.status == Status_NoMatchigTokens)
+        {
+            if (filter.size)
+            {
+                range = get_max_date_range(true);
+            }
+            else
+            {
+                range = get_recent_days_range(session->records);
+                message = "Range assumed from xxxx-xx-xx to xxxx-xx-xx; "
+                    "To use all records specify filter or use \"show all\"\n";
+            }
+        }
+        
+        print_top(state, range.first, range.last, filter);
+        
+        if (message) {
+            print_color(Color_Dimmed);
+            printf("%s", message);
+            print_color(Color_Reset);
+        }
+    }
+    else
+    {
+        session_set_error(session, "Incorect command usage... TODO full message :<\n");
+    }
+}
+    
