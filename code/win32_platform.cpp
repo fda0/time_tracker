@@ -10,7 +10,7 @@ platform_tm_to_time(tm *date)
 }
 
 internal File_Time
-platform_get_file_mod_time(Arena *arena, Path *path)
+platform_get_file_mod_time(Arena *arena, Path path)
 {
     arena_scope(arena);
     char *file_name = cstr_from_path(arena, path);

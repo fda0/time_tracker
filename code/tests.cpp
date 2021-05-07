@@ -90,15 +90,15 @@ s32 main()
     {
         arena_scope(arena);
         
-        Path *input_path = &input_node->item;
+        Path input_path = input_node->item;
         Path out_path = {
             out_dir,
-            input_path->file_name
+            input_path.file_name
         };
             
-        file_copy(arena, input_path, &out_path, true);
+        file_copy(arena, input_path, out_path, true);
         
-        char *out_path_cstr = cstr_from_path(arena, &out_path);
+        char *out_path_cstr = cstr_from_path(arena, out_path);
         char *command = cstrf(arena, "..\\build\\tt.exe -r -d \"%s\" > nul", out_path_cstr);
         Pipe_Handle pipe = pipe_open_read(command);
         //String_List pipe_output = save_pipe_output(arena, &pipe); // TODO(f0): figure out why this didn't work
@@ -108,11 +108,11 @@ s32 main()
         {
             Path ref_path = {
                 ref_dir,
-                input_path->file_name
+                input_path.file_name
             };
             
-            File_Content ref_content = read_entire_file(arena, &ref_path);
-            File_Content out_content = read_entire_file(arena, &out_path);
+            File_Content ref_content = read_entire_file(arena, ref_path);
+            File_Content out_content = read_entire_file(arena, out_path);
             
             if (no_errors(&ref_content))
             {

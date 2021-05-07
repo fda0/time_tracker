@@ -120,7 +120,7 @@ archive_current_file(Program_State *state, b32 long_format = false)
                                string_expand(state->title), timestamp.str);
     
     Path archive_path = get_path(state->archive_dir, file_name);
-    file_copy(arena, &state->input_path, &archive_path, false);
+    file_copy(arena, state->input_path, archive_path, false);
     
     if (long_format) {
         printf("File archived as: %.*s\n", string_expand(file_name));
@@ -136,7 +136,7 @@ save_to_file(Program_State *state)
     
     b32 success = false;
     
-    File_Handle file = file_open_write(arena, &state->input_path);
+    File_Handle file = file_open_write(arena, state->input_path);
     if (no_errors(&file))
     {
         Simple_String_Builder builder = {};
@@ -247,11 +247,11 @@ save_to_file(Program_State *state)
             success = true;
         }
         
-        state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
+        state->input_file_mod_time = platform_get_file_mod_time(&state->arena, state->input_path);
     }
     else
     {
-        char *input_path_cstr = cstr_from_path(&state->arena, &state->input_path);
+        char *input_path_cstr = cstr_from_path(&state->arena, state->input_path);
         printf("Failed to write to file: %s\n", input_path_cstr);
     }
     
@@ -565,7 +565,7 @@ process_input(Program_State *state, Record_Session *session)
                     if (reading_from_file) {
                         Error_Cmd_Exclusive;
                     } else {
-                        open_in_default_program(&state->arena, &state->input_path);
+                        open_in_default_program(&state->arena, state->input_path);
                     }
                 }
                 else if (token_equals(token, "dir"))
@@ -700,7 +700,7 @@ load_file(Program_State *state)
          (load_tries < 5 && !load_successful);
          ++load_tries)
     {
-        File_Content file_content = read_entire_file_and_zero_terminate(&state->arena, &state->input_path);
+        File_Content file_content = read_entire_file_and_zero_terminate(&state->arena, state->input_path);
         
         if (no_errors(&file_content))
         {
@@ -731,12 +731,12 @@ load_file(Program_State *state)
     {
         state->load_file_error = true;
         arena_scope(&state->arena);
-        char *file_name = cstr_from_path(&state->arena, &state->input_path);
+        char *file_name = cstr_from_path(&state->arena, state->input_path);
         printf("[Critial error] Failed to load from file: %s\n", file_name);
     }
     
     
-    state->input_file_mod_time = platform_get_file_mod_time(&state->arena, &state->input_path);
+    state->input_file_mod_time = platform_get_file_mod_time(&state->arena, state->input_path);
 }
 
 
@@ -887,7 +887,7 @@ s32 main(int argument_count, char **arguments)
     {
         arena_scope(arena);
         
-        char *input_path_cstr = cstr_from_path(arena, &state.input_path);
+        char *input_path_cstr = cstr_from_path(arena, state.input_path);
         if (!file_exists(input_path_cstr))
         {
             if (!reformat_mode)
@@ -972,7 +972,7 @@ s32 main(int argument_count, char **arguments)
         
         
         
-        File_Time mod_time = platform_get_file_mod_time(&state.arena, &state.input_path);
+        File_Time mod_time = platform_get_file_mod_time(&state.arena, state.input_path);
         b32 source_file_changed = platform_compare_file_time(state.input_file_mod_time, mod_time) != 0;
         
         if (source_file_changed)

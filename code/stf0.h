@@ -1,25 +1,24 @@
 #if !defined(Stf0_H)
 #define Stf0_H
 /* ======================= #define guide ======================
-
-stf0 switches:
-    Stf0_Namespace - wrap the code in stf0:: c++ namepsace
-
-100% manual switches:
-	Def_Internal:
+Switches that can be defined manually:
+	> Def_Internal:
 		0 - Build for public relrease
 		1 - Build for developers only
-	Def_Slow:
+	> Def_Slow:
 		0 - No slow code allowed!
 		1 - Slow code is welcomed (example: additional asserts)
+    > Stf0_Namespace - wrap this whole code in stf0:: c++ namepsace
+    > Stf0_Wide_Char - add functions for interfacing with UTF16 for Windows
 
-manual but may be guessed if not specified:
-    Def_Windows; Def_Linux - target platforms
-    Def_Msvc; Dev_Llvm     - target compiler
+Semi automatic switches (but can be specified manually):
+    > Def_Windows; Def_Linux - target platforms
+    > Def_Msvc; Dev_Llvm     - target compiler
 */
 
 /* TODO:
   [ ] Compile with unicode switch to find all cases where Windows ASCII API is not used
+  [ ] Base string builders on fill versions build_to_buffer(buffer, buffer_size)
 */
 
 
@@ -126,7 +125,9 @@ manual but may be guessed if not specified:
 #    include <shellapi.h>
 //#    include <debugapi.h>
 
+// Microsoft's wall of shame:
 #undef near
+#undef interface
 
 #endif
 
@@ -187,6 +188,7 @@ typedef __m128i m128i;
 #define U64_Max _UI64_MAX
 //
 #define F32_Max FLT_MAX
+#define F64_Max DBL_MAX
 //
 #define Pi32  3.14159265359f
 #define Tau32 6.2831853071795864769f
@@ -200,6 +202,8 @@ typedef __m128i m128i;
 #define array_count(a) ((sizeof(a))/(sizeof(*a)))
 #define pick_smaller(a, b) (((a) > (b)) ? (b) : (a))
 #define pick_bigger(a, b) (((a) > (b)) ? (a) : (b))
+//
+#define offset_of(Type, Member) ((s64)&(((Type *)0)->Member))
 //
 #define kilobytes(b) (1024*(b))
 #define megabytes(b) (1024*kilobytes(b))
@@ -259,8 +263,9 @@ Stf0_Open_Namespace
 //=============================
 #if Def_Compiler_Msvc
 #    define This_Function __func__
-#    define This_Line_s32 __LINE__
+#    define This_Line_S32 __LINE__
 #    define This_File     __FILE__
+#    define Counter_Macro __COUNTER__
 #else
 #    error "not impl"
 #endif
@@ -285,7 +290,11 @@ debug_break(); force_halt(); exit(1);\
 //=============================
 #if Def_Slow
 // TODO(f0): other compilers
+#ifdef WIN32_LEAN_AND_MEAN
 #    define debug_break() do{if(IsDebuggerPresent()) {fflush(stdout); __debugbreak();}}while(0)
+#else
+#    define debug_break() do{fflush(stdout); __debugbreak();}while(0)
+#endif
 #    define assert(Expression) assert_always(Expression)
 #    define break_at(Expression) do{if((Expression)){debug_break();}}while(0)
 
@@ -294,6 +303,10 @@ debug_break(); force_halt(); exit(1);\
 #    define assert(Expression)
 #    define break_at(Expression)
 #endif
+
+inline b32 static_expression_wrapper_(b32 a) { return a; }
+#define runtime_assert(ExpressionMakeNotStatic) assert(static_expression_wrapper_(ExpressionMakeNotStatic))
+
 
 
 //=============================
@@ -351,7 +364,7 @@ struct String
 
 struct Find_Index
 {
-    u64 index; // NOTE(f0): Index is 0 when not found
+    u64 index; // NOTE(f0): Index defaults to 0 when not found
     b32 found;
     u32 _padding;
 };
@@ -433,16 +446,16 @@ safe_truncate_to_s32(s64 value)
 
 // ===================== @Basic_Intrinsics ====================
 
-struct Bit_Scan_Result
+struct Bit_Scan_result
 {
     u32 index;
     b32 found;
 };
 
-inline Bit_Scan_Result
+inline Bit_Scan_result
 find_most_significant_bit(u64 value)
 {
-    Bit_Scan_Result result = {};
+    Bit_Scan_result result = {};
 #if Def_Compiler_Msvc
     result.found = _BitScanReverse64((unsigned long *)&result.index, value);
 #else
@@ -450,14 +463,14 @@ find_most_significant_bit(u64 value)
 #endif
     return result;
 }
-inline Bit_Scan_Result find_most_significant_bit(s64 value) {
+inline Bit_Scan_result find_most_significant_bit(s64 value) {
     return find_most_significant_bit((u64)value);
 }
 
-inline Bit_Scan_Result
+inline Bit_Scan_result
 find_most_significant_bit(u32 value)
 {
-    Bit_Scan_Result result = {};
+    Bit_Scan_result result = {};
 #if Def_Compiler_Msvc
     result.found = _BitScanReverse((unsigned long *)&result.index, value);
 #else
@@ -465,15 +478,15 @@ find_most_significant_bit(u32 value)
 #endif
     return result;
 }
-inline Bit_Scan_Result find_most_significant_bit(s32 value) {
+inline Bit_Scan_result find_most_significant_bit(s32 value) {
     return find_most_significant_bit((u32)value);
 }
 
 ///////
-inline Bit_Scan_Result
+inline Bit_Scan_result
 find_least_significant_bit(u32 value)
 {
-    Bit_Scan_Result result = {};
+    Bit_Scan_result result = {};
 #if Def_Compiler_Msvc
     result.found = _BitScanForward((unsigned long *)&result.index, value);
     
@@ -490,15 +503,15 @@ find_least_significant_bit(u32 value)
 #endif
     return result;
 }
-inline Bit_Scan_Result find_least_significant_bit(s32 value) {
+inline Bit_Scan_result find_least_significant_bit(s32 value) {
     return find_least_significant_bit((u32)value);
 };
 
 
-inline Bit_Scan_Result
+inline Bit_Scan_result
 find_least_significant_bit(u64 value)
 {
-    Bit_Scan_Result result = {};
+    Bit_Scan_result result = {};
     
 #if Def_Compiler_Msvc
     result.found = _BitScanForward64((unsigned long *)&result.index, value);
@@ -507,7 +520,7 @@ find_least_significant_bit(u64 value)
 #endif
     return result;
 }
-inline Bit_Scan_Result find_least_significant_bit(s64 value) {
+inline Bit_Scan_result find_least_significant_bit(s64 value) {
     return find_least_significant_bit((u64)value);
 };
 
@@ -522,8 +535,8 @@ inline Bit_Scan_Result find_least_significant_bit(s64 value) {
 inline b32
 is_non_zero_power_of_two(u64 value)
 {
-    Bit_Scan_Result msb = find_most_significant_bit(value);
-    Bit_Scan_Result lsb = find_least_significant_bit(value);
+    Bit_Scan_result msb = find_most_significant_bit(value);
+    Bit_Scan_result lsb = find_least_significant_bit(value);
     b32 result = (msb.found == lsb.found &&
                   msb.index == lsb.index);
     return result;
@@ -618,70 +631,31 @@ string(char *cstr)
 
 
 // ======================== @Basic_Char =======================
-inline b32
-is_slash(u8 c)
-{
-    b32 result = (c == '\\' || c == '/');
-    return result;
-}
+inline b32 is_slash(u32 c) { return (c == '\\' || c == '/'); }
 
-inline b32
-is_end_of_line(u8 c)
-{
-    b32 result = ((c == '\n') || (c == '\r'));
-    return result;
-}
+inline b32 is_end_of_line(u32 c) { return ((c == '\n') || (c == '\r')); }
 
-inline b32
-is_whitespace(u8 c)
-{
-    b32 result = ((c == ' ') ||
-                  (c == '\t') ||
-                  (c == '\v') ||
-                  (c == '\f'));
-    return result;
-}
+inline b32 is_whitespace(u32 c) { return ((c == ' ') || (c == '\t') || (c == '\v') || (c == '\f')); }
 
-inline b32
-is_white(u8 c)
-{
-    b32 result = (is_whitespace(c) ||
-                  is_end_of_line(c));
-    return result;
-}
-inline b32 is_white(char c) {
-    return is_white((u8)c);
-}
+inline b32 is_white(u32 c) { return (is_whitespace(c) || is_end_of_line(c)); }
+inline b32 is_white(char c) { return is_white((u32)c); }
+inline b32 is_white(u8 c) { return is_white((u32)c); }
 
-inline b32
-is_alpha(u8 c)
-{
-    b32 result = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
-    
-    return result;
-}
+inline b32 is_alpha(u32 c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
 
-inline b32
-is_number(u8 c)
-{
-    b32 result = (c >= '0' && c <= '9');
-    return result;
-}
+inline b32 is_number(u32 c) { return (c >= '0' && c <= '9'); }
 
 
 inline u8
 get_lower(u8 c)
 {
     u8 delta = 'a' - 'A';
-    if (c >= 'A' && c <= 'Z')
-    {
+    if (c >= 'A' && c <= 'Z') {
         c += delta;
     }
     return c;
 }
-inline char get_lower(char c) {
-    return (char)get_lower((u8)c);
-}
+inline char get_lower(char c) { return (char)get_lower((u8)c); }
 
 
 
@@ -1220,6 +1194,1354 @@ compare_with_line_column(String value_a, String value_b, b32 case_ins = false)
 }
 
 
+//~ ======================= @Level_Math =======================
+#if Stf0_Level >= 21
+//~ ======================== @Level_21 ========================
+//~ ===================== @Math_Intrinics =====================
+
+// TODO(f0): Remove math.h in some beautiful future?
+#include <math.h>
+
+inline s32
+sign_of(s32 value)
+{
+    s32 result = (value >= 0) ? 1 : -1;
+    return result;
+}
+
+inline f32
+sign_of(f32 value)
+{
+    f32 result = (value >= 0.f) ? 1.f : -1.f;
+    return result;
+}
+
+inline f32
+square_root(f32 real32)
+{
+    f32 result = sqrtf(real32);
+    return result;
+}
+
+inline f32
+absolute_value(f32 real32)
+{
+    f32 result = (f32)fabs(real32);
+    return result;
+}
+
+inline u32
+rotate_left(u32 value, s32 amount)
+{
+#if Def_Compiler_Msvc
+    u32 result = _rotl(value, amount);
+#else
+#error this is slow
+    amount &= 31;
+    result = (value << amount) | (value >> (32 - amount));
+#endif
+    
+    return result;
+}
+
+inline u32
+rotate_right(u32 value, s32 amount)
+{
+#if Def_Compiler_Msvc
+    u32 result = _rotr(value, amount);
+#else
+#error this is slow
+    amount &= 31;
+    u32 result = (value >> amount)  | (value << (32 - amount));
+#endif
+    
+    return result;
+}
+
+inline s32
+round_f32_to_s32(f32 value)
+{
+    s32 result = (s32)roundf(value);
+    return result;
+}
+
+inline u32
+round_f32_to_u32(f32 value)
+{
+    u32 result = (u32)roundf(value);
+    return result;
+}
+
+inline s32
+floor_f32_to_s32(f32 value)
+{
+    s32 result = (s32)floorf(value);
+    return result;
+}
+
+inline s32
+ceil_f32_to_s32(f32 value)
+{
+    s32 result = (s32)ceilf(value);
+    return result;
+}
+
+inline s32
+truncate_f32_to_s32(f32 value)
+{
+    s32 result = (s32)value;
+    return result;
+}
+
+inline f32
+sin(f32 angle)
+{
+    f32 result = sinf(angle);
+    return result;
+}
+
+inline f32
+cos(f32 angle)
+{
+    f32 result = cosf(angle);
+    return result;
+}
+
+inline f32
+atan2(f32 y, f32 x)
+{
+    f32 result = atan2f(y, x);
+    return result;
+}
+
+
+
+
+
+
+
+
+
+
+
+//~ ======================= @Math_Types =======================
+// ====================== Vectors (float) =====================
+union v2
+{
+    struct {
+        f32 x, y;
+    };
+    f32 e[2];
+};
+union v3
+{
+    struct {
+        f32 x, y, z;
+    };
+    struct {
+        v2 xy;
+    };
+    struct {
+        f32 _x_;
+        v2 yz;
+    };
+    f32 e[3];
+};
+union v4
+{
+    struct {
+        f32 x, y, z, w;
+    };
+    struct {
+        v3 xyz;
+    };
+    struct {
+        v2 xy, zw;
+    };
+    struct {
+        f32 r, g, b, a;
+    };
+    struct {
+        v3 rgb;
+    };
+    f32 e[4];
+};
+
+// ==================== Rectangles (float) ====================
+struct Rect2
+{
+    v2 min, max;
+};
+struct Rect3
+{
+    v3 min, max;
+};
+
+
+// ======================= Vectors (int) ======================
+union v2s
+{
+    struct {
+        s32 x, y;
+    };
+    s32 e[2];
+};
+// ===================== Rectangles (int) =====================
+struct Rect2s
+{
+    v2s min, max;
+};
+
+
+
+//~ ======================== @s32_math ========================
+inline s32
+clamp(s32 min, s32 value, s32 max)
+{
+    s32 result = value;
+    
+    if (result < min) {
+        result = min;
+    }
+    
+    if (result > max) {
+        result = max;
+    }
+    
+    return result;
+}
+
+inline void
+clamp_bot(s32 *value, s32 bound)
+{
+    if (*value < bound) {
+        *value = bound;
+    }
+}
+
+inline void
+clamp_top(s32 *value, s32 bound)
+{
+    if (*value > bound) {
+        *value = bound;
+    }
+}
+
+
+
+
+
+//~ ======================== @f32_math ========================
+inline void
+clamp_bot(f32 *value, f32 bound)
+{
+    if (*value < bound) {
+        *value = bound;
+    }
+}
+
+inline void
+clamp_top(f32 *value, f32 bound)
+{
+    if (*value > bound) {
+        *value = bound;
+    }
+}
+
+inline f32
+square(f32 a)
+{
+    f32 result = a * a;
+    return result;
+}
+
+inline f32
+lerp(f32 a, f32 t, f32 b)
+{
+    f32 result = (1.0f - t)*a + t*b;
+    return result;
+}
+
+inline f32
+safe_ratio_n(f32 numerator, f32 divisor, f32 n)
+{
+    f32 result = n;
+    if (divisor != 0.0f)
+    {
+        result = numerator / divisor;
+    }
+    return result;
+}
+
+inline f32
+safe_ratio_0(f32 numerator, f32 divisor)
+{
+    f32 result = safe_ratio_n(numerator, divisor, 0.0f);
+    return result;
+}
+
+inline f32
+safe_ratio_1(f32 numerator, f32 divisor)
+{
+    f32 result = safe_ratio_n(numerator, divisor, 1.0f);
+    return result;
+}
+
+inline f32
+clamp(f32 min, f32 value, f32 max)
+{
+    f32 result = value;
+    if (result < min) {
+        result = min;
+    }
+    // NOTE(f0): No else here produces branchless clamp
+    if (result > max) {
+        result = max;
+    }
+    return result;
+}
+
+inline f32
+clamp01(f32 value)
+{
+    f32 result = clamp(0.0f, value, 1.0f);
+    return result;
+}
+
+inline f32
+clamp01_map_to_range(f32 min, f32 t, f32 max)
+{
+    f32 result = 0.f;
+    
+    f32 range = max - min;
+    if (range != 0.0f)
+    {
+        result = clamp01((t - min) / range);
+    }
+    
+    return result;
+}
+
+
+
+
+
+//~ ========================= @v2_math ========================
+inline v2
+arm2(f32 angle)
+{
+    v2 result = {cos(angle), sin(angle)};
+    return result;
+}
+
+inline v2
+perp(v2 a)
+{
+    v2 result = {-a.y, a.x};
+    return result;
+}
+
+
+inline v2
+V2(f32 x, f32 y)
+{
+    v2 result = {x, y};
+    return result;
+}
+
+inline v2
+V2(f32 xy)
+{
+    v2 result = {xy, xy};
+    return result;
+}
+
+inline v2
+V2i(s32 x, s32 y)
+{
+    v2 result = {(f32)x, (f32)y};
+    return result;
+}
+
+inline v2
+V2i(u32 x, u32 y)
+{
+    v2 result = {(f32)x, (f32)y};
+    return result;
+}
+
+inline v2
+V2i(s32 xy)
+{
+    v2 result = {(f32)xy, (f32)xy};
+    return result;
+}
+
+inline v2
+V2i(u32 xy)
+{
+    v2 result = {(f32)xy, (f32)xy};
+    return result;
+}
+
+inline v2
+V2i(v2s a)
+{
+    v2 result = {(f32)a.x, (f32)a.y};
+    return result;
+}
+
+
+
+inline v2
+operator*(f32 a, v2 b)
+{
+    v2 result {
+        a * b.x,
+        a * b.y
+    };
+    return result;
+}
+
+inline v2
+operator*(v2 a, f32 b)
+{
+    v2 result = b * a;
+    return result;
+}
+
+inline v2
+operator-(v2 a)
+{
+    v2 result;
+    result.x = -a.x;
+    result.y = -a.y;
+    return result;
+}
+
+inline v2
+operator+(v2 a, v2 b)
+{
+    v2 result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    return result;
+}
+
+inline v2
+operator-(v2 a, v2 b)
+{
+    v2 result;
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+    return result;
+}
+
+inline v2
+operator*=(v2 &a, f32 b)
+{ 
+    a = b * a;
+    return a;
+}
+
+inline v2
+operator+=(v2 &a, v2 b)
+{
+    a = a + b;
+    return a;   
+}
+
+inline v2
+operator-=(v2 &a, v2 b)
+{
+    a = a - b;
+    return a;   
+}
+
+
+inline void
+clamp_bot(v2 *value, f32 bound)
+{
+    clamp_bot(&value->x, bound);
+    clamp_bot(&value->y, bound);
+}
+
+inline void
+clamp_top(v2 *value, f32 bound)
+{
+    clamp_top(&value->x, bound);
+    clamp_top(&value->y, bound);
+}
+
+
+
+inline v2
+lerp(v2 a, f32 t, v2 b)
+{
+    v2 result = (1.0f - t)*a + t*b;
+    return result;
+}
+
+inline v2
+hadamard(v2 a, v2 b)
+{
+    v2 result;
+    result.x = a.x * b.x;
+    result.y = a.y * b.y;
+    
+    return result;
+}
+
+inline f32
+inner(v2 a, v2 b)
+{
+    f32 result = a.x * b.x + a.y * b.y;
+    return result;
+}
+
+inline f32
+length_sq(v2 a)
+{
+    f32 result = inner(a, a);
+    return result;
+}
+
+inline f32
+length(v2 a)
+{
+    f32 result = square_root(length_sq(a));
+    return result;
+}
+
+inline v2
+normalize (v2 a)
+{
+    v2 result = a * (1.0f / length(a));
+    return result;
+}
+
+inline v2
+clamp01(v2 value)
+{
+    v2 result;
+    result.x = clamp01(value.x);
+    result.y = clamp01(value.y);
+    
+    return result;
+}
+
+
+
+
+
+
+
+
+
+
+
+//~ ========================= @v3_math ========================
+inline v3
+V3(f32 x, f32 y, f32 z)
+{
+    v3 result = {x, y, z};
+    return result;
+}
+
+inline v3
+V3(v2 xy, f32 z)
+{
+    v3 result = {xy.x, xy.y, z};
+    return result;
+}
+
+inline v3
+V3(f32 xyz)
+{
+    v3 result = {xyz, xyz, xyz};
+    return result;
+}
+
+inline v3
+V3i(s32 x, s32 y, s32 z)
+{
+    v3 result = {(f32)x, (f32)y, (f32)z};
+    return result;
+}
+
+inline v3
+V3i(u32 x, u32 y, u32 z)
+{
+    v3 result = {(f32)x, (f32)y, (f32)z};
+    return result;
+}
+
+inline v3
+operator*(f32 a, v3 b)
+{
+    v3 result;
+    result.x = a * b.x;
+    result.y = a * b.y;
+    result.z = a * b.z;
+    
+    return result;
+}
+
+inline v3
+operator*(v3 a, f32 b)
+{
+    v3 result = b * a;
+    return result;
+}
+
+inline v3
+operator-(v3 a)
+{
+    v3 result;
+    result.x = -a.x;
+    result.y = -a.y;
+    result.z = -a.z;
+    
+    return result;
+}
+
+inline v3
+operator+(v3 a, v3 b)
+{
+    v3 result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    return result;
+}
+
+inline v3
+operator-(v3 a, v3 b)
+{
+    v3 result;
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+    result.z = a.z - b.z;
+    return result;
+}
+
+inline v3
+operator*=(v3 &a, f32 b)
+{ 
+    a = b * a;
+    return a;
+}
+
+inline v3
+operator+=(v3 &a, v3 b)
+{
+    a = a + b;
+    return a;   
+}
+
+inline v3
+operator-=(v3 &a, v3 b)
+{
+    a = a - b;
+    return a;
+}
+
+inline v3
+lerp(v3 a, f32 t, v3 b)
+{
+    v3 result = (1.0f - t)*a + t*b;
+    return result;
+}
+
+inline v3
+hadamard(v3 a, v3 b)
+{
+    v3 result;
+    result.x = a.x * b.x;
+    result.y = a.y * b.y; 
+    result.z = a.z * b.z;
+    
+    return result;
+}
+
+inline f32
+inner(v3 a, v3 b)
+{
+    f32 result = (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
+    return result;
+}
+
+inline f32
+length_sq(v3 a)
+{
+    f32 result = inner(a, a);
+    return result;
+}
+
+inline f32
+length(v3 a)
+{
+    f32 result = square_root(length_sq(a));
+    return result;
+}
+
+inline v3
+normalize (v3 a)
+{
+    v3 result = a * (1.0f /length(a));
+    return result;
+}
+
+inline v3
+clamp01(v3 value)
+{
+    v3 result;
+    result.x = clamp01(value.x);
+    result.y = clamp01(value.y);
+    result.z = clamp01(value.z);
+    
+    return result;
+}
+
+
+
+
+
+
+
+
+
+//~ ========================= vector4 =========================
+
+inline v4
+V4(f32 x, f32 y, f32 z, f32 w)
+{
+    v4 result = {x, y, z, w};
+    return result;
+}
+
+inline v4
+V4(v3 xyz, f32 w)
+{
+    v4 result;
+    result.xyz = xyz;
+    result.w = w;
+    return result;
+}
+
+
+inline v4
+V4(f32 scalar_xyzw)
+{
+    v4 result = {scalar_xyzw, scalar_xyzw, scalar_xyzw, scalar_xyzw};
+    return result;
+}
+
+
+inline v4
+V4i(s32 x, s32 y, s32 z, s32 w)
+{
+    v4 result = { (f32)x, (f32)y, (f32)z, (f32)w };
+    return result;
+}
+
+inline v4
+V4i(u32 x, u32 y, u32 z, u32 w)
+{
+    v4 result = { (f32)x, (f32)y, (f32)z, (f32)w };
+    return result;
+}
+
+inline v4
+operator*(f32 a, v4 b)
+{
+    v4 result;
+    result.x = a * b.x;
+    result.y = a * b.y;
+    result.z = a * b.z;
+    result.w = a * b.w;
+    
+    return result;
+}
+
+inline v4
+operator*(v4 a, f32 b)
+{
+    v4 result = b * a;
+    return result;
+}
+
+inline v4
+operator-(v4 a)
+{
+    v4 result;
+    result.x = -a.x;
+    result.y = -a.y;
+    result.z = -a.z;
+    result.w = -a.w;
+    
+    return result;
+}
+
+inline v4
+operator+(v4 a, v4 b)
+{
+    v4 result;
+    result.x = a.x + b.x;
+    result.y = a.y + b.y;
+    result.z = a.z + b.z;
+    result.w = a.w + b.w;
+    
+    return result;
+}
+
+inline v4
+operator-(v4 a, v4 b)
+{
+    v4 result;
+    result.x = a.x - b.x;
+    result.y = a.y - b.y;
+    result.z = a.z - b.z;
+    result.w = a.w - b.w;
+    
+    return result;
+}
+
+inline v4
+operator*=(v4 &a, f32 b)
+{ 
+    a = b * a;
+    return a;
+}
+
+inline v4
+operator+=(v4 &a, v4 b)
+{
+    a = a + b;
+    return a;   
+}
+
+inline v4
+operator-=(v4 &a, v4 b)
+{
+    a = a - b;
+    return a;   
+}
+
+inline v4
+lerp(v4 a, f32 t, v4 b)
+{
+    v4 result = (1.0f - t)*a + t*b;
+    return result;
+}
+
+inline v4
+hadamard(v4 a, v4 b)
+{
+    v4 result;
+    result.x = a.x * b.x;
+    result.y = a.y * b.y; 
+    result.z = a.z * b.z;
+    result.w = a.w * b.w;
+    
+    return result;
+}
+
+inline f32
+inner(v4 a, v4 b)
+{
+    f32 result = (a.x * b.x) + (a.y * b.y) + (a.z * b.z) + (a.w * b.w);
+    return result;
+}
+
+inline f32
+length_sq(v4 a)
+{
+    f32 result = inner(a, a);
+    return result;
+}
+
+inline f32
+length(v4 a)
+{
+    f32 result = square_root(length_sq(a));
+    return result;
+}
+
+inline v4
+normalize (v4 a)
+{
+    v4 result = a * (1.0f / length(a));
+    return result;
+}
+
+inline v4
+clamp01(v4 value)
+{
+    v4 result;
+    result.x = clamp01(value.x);
+    result.y = clamp01(value.y);
+    result.z = clamp01(value.z);
+    result.w = clamp01(value.w);
+    
+    return result;
+}
+
+
+
+
+
+
+
+
+
+//~ ========================== Rect2 ==========================
+
+
+inline Rect2 // NOTE(mg): Rect3 -> Rect2
+to_rect_xy(Rect3 a)
+{
+    Rect2 result;
+    result.min = a.min.xy;
+    result.max = a.max.xy;
+    return result;
+}
+
+// Rect2 constructors
+
+inline Rect2
+rect_min_max(v2 min, v2 max)
+{
+    Rect2 output;
+    output.min = min;
+    output.max = max;
+    return output;
+};
+
+inline Rect2
+rect_min_dim(v2 min, v2 dim)
+{
+    Rect2 output;
+    output.min = min;
+    output.max = min + dim;
+    return output;
+};
+
+inline Rect2
+rect_center_half_dim(v2 center, v2 half_dim)
+{
+    Rect2 output;
+    output.min = center - half_dim;
+    output.max = center + half_dim;
+    return output;
+};
+
+inline Rect2
+rect_center_dim(v2 center, v2 dim)
+{
+    Rect2 output = rect_center_half_dim(center, 0.5f*dim);
+    return output;
+};
+
+// Rect2 functions
+
+inline Rect2
+add_radius_to(Rect2 rectangle, v2 radius)
+{
+    Rect2 result;
+    result.min = rectangle.min - radius;
+    result.max = rectangle.max + radius;
+    
+    return result;
+}
+
+inline Rect2
+get_offset(Rect2 rectangle, v2 offset)
+{
+    Rect2 result;
+    result.min = rectangle.min + offset;
+    result.max = rectangle.max + offset;
+    
+    return result;
+}
+
+inline b32
+is_in_rectangle(Rect2 rectangle, v2 test)
+{
+    b32 result = ((test.x >= rectangle.min.x) && 
+                  (test.y >= rectangle.min.y) &&
+                  (test.x < rectangle.max.x) &&
+                  (test.y < rectangle.max.y));
+    
+    return result;
+} 
+
+inline v2
+get_min_corner(Rect2 rect)
+{
+    v2 result = rect.min;
+    return result;
+}
+
+inline v2
+get_max_corner(Rect2 rect)
+{
+    v2 result = rect.max;
+    return result;
+}
+
+inline v2
+get_center(Rect2 rect)
+{
+    v2 result = 0.5f*(rect.min + rect.max);
+    return result;
+}
+
+inline v2
+get_dim(Rect2 rect)
+{
+    v2 result = rect.max - rect.min;
+    return result;
+}
+
+inline b32
+are_intersecting(Rect2 a, Rect2 b)
+{
+    b32 result = !((b.max.x <= a.min.x) || // x axis
+                   (b.min.x >= a.max.x) ||
+                   (b.max.y <= a.min.y) || // y axis
+                   (b.min.y >= a.max.y));
+    
+    return result;
+}
+
+inline v2
+get_barycentric(Rect2 rect, v2 p)
+{
+    v2 result;
+    result.x = safe_ratio_0((p.x - rect.min.x), (rect.max.x - rect.min.x));
+    result.y = safe_ratio_0((p.y - rect.min.y), (rect.max.y - rect.min.y));
+    
+    return result;
+}
+
+
+// ================= additional ================
+
+inline Rect2
+get_intersection(Rect2 a, Rect2 b)
+{
+    Rect2 result;
+    result.min.x = pick_bigger(a.min.x, b.min.x);
+    result.min.y = pick_bigger(a.min.y, b.min.y);
+    result.max.x = pick_smaller(a.max.x, b.max.x);
+    result.max.y = pick_smaller(a.max.y, b.max.y);
+    
+    return result;
+}
+
+inline Rect2
+get_union(Rect2 a, Rect2 b)
+{
+    // NOTE(mg): Optimistic approximation of the union as rectangle.
+    
+    Rect2 result;
+    result.min.x = pick_smaller(a.min.x, b.min.x);
+    result.min.y = pick_smaller(a.min.y, b.min.y);
+    result.max.x = pick_bigger(a.max.x, b.max.x);
+    result.max.y = pick_bigger(a.max.y, b.max.y);
+    
+    return result;
+}
+
+inline f32
+get_clamped_rect_area(Rect2 a)
+{
+    f32 width = a.max.x - a.min.x;
+    f32 height = a.max.y - a.min.y;
+    f32 result = 0;
+    
+    if ((width > 0) && (height > 0))
+    {
+        result = width*height;
+    }
+    
+    return result;
+}
+
+inline b32
+has_area(Rect2 a)
+{
+    b32 result = ((a.min.x < a.max.x) && (a.min.y < a.max.y));
+    return result;
+}
+
+inline Rect2
+inverted_infinity_rect2()
+{
+    Rect2 result;
+    result.min.x = result.min.y = F32_Max;
+    result.max.x = result.max.y = -F32_Max;
+    return result;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+//~ ========================== Rect3 ==========================
+
+// Rect3 constructors
+
+inline Rect3
+rect_min_max(v3 min, v3 max)
+{
+    Rect3 output;
+    output.min = min;
+    output.max = max;
+    return output;
+};
+
+inline Rect3
+rect_min_dim(v3 min, v3 dim)
+{
+    Rect3 output;
+    output.min = min;
+    output.max = min + dim;
+    return output;
+};
+
+inline Rect3
+rect_center_half_dim(v3 center, v3 half_dim)
+{
+    Rect3 output;
+    output.min = center - half_dim;
+    output.max = center + half_dim;
+    return output;
+};
+
+inline Rect3
+rect_center_dim(v3 center, v3 dim)
+{
+    Rect3 output = rect_center_half_dim(center, 0.5f*dim);
+    return output;
+};
+
+// Rect3 functions
+
+inline Rect3
+add_radius_to(Rect3 rectangle, v3 radius)
+{
+    Rect3 result;
+    result.min = rectangle.min - radius;
+    result.max = rectangle.max + radius;
+    
+    return result;
+}
+
+inline Rect3
+get_offset(Rect3 rectangle, v3 offset)
+{
+    Rect3 result;
+    result.min = rectangle.min + offset;
+    result.max = rectangle.max + offset;
+    
+    return result;
+}
+
+inline b32
+is_in_rectangle(Rect3 rectangle, v3 test)
+{
+    b32 result = ((test.x >= rectangle.min.x) && 
+                  (test.y >= rectangle.min.y) &&
+                  (test.z >= rectangle.min.z) &&
+                  (test.x < rectangle.max.x) &&
+                  (test.y < rectangle.max.y) &&
+                  (test.z < rectangle.max.z));
+    
+    return result;
+} 
+
+
+inline v3
+get_min_corner(Rect3 rect)
+{
+    v3 result = rect.min;
+    return result;
+}
+
+inline v3
+get_max_corner(Rect3 rect)
+{
+    v3 result = rect.max;
+    return result;
+}
+
+inline v3
+get_center(Rect3 rect)
+{
+    v3 result = 0.5f*(rect.min + rect.max);
+    return result;
+}
+
+inline v3
+get_dim(Rect3 rect)
+{
+    v3 result = rect.max - rect.min;
+    return result;
+}
+
+
+inline b32
+are_intersecting(Rect3 a, Rect3 b)
+{
+    b32 result = !((b.max.x <= a.min.x) || // x axis
+                   (b.min.x >= a.max.x) ||
+                   (b.max.y <= a.min.y) || // y axis
+                   (b.min.y >= a.max.y) ||
+                   (b.max.z <= a.min.z) || // z axis
+                   (b.min.z >= a.max.z));
+    
+    return result;
+}
+
+inline v3
+get_barycentric(Rect3 rect, v3 p)
+{
+    v3 result;
+    result.x = safe_ratio_0((p.x - rect.min.x), (rect.max.x - rect.min.x));
+    result.y = safe_ratio_0((p.y - rect.min.y), (rect.max.y - rect.min.y));
+    result.z = safe_ratio_0((p.z - rect.min.z), (rect.max.z - rect.min.z));
+    
+    return result;
+}
+
+
+
+
+
+
+
+
+//~ ========================== Rect2s ==========================
+
+inline Rect2s
+get_intersection(Rect2s a, Rect2s b)
+{
+    Rect2s result;
+    result.min = {
+        pick_bigger(a.min.x, b.min.x),
+        pick_bigger(a.min.y, b.min.y)
+    };
+    result.max = {
+        pick_smaller(a.max.x, b.max.x),
+        pick_smaller(a.max.y, b.max.y)
+    };
+    return result;
+}
+
+inline Rect2s
+get_union(Rect2s a, Rect2s b)
+{
+    // NOTE: "Optimistic" approximation of the union as rectangle.
+    Rect2s result;
+    result.min = {
+        pick_smaller(a.min.x, b.min.x),
+        pick_smaller(a.min.y, b.min.y)
+    };
+    result.max = {
+        pick_bigger(a.max.x, b.max.x),
+        pick_bigger(a.max.y, b.max.y)
+    };
+    return result;
+}
+
+inline s32
+get_clamped_rect_area(Rect2s a)
+{
+    s32 width = a.max.x - a.min.x;
+    s32 height = a.max.y - a.min.y;
+    s32 result = 0;
+    
+    if ((width > 0) && (height > 0))
+    {
+        result = width*height;
+    }
+    
+    return result;
+}
+
+inline b32
+has_area(Rect2s a)
+{
+    b32 result = ((a.min.x < a.max.x) && (a.min.y < a.max.y));
+    return result;
+}
+
+inline Rect2s
+inverted_infinity_rect2s()
+{
+    Rect2s result;
+    result.min.x = result.min.y = S32_Max;
+    result.max.x = result.max.y = S32_Min;
+    return result;
+}
+
+
+
+
+
+
+//~ ========================== Colors =========================
+
+inline v4
+srgb255_to_linear1(v4 c)
+{
+    f32 inv_255 = 1.0f / 255.0f;
+    
+    v4 result;
+    result.r = square(inv_255 * c.r);
+    result.g = square(inv_255 * c.g);
+    result.b = square(inv_255 * c.b);
+    result.a = inv_255 * c.a;
+    
+    return result;
+}
+
+inline v4
+linear1_to_srgb255(v4 c)
+{
+    f32 one_255 = 255.0f;
+    
+    v4 result;
+    result.r = one_255 * square_root(c.r);
+    result.g = one_255 * square_root(c.g);
+    result.b = one_255 * square_root(c.b);
+    result.a = one_255 * c.a;
+    
+    return result;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1263,6 +2585,12 @@ create_arena_scope(Arena *arena)
 }
 
 inline void
+reset_arena_position(Arena *arena)
+{
+    arena->position = 0;
+}
+
+inline void
 pop_arena_scope(Arena_Scope *scope)
 {
     assert(scope);
@@ -1275,6 +2603,7 @@ struct Automatic_Arena_Scope
 {
     Arena_Scope scope;
     s32 stack_count;
+    u32 _padding;
     
     Automatic_Arena_Scope(Arena* arena)
     {
@@ -1290,8 +2619,7 @@ struct Automatic_Arena_Scope
     }
 };
 
-#define arena_scope(Arena) Automatic_Arena_Scope glue(automatic_arena_scope_, __COUNTER__)(Arena)
-
+#define arena_scope(Arena) Automatic_Arena_Scope glue(automatic_arena_scope_, This_Line_S32)(Arena)
 
 
 
@@ -1299,7 +2627,6 @@ struct Automatic_Arena_Scope
 
 
 // ======================= @Memory_Push =======================
-
 #define push_array(ArenaPtr, Type, Count)\
 (Type *)push_bytes_((ArenaPtr), (sizeof(Type)*(Count)), alignof(Type))
 
@@ -1312,7 +2639,12 @@ struct Automatic_Arena_Scope
 #define push_array_clear_align(ArenaPtr, Type, Count, Align)\
 (Type *)push_bytes_clear_((ArenaPtr), (sizeof(Type)*(Count)), Align)
 
-///////////////////////////////
+////////////////////////////////
+#define push_struct(ArenaPtr, Type)       push_array(ArenaPtr, Type, 1)
+#define push_struct_align(ArenaPtr, Type) push_array_align(ArenaPtr, Type, 1)
+#define push_struct_clear(ArenaPtr, Type) push_array_clear(ArenaPtr, Type, 1)
+
+////////////////////////////////
 #define push_array_copy(ArenaPtr, Source, Type, Count)\
 (Type *)push_bytes_and_copy_((ArenaPtr), (Source), sizeof(Type)*(Count), alignof(Type))
 
@@ -1326,6 +2658,8 @@ struct Automatic_Arena_Scope
 
 
 
+
+// =================== @Memory_Virtual_Arena ==================
 inline u64
 get_aligment_offset(Arena *arena, u64 aligment)
 {
@@ -1342,7 +2676,6 @@ get_aligment_offset(Arena *arena, u64 aligment)
 }
 
 
-// =================== @Memory_Virtual_Arena ==================
 inline u64
 round_up_to_page_size(Arena *arena, u64 value)
 {
@@ -1879,14 +3212,12 @@ push_path(Arena *arena, Directory directory, String file_name) {
 
 
 inline b32
-equals(Path *a, Path *b)
+equals(Path a, Path b)
 {
-    assert(a);
-    assert(b);
-    b32 result = equals(a->file_name, b->file_name);
+    b32 result = equals(a.file_name, b.file_name);
     
     if (result) {
-        result = equals(a->directory, b->directory);
+        result = equals(a.directory, b.directory);
     }
     
     return result;
@@ -1901,30 +3232,28 @@ equals(Path *a, Path *b)
 
 
 inline u64
-get_path_string_length(Path *path)
+get_path_string_length(Path path)
 {
-    assert(path);
-    u64 result = get_directory_names_length_sum(path->directory);
-    result += path->directory.name_count;
-    result += path->file_name.size;
+    u64 result = get_directory_names_length_sum(path.directory);
+    result += path.directory.name_count;
+    result += path.file_name.size;
     return result;
 }
 
 
 internal u64
 fill_string_from_path(void *output, u64 output_size,
-                      Path *path, b32 use_windows_slash = (Native_Slash_Char == '\\'))
+                      Path path, b32 use_windows_slash = (Native_Slash_Char == '\\'))
 {
-    assert(path);
     u8 slash = (u8)(use_windows_slash ? '\\' : '/');
     u64 out_index = 0;
     
     u8 *out = (u8 *)output;
     b32 full_fill = false;
     
-    for_u64(name_index, path->directory.name_count)
+    for_u64(name_index, path.directory.name_count)
     {
-        String *dir_name = path->directory.names + name_index;
+        String *dir_name = path.directory.names + name_index;
         for_u64(char_index, dir_name->size)
         {
             if (out_index >= output_size) {
@@ -1942,13 +3271,13 @@ fill_string_from_path(void *output, u64 output_size,
         out[out_index++] = slash;
     }
     
-    for_u64(char_index, path->file_name.size)
+    for_u64(char_index, path.file_name.size)
     {
         if (out_index >= output_size) {
             goto early_exit_label;
         }
         
-        out[out_index++] = path->file_name.str[char_index];
+        out[out_index++] = path.file_name.str[char_index];
     }
     
     full_fill = true;
@@ -1962,7 +3291,7 @@ fill_string_from_path(void *output, u64 output_size,
 
 
 internal String
-string_from_path(Arena *arena, Path *path,
+string_from_path(Arena *arena, Path path,
                  b32 use_windows_slash = (Native_Slash_Char == '\\'))
 {
     u64 pre_len = get_path_string_length(path);
@@ -1975,7 +3304,7 @@ string_from_path(Arena *arena, Path *path,
 }
 
 inline char *
-cstr_from_path(Arena *arena, Path *path,
+cstr_from_path(Arena *arena, Path path,
                b32 use_windows_slash = (Native_Slash_Char == '\\'))
 {
     u64 pre_len = get_path_string_length(path);
@@ -1987,6 +3316,11 @@ cstr_from_path(Arena *arena, Path *path,
     result[pre_len] = 0;
     return result;
 }
+
+
+
+
+
 
 
 
@@ -2179,7 +3513,7 @@ stringf(Arena *arena, char *format, ...)
     s32 len = vsnprintf(0, 0, format, args);
     assert(len >= 0);
     String result = allocate_string(arena, (u64)(len+1));
-    vsnprintf((char *) result.str, result.size, format, args);
+    vsnprintf((char *)result.str, result.size, format, args);
     --result.size;
     va_end(args);
     return result;
@@ -2213,14 +3547,14 @@ internal String
 concatenate(Arena *arena, String first, String second)
 {
     String result = allocate_string(arena, first.size + second.size);
-    copy_bytes(result.str,              first.str,  first.size);
+    copy_bytes(result.str, first.str, first.size);
     copy_bytes(result.str + first.size, second.str, second.size);
     return result;
 }
 
 
 internal String
-string_replace_file_name_extension(Arena *arena, String file_name, String new_extension)
+create_new_file_name_extension(Arena *arena, String file_name, String new_extension)
 {
     // Example: new_extension = l2s("txt");
     String file_name_no_extension = trim_from_index_of_reverse(file_name, '.');
@@ -2248,10 +3582,11 @@ string_replace_file_name_extension(Arena *arena, String file_name, String new_ex
 struct File_Handle
 {
     HANDLE handle_;
-    // TODO(f0): keep 1 byte for error check and few bytes for file_name error reporting?
+    // TODO(f0): @maybe keep 1 byte for error check and few bytes for file_name error reporting?
     b32 no_error;
     u32 _padding;
 };
+
 struct Pipe_Handle
 {
     FILE *handle_;
@@ -2338,7 +3673,7 @@ is_valid_handle(File_Handle *file)
     b32 result = (file->handle_ != INVALID_HANDLE_VALUE);
 #if Def_Slow
     if (!result) {
-        s32 error_code = GetLastError();
+        DWORD error_code = GetLastError();
         debug_break();
     }
 #endif
@@ -2382,7 +3717,7 @@ file_open_read(cstr_lit path)
 }
 
 internal File_Handle
-file_open_read(Arena *temp_arena, Path *path)
+file_open_read(Arena *temp_arena, Path path)
 {
     arena_scope(temp_arena);
     char *path_cstr = cstr_from_path(temp_arena, path);
@@ -2410,7 +3745,7 @@ file_open_write(cstr_lit path)
 }
 
 internal File_Handle
-file_open_write(Arena *temp_arena, Path *path)
+file_open_write(Arena *temp_arena, Path path)
 {
     arena_scope(temp_arena);
     char *path_cstr = cstr_from_path(temp_arena, path);
@@ -2438,7 +3773,7 @@ file_open_append(cstr_lit path)
 }
 
 internal File_Handle
-file_open_append(Arena *temp_arena, Path *path)
+file_open_append(Arena *temp_arena, Path path)
 {
     arena_scope(temp_arena);
     char *path_cstr = cstr_from_path(temp_arena, path);
@@ -2481,7 +3816,7 @@ file_copy(cstr_lit source, cstr_lit destination, b32 overwrite)
 }
 
 internal b32
-file_copy(Arena *temp_arena, Path *source, Path *destination, b32 overwrite)
+file_copy(Arena *temp_arena, Path source, Path destination, b32 overwrite)
 {
     arena_scope(temp_arena);
     char *source_cstr = cstr_from_path(temp_arena, source);
@@ -2508,7 +3843,7 @@ file_hard_link(cstr_lit source_path, cstr_lit link_path)
 }
 
 internal b32
-file_hard_link(Arena *temp_arena, Path *source_path, Path *link_path)
+file_hard_link(Arena *temp_arena, Path source_path, Path link_path)
 {
     arena_scope(temp_arena);
     char *link_path_cstr = cstr_from_path(temp_arena, link_path);
@@ -2535,7 +3870,7 @@ file_delete(cstr_lit path)
 }
 
 internal b32
-file_delete(Arena *temp_arena, Path *path)
+file_delete(Arena *temp_arena, Path path)
 {
     arena_scope(temp_arena);
     char *path_cstr = cstr_from_path(temp_arena, path);
@@ -2562,7 +3897,7 @@ file_exists(cstr_lit path)
 }
 
 internal b32
-file_exists(Arena *temp_arena, Path *path)
+file_exists(Arena *temp_arena, Path path)
 {
     arena_scope(temp_arena);
     char *path_cstr = cstr_from_path(temp_arena, path);
@@ -2713,17 +4048,17 @@ file_set_distance_from_end(File_Handle *file, s64 distance)
 
 
 
-struct Distance_Result
+struct Distance_result
 {
     s64 value;
     b32 success;
     u32 _padding;
 };
 
-internal Distance_Result
+internal Distance_result
 file_get_distance(File_Handle *file)
 {
-    Distance_Result result = {};
+    Distance_result result = {};
     if (no_errors(file))
     {
 #if Def_Windows
@@ -2874,7 +4209,7 @@ open_in_default_program(cstr_lit path_cstr)
 }
 
 inline void
-open_in_default_program(Arena *temp_arena, Path *path)
+open_in_default_program(Arena *temp_arena, Path path)
 {
     arena_scope(temp_arena);
     char *path_cstr = cstr_from_path(temp_arena, path);
@@ -2904,9 +4239,9 @@ list_files_in_directory(Arena *arena, Directory directory)
     
     Path wildcard_path = get_path(directory, lit2str("*"));
     
-    u64 wildcard_len = get_path_string_length(&wildcard_path);
+    u64 wildcard_len = get_path_string_length(wildcard_path);
     char *wildcard_cstr = push_stack_array(char, wildcard_len + 1);
-    fill_string_from_path(wildcard_cstr, wildcard_len, &wildcard_path);
+    fill_string_from_path(wildcard_cstr, wildcard_len, wildcard_path);
     wildcard_cstr[wildcard_len] = 0;
     
     
@@ -2933,13 +4268,13 @@ list_files_in_directory(Arena *arena, Directory directory)
 
 
 internal void
-files_delete_matching(Arena *temp_arena, Path *wildcard_file_name_path)
+files_delete_matching(Arena *temp_arena, Path wildcard_file_name_path)
 {
     arena_scope(temp_arena);
     
 #if Def_Windows
     char *search_cstr = cstr_from_path(temp_arena, wildcard_file_name_path);
-    Path path_copy = *wildcard_file_name_path;
+    Path path_copy = wildcard_file_name_path;
     
     
     WIN32_FIND_DATAA data = {};
@@ -2950,7 +4285,7 @@ files_delete_matching(Arena *temp_arena, Path *wildcard_file_name_path)
             if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
             {
                 path_copy.file_name = string(data.cFileName);
-                char *delete_cstr = cstr_from_path(temp_arena, &path_copy);
+                char *delete_cstr = cstr_from_path(temp_arena, path_copy);
                 DeleteFileA(delete_cstr);
             }
         } while (FindNextFileA(find_handle, &data) != 0);
@@ -2968,7 +4303,7 @@ directory_delete_all_files(Arena *temp_arena, Directory directory)
 {
     arena_scope(temp_arena);
     Path wildcard_path = get_path(directory, l2s("*"));
-    files_delete_matching(temp_arena, &wildcard_path);
+    files_delete_matching(temp_arena, wildcard_path);
 }
 
 
@@ -3189,6 +4524,7 @@ struct File_Content
 {
     String content;
     b32 no_error;
+    u32 _padding;
 };
 
 inline b32
@@ -3231,7 +4567,7 @@ read_entire_file(Arena *arena, cstr_lit file_path)
 }
 
 inline File_Content
-read_entire_file(Arena *arena, Path *path)
+read_entire_file(Arena *arena, Path path)
 {
     char *path_cstr = cstr_from_path(arena, path);
     File_Content result = read_entire_file(arena, path_cstr);
@@ -3277,7 +4613,7 @@ read_entire_file_and_zero_terminate(Arena *arena, cstr_lit file_path)
 }
 
 inline File_Content 
-read_entire_file_and_zero_terminate(Arena *arena, Path *path)
+read_entire_file_and_zero_terminate(Arena *arena, Path path)
 {
     char *path_cstr = cstr_from_path(arena, path);
     File_Content result = read_entire_file_and_zero_terminate(arena, path_cstr);
@@ -3296,6 +4632,7 @@ read_entire_file_and_zero_terminate(Arena *arena, Path *path)
 #endif // 50: Platform
 #endif // 40: String_Alloc
 #endif // 30: Memory
+#endif // 21: Math
 #endif // 20: Basic
 #endif // 10: Types
 //=============

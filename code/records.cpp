@@ -173,11 +173,16 @@ process_days_from_range(Program_State *state, u64 starting_index,
         
         
         Record_Range range = get_day_range_for_record_index(state, start_pair.index);
+        result.next_day_record_index = range.next_day_record_index;
+        
         for (;
              range.date <= date_end && range.date != 0;
              range = get_day_range_for_record_index(state, range.next_day_record_index))
         {
             arena_scope(arena);
+            
+            result.next_day_record_index = range.next_day_record_index;
+            
             
             Linked_List<Record> defered_time_deltas = {}; // NOTE: for prints only
             Record *active_start = nullptr;
@@ -490,9 +495,7 @@ process_days_from_range(Program_State *state, u64 starting_index,
         }
         
         
-        escape_all_loops_label:
-        
-        result.next_day_record_index = range.next_day_record_index;
+        escape_all_loops_label:;
     }
     
     
@@ -561,13 +564,14 @@ print_summary(Program_State *state, Granularity granularity,
             {
                 s32 day_count = safe_truncate_to_s32(((last_date - first_date) / Days(1)) + 1);
                 
-                if (days.next_day_record_index == state->records.count)
+                if (first_date <= today &&
+                    days.next_day_record_index == state->records.count)
                 {
-                    s32 current_day_count = safe_truncate_to_s32(((today - first_date) / Days(1)) + 1);
-                    
-                    assert(current_day_count > 0);
-                    assert(current_day_count <= day_count);
-                    day_count = current_day_count;
+                    s32 day_count_stopped_at_today = safe_truncate_to_s32(((today - first_date) / Days(1)) + 1);
+                    if (day_count_stopped_at_today < day_count)
+                    {
+                        day_count = day_count_stopped_at_today;
+                    }
                 }
                 
                 
