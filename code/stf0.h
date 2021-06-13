@@ -17,8 +17,6 @@ Semi automatic switches (but can be specified manually):
 */
 
 /* TODO:
-  [ ] use copy(Arena *arena, ...) name for all copy operations
-
   [ ] Compile with unicode switch to find all cases where Windows ASCII API is not used
   [ ] Base string builders on fill versions build_to_buffer(buffer, buffer_size)
 */
@@ -128,6 +126,8 @@ Semi automatic switches (but can be specified manually):
 // Microsoft's wall of shame:
 #undef near
 #undef interface
+#undef RELATIVE
+#undef ABSOLUTE
 
 #endif
 
@@ -187,12 +187,12 @@ typedef __m128i m128i;
 #define Pi32  3.14159265359f
 #define Tau32 6.2831853071795864769f
 //=============
-#if !defined(internal)
 #define internal static
 #define function static
-#endif
 #define local_global static
 #define global static
+#define global_const static const
+#define force_inline __forceinline
 //=============
 #define array_count(a) ((sizeof(a))/(sizeof(*a)))
 #define pick_smaller(a, b) (((a) > (b)) ? (b) : (a))
@@ -216,8 +216,12 @@ typedef __m128i m128i;
 #define for_linked_list(Node, List) for (auto Node = (List).first; Node; Node = Node->next)
 #define for_linked_list_ptr(Node, List) for (auto Node = (List)->first; Node; Node = Node->next)
 #define for_u64(I, Range) for_range(u64, I, Range)
+#define for_s64(I, Range) for_range(s64, I, Range)
 #define for_u32(I, Range) for_range(u32, I, Range)
 #define for_s32(I, Range) for_range(s32, I, Range)
+//
+#define u32_from_pointer(Pointer) ((u32)(u64)(Pointer))
+#define pointer_from_u32(Type, Value) ((Type *)((u64)Value))
 //
 // NOTE(f0): Align bits needs to be power of 2
 #define align_bin_to(Value, AlignBits) ((Value + (AlignBits-1)) & ~(AlignBits-1))
@@ -229,6 +233,119 @@ typedef __m128i m128i;
 #define f32_from_m128(wide, index) ((f32 *)&(wide))[index]
 #define u32_from_m128i(wide, index) ((u32 *)&(wide))[index]
 #define s32_from_m128i(wide, index) ((s32 *)&(wide))[index]
+
+
+
+
+//================= Doubly linked list macros =================
+#define for_dll_NP(Item, SentinelPtr, NextName) \
+for(auto Item = (SentinelPtr)->NextName; Item != (SentinelPtr); Item = Item->NextName)
+
+#define for_dll(Item, SentinelPtr) for_dll_NP(Item, SentinelPtr, next)
+#define for_dll_Panel(Item, SentinelPtr) for_dll_NP(Item, SentinelPtr, panel_next)
+
+//-
+#define dll_initialize_sentinel_NP(Sentinel, NextName, PrevName) (Sentinel).NextName = (Sentinel).PrevName = &(Sentinel)
+#define dll_initialize_sentinel(Sentinel) dll_initialize_sentinel_NP(Sentinel, next, prev)
+
+//-
+#define dll_insert_after_NP(Parent, Ptr, NextName, PrevName) do{ \
+(Ptr)->NextName = (Parent)->NextName;                            \
+(Ptr)->PrevName = (Parent);                                      \
+(Ptr)->NextName->PrevName = (Ptr);                               \
+(Ptr)->PrevName->NextName = (Ptr);                               \
+}while(0)
+
+#define dll_insert_after(Parent, Ptr) dll_insert_after_NP(Parent, Ptr, next, prev)
+
+//-
+#define dll_insert_before_NP(Parent, Ptr, NextName, PrevName) do{ \
+(Ptr)->NextName = (Parent);                                       \
+(Ptr)->PrevName = (Parent)->PrevName;                             \
+(Ptr)->NextName->PrevName = (Ptr);                                \
+(Ptr)->prev->NextName = (Ptr);                                    \
+}while(0)
+
+#define dll_insert_before(Parent, Ptr) dll_insert_before_NP(Parent, Ptr, next, prev)
+
+//-
+#define dll_remove_NP(Ptr, NextName, PrevName) do{ \
+(Ptr)->NextName->PrevName = (Ptr)->PrevName;       \
+(Ptr)->PrevName->NextName = (Ptr)->NextName;       \
+}while(0)
+
+#define dll_remove(Ptr) dll_remove_NP(Ptr, next, prev)
+
+
+
+//
+// ========================= CONSTANTS ========================
+//
+global_const u32 bitmask_1  = 0x00000001;
+global_const u32 bitmask_2  = 0x00000003;
+global_const u32 bitmask_3  = 0x00000007;
+global_const u32 bitmask_4  = 0x0000000f;
+global_const u32 bitmask_5  = 0x0000001f;
+global_const u32 bitmask_6  = 0x0000003f;
+global_const u32 bitmask_7  = 0x0000007f;
+global_const u32 bitmask_8  = 0x000000ff;
+global_const u32 bitmask_9  = 0x000001ff;
+global_const u32 bitmask_10 = 0x000003ff;
+global_const u32 bitmask_11 = 0x000007ff;
+global_const u32 bitmask_12 = 0x00000fff;
+global_const u32 bitmask_13 = 0x00001fff;
+global_const u32 bitmask_14 = 0x00003fff;
+global_const u32 bitmask_15 = 0x00007fff;
+global_const u32 bitmask_16 = 0x0000ffff;
+global_const u32 bitmask_17 = 0x0001ffff;
+global_const u32 bitmask_18 = 0x0003ffff;
+global_const u32 bitmask_19 = 0x0007ffff;
+global_const u32 bitmask_20 = 0x000fffff;
+global_const u32 bitmask_21 = 0x001fffff;
+global_const u32 bitmask_22 = 0x003fffff;
+global_const u32 bitmask_23 = 0x007fffff;
+global_const u32 bitmask_24 = 0x00ffffff;
+global_const u32 bitmask_25 = 0x01ffffff;
+global_const u32 bitmask_26 = 0x03ffffff;
+global_const u32 bitmask_27 = 0x07ffffff;
+global_const u32 bitmask_28 = 0x0fffffff;
+global_const u32 bitmask_29 = 0x1fffffff;
+global_const u32 bitmask_30 = 0x3fffffff;
+global_const u32 bitmask_31 = 0x7fffffff;
+
+global_const u32 bit_1  = 0x00000001;
+global_const u32 bit_2  = 0x00000002;
+global_const u32 bit_3  = 0x00000004;
+global_const u32 bit_4  = 0x00000008;
+global_const u32 bit_5  = 0x00000010;
+global_const u32 bit_6  = 0x00000020;
+global_const u32 bit_7  = 0x00000040;
+global_const u32 bit_8  = 0x00000080;
+global_const u32 bit_9  = 0x00000100;
+global_const u32 bit_10 = 0x00000200;
+global_const u32 bit_11 = 0x00000400;
+global_const u32 bit_12 = 0x00000800;
+global_const u32 bit_13 = 0x00001000;
+global_const u32 bit_14 = 0x00002000;
+global_const u32 bit_15 = 0x00004000;
+global_const u32 bit_16 = 0x00008000;
+global_const u32 bit_17 = 0x00010000;
+global_const u32 bit_18 = 0x00020000;
+global_const u32 bit_19 = 0x00040000;
+global_const u32 bit_20 = 0x00080000;
+global_const u32 bit_21 = 0x00100000;
+global_const u32 bit_22 = 0x00200000;
+global_const u32 bit_23 = 0x00400000;
+global_const u32 bit_24 = 0x00800000;
+global_const u32 bit_25 = 0x01000000;
+global_const u32 bit_26 = 0x02000000;
+global_const u32 bit_27 = 0x04000000;
+global_const u32 bit_28 = 0x08000000;
+global_const u32 bit_29 = 0x10000000;
+global_const u32 bit_30 = 0x20000000;
+global_const u32 bit_31 = 0x40000000;
+global_const u32 bit_32 = 0x80000000;
+
 
 
 
@@ -261,9 +378,11 @@ Stf0_Open_Namespace
 #endif
 
 
+
 //=============================
 #define File_Line          This_File "(" stringify2(This_Line_S32) ")"
 #define File_Line_Function File_Line ": " This_Function
+
 
 
 //=============================
@@ -275,6 +394,7 @@ stringify(Expression), This_Function);\
 fflush(stdout);\
 debug_break(); force_halt(); exit(1);\
 }}while(0)
+
 
 
 //=============================
@@ -297,10 +417,10 @@ debug_break(); force_halt(); exit(1);\
 inline b32 static_expression_wrapper_(b32 a) { return a; }
 #define runtime_assert(ExpressionMakeNotStatic) assert(static_expression_wrapper_(ExpressionMakeNotStatic))
 
+#define assert_bounds(Index, Array) assert((Index) >= 0 && (Index) < array_count(Array))
 
-
-//=============================
 #define exit_error() do{ fflush(stdout); debug_break(); exit(1);}while(0)
+
 
 
 
@@ -325,6 +445,29 @@ Private_Defer<F> private_defer_function(F f) {
 
 
 
+// ======================= @Basic_Flags =======================
+
+function b32
+is_set(u32 flag, u32 bits)
+{
+    b32 result = (flag & bits) == bits;
+    return result;
+}
+
+
+function void
+set_flag(u32 *flag, u32 bits)
+{
+    *flag |= bits;
+}
+
+function void
+clear_flag(u32 *flag, u32 bits)
+{
+    *flag &= (~bits);
+}
+
+
 
 
 
@@ -339,7 +482,7 @@ struct Time32ms
 
 struct Time_Perfomance
 {
-    s64 t_; // NOTE(f0): retrieve with get_delta(a, b)
+    s64 t_; // NOTE(f0): retrieve with get_*seconds_elapsed(a, b)
 };
 
 
@@ -1599,6 +1742,13 @@ floor(f32 value)
     return result;
 }
 
+inline f32
+ceil(f32 value)
+{
+    f32 result = ceilf(value);
+    return result;
+}
+
 
 inline s32
 round_f32_to_s32(f32 value)
@@ -1624,7 +1774,7 @@ floor_f32_to_s32(f32 value)
 inline s32
 ceil_f32_to_s32(f32 value)
 {
-    s32 result = (s32)ceilf(value);
+    s32 result = (s32)ceil(value);
     return result;
 }
 
@@ -1770,6 +1920,24 @@ clamp_top(s32 *value, s32 bound)
 }
 
 
+//~ ======================== @s64_math ========================
+inline void
+clamp_bot(s64 *value, s64 bound)
+{
+    if (*value < bound) {
+        *value = bound;
+    }
+}
+
+inline void
+clamp_top(s64 *value, s64 bound)
+{
+    if (*value > bound) {
+        *value = bound;
+    }
+}
+
+
 
 
 
@@ -1882,6 +2050,21 @@ perp(v2 a)
     v2 result = {-a.y, a.x};
     return result;
 }
+
+inline void
+clamp_bot(v2 *value, v2 bound)
+{
+    clamp_bot(&value->x, bound.x);
+    clamp_bot(&value->y, bound.y);
+}
+
+inline void
+clamp_top(v2 *value, v2 bound)
+{
+    clamp_top(&value->x, bound.x);
+    clamp_top(&value->y, bound.y);
+}
+
 
 
 inline v2
@@ -3262,7 +3445,24 @@ struct Linked_List
         return &result->item;
     }
     
-    inline T *at(u64 index);
+    inline T *at(u64 index)
+    {
+        assert(index < count);
+        
+        T *result = nullptr;
+        
+        for (Linked_List_Node<T> *node = first;
+             node;
+             node = node->next)
+        {
+            result = &node->item;
+            
+            if (index == 0) { break; }
+            index -= 1;
+        }
+        
+        return result;
+    }
 };
 
 
@@ -3319,7 +3519,7 @@ allocate_string(Arena *arena, u64 size)
 
 
 function String
-copy_string(Arena *arena, String source)
+copy(Arena *arena, String source)
 {
     String result = {};
     if (source.size > 0) {
@@ -3331,7 +3531,7 @@ copy_string(Arena *arena, String source)
 
 
 function char *
-copy_cstr(Arena *arena, char *source, s64 overwrite_len = -1)
+copy(Arena *arena, char *source, s64 overwrite_len = -1)
 {
     u64 len = (u64)((overwrite_len > 0) ? overwrite_len : length(source));
     char *result = push_array(arena, char, len + 1);
@@ -3352,6 +3552,33 @@ cstr_from_string(Arena *arena, String string)
 
 
 
+function Directory
+copy(Arena *arena, Directory directory)
+{
+    Directory result = {};
+    
+    if (directory.name_count > 0)
+    {
+        result.names = push_array(arena, String, directory.name_count);
+        result.name_count = directory.name_count;
+        
+        for_u64(name_index, directory.name_count)
+        {
+            result.names[name_index] = copy(arena, directory.names[name_index]);
+        }
+    }
+    
+    return result;
+}
+
+function Path
+copy(Arena *arena, Path path)
+{
+    Path result = {};
+    result.directory = copy(arena, path.directory);
+    result.file_name = copy(arena, path.file_name); // TODO(f0): rename to copy(...)
+    return result;
+}
 
 
 
@@ -3461,42 +3688,6 @@ get_directory_string_length(Directory directory)
 
 
 
-function String
-to_string(Arena *arena, Directory directory,
-          b32 use_windows_slash = (Native_Slash_Char == '\\'))
-{
-    u8 slash = (u8)(use_windows_slash ? '\\' : '/');
-    
-    u64 result_index = 0;
-    String result = allocate_string(arena, get_directory_string_length(directory)+1);
-    result.size -= 1; // TODO(f0): Convert it to fill function
-    // TODO(f0): Make it so string version doesn't overallocate 1 byte
-    result.str[result.size] = 0;
-    
-    for_u64(name_index, directory.name_count)
-    {
-        String *dir_name = directory.names + name_index;
-        for_u64(char_index, dir_name->size)
-        {
-            result.str[result_index++] = dir_name->str[char_index];
-        }
-        result.str[result_index++] = slash;
-    }
-    
-    result.str[result.size] = 0;
-    assert(result.size == result_index);
-    return result;
-}
-
-inline char *
-to_cstr(Arena *arena, Directory directory,
-        b32 use_windows_slash = (Native_Slash_Char == '\\'))
-{
-    String string = to_string(arena, directory, use_windows_slash);
-    char *result = (char *)string.str;
-    return result;
-}
-
 
 
 
@@ -3546,12 +3737,48 @@ equals(Path a, Path b)
 
 
 
+//~ Big functions
+
+//- Directory
+// TODO(f0): convert to fill_buffer
+function String
+to_string(Arena *arena, Directory directory,
+          b32 use_windows_slash = (Native_Slash_Char == '\\'))
+{
+    u8 slash = (u8)(use_windows_slash ? '\\' : '/');
+    
+    u64 result_index = 0;
+    String result = allocate_string(arena, get_directory_string_length(directory)+1);
+    result.size -= 1; // TODO(f0): Convert it to fill function
+    // TODO(f0): Make it so string version doesn't overallocate 1 byte
+    result.str[result.size] = 0;
+    
+    for_u64(name_index, directory.name_count)
+    {
+        String *dir_name = directory.names + name_index;
+        for_u64(char_index, dir_name->size)
+        {
+            result.str[result_index++] = dir_name->str[char_index];
+        }
+        result.str[result_index++] = slash;
+    }
+    
+    result.str[result.size] = 0;
+    assert(result.size == result_index);
+    return result;
+}
+
+inline char *
+to_cstr(Arena *arena, Directory directory,
+        b32 use_windows_slash = (Native_Slash_Char == '\\'))
+{
+    String string = to_string(arena, directory, use_windows_slash);
+    char *result = (char *)string.str;
+    return result;
+}
 
 
-
-
-
-
+//- Path
 inline u64
 get_path_string_length(Path path)
 {
@@ -3646,6 +3873,14 @@ to_cstr(Arena *arena, Path path,
 
 
 
+
+
+
+
+
+
+
+//~ String builders
 
 // =================== @Alloc_String_Builder ==================
 // TODO(f0): Base API on "fill" version
@@ -3857,7 +4092,7 @@ cstrf(Arena *arena, char *format, ...)
 
 
 
-// =================== @Alloc_String_Helpers ==================
+// =================== @String_Helpers ==================
 function String
 concatenate(Arena *arena, String first, String second)
 {
@@ -3877,6 +4112,60 @@ create_new_file_name_extension(Arena *arena, String file_name, String new_extens
     String result = concatenate(arena, file_name_no_extension, new_extension);
     return result;
 }
+
+
+
+
+
+
+
+// ======================== @to_string ========================
+function String
+to_string(Arena *a, f32 value)
+{
+    String result = stringf(a, "%.2f", value);
+    return result;
+}
+
+function String
+to_string(Arena *a, Rect2 value)
+{
+    String result = stringf(a, "{min: {%.2f, %.2f}, max: {%.2f, %.2f}}",
+                            value.min.x, value.min.y,
+                            value.max.x, value.max.y);
+    return result;
+}
+
+function String
+to_string(Arena *a, s64 value)
+{
+    String result = stringf(a, "%lld", value);
+    return result;
+}
+
+function String
+to_string(Arena *a, u64 value)
+{
+    String result = stringf(a, "%llu", value);
+    return result;
+}
+
+function String
+to_string(Arena *a, u32 value)
+{
+    String result = stringf(a, "%u", value);
+    return result;
+}
+
+function String
+to_string(Arena *a, s32 value)
+{
+    String result = stringf(a, "%d", value);
+    return result;
+}
+
+
+
 
 
 
@@ -4603,7 +4892,7 @@ platform_list_files_in_directory(Arena *arena, Directory directory)
         {
             if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
             {
-                String file_name_string = copy_string(arena, string(data.cFileName));
+                String file_name_string = copy(arena, string(data.cFileName));
                 *result.push(arena) = get_path(directory, file_name_string);
             }
         } while (FindNextFileA(find_handle, &data) != 0);
@@ -4696,7 +4985,7 @@ platform_get_current_executable_directory(Arena *arena)
 #if Def_Windows
     char buffer[kilobytes(4)];
     DWORD len = GetModuleFileNameA(nullptr, buffer, sizeof(buffer));
-    String path = copy_string(arena, string(buffer, len));
+    String path = copy(arena, string(buffer, len));
     
     String path_no_file_name = trim_file_name_from_path(path);
     Directory result = directory_from_string(arena, path_no_file_name);
@@ -4712,7 +5001,7 @@ platform_get_current_executable_path(Arena *arena)
 #if Def_Windows
     char buffer[kilobytes(4)];
     DWORD len = GetModuleFileNameA(nullptr, buffer, sizeof(buffer));
-    String path = copy_string(arena, string(buffer, len));
+    String path = copy(arena, string(buffer, len));
     
     String path_no_file_name = trim_file_name_from_path(path);
     Directory dir = directory_from_string(arena, path_no_file_name);
@@ -4859,7 +5148,7 @@ save_pipe_output(Arena *arena, Pipe_Handle *pipe)
     char line_buffer[1024*8];
     while (platform_pipe_read_line(pipe, line_buffer, sizeof(line_buffer)))
     {
-        String line = copy_string(arena, string(line_buffer, length_trim_white_reverse(line_buffer)));
+        String line = copy(arena, string(line_buffer, length_trim_white_reverse(line_buffer)));
         *result.push(arena) = line;
     }
     return result;
@@ -4893,6 +5182,8 @@ platform_read_entire_file(Arena *arena, File_Handle *file)
     if (no_errors(file))
     {
         result.content.size = platform_file_get_size(file);
+        result.no_error = true;
+        
         if (result.content.size > 0)
         {
             result.content.str = push_array(arena, u8, result.content.size);
@@ -4900,8 +5191,6 @@ platform_read_entire_file(Arena *arena, File_Handle *file)
             
             if (bytes_read != result.content.size) {
                 set_error(file, "Couldn't read whole file");
-            } else {
-                result.no_error = true;
             }
             
             result.content.size = bytes_read;

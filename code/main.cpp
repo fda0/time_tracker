@@ -953,7 +953,7 @@ s32 main(int argument_count, char **arguments)
         {
             state.last_input_time = now;
             Record_Session session = create_record_session_no_lexer(&state.arena, &state.records, false);
-            char *input_copy = copy_cstr(&state.arena, thread_memory.input_buffer);
+            char *input_copy = copy(&state.arena, thread_memory.input_buffer);
             session.lexer = create_lexer(input_copy);
                                                      
             process_input(&state, &session);

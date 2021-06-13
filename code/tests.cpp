@@ -32,8 +32,8 @@ add_summary(Tests_Summary *summary, b32 success, String message, String file_nam
         pair = summary->messages.push(&summary->arena);
     }
     
-    pair->message = copy_string(&summary->arena, message);
-    pair->file_name = copy_string(&summary->arena, file_name);
+    pair->message = copy(&summary->arena, message);
+    pair->file_name = copy(&summary->arena, file_name);
 }
 
 internal void
