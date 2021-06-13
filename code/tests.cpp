@@ -25,11 +25,11 @@ add_summary(Tests_Summary *summary, b32 success, String message, String file_nam
     if (success)
     {
         summary->success_count += 1;
-        pair = summary->messages.push_get_item(&summary->arena);
+        pair = summary->messages.push(&summary->arena);
     }
     else
     {
-        pair = summary->messages.push_get_item(&summary->arena);
+        pair = summary->messages.push(&summary->arena);
     }
     
     pair->message = copy_string(&summary->arena, message);
@@ -69,7 +69,7 @@ print_summary(Tests_Summary *summary)
 s32 main()
 {
     stf0_initialize();
-    Time_Perfomance start = get_perfomance_time();
+    Time_Perfomance start = platform_get_perfomance_time();
     
     Tests_Summary summary = {};
     summary.arena = create_virtual_arena();
@@ -77,14 +77,14 @@ s32 main()
     Arena arena_ = create_virtual_arena();
     Arena *arena = &arena_;
     
-    Directory cw_dir = current_working_directory(arena);
+    Directory cw_dir = platform_get_current_working_directory(arena);
     Directory out_dir = directory_append(arena, cw_dir, l2s("output"));
-    directory_delete_all_files(arena, out_dir);
+    platform_directory_delete_all_files(arena, out_dir);
     
     Directory ref_dir = directory_append(arena, cw_dir, l2s("reference"));
     Directory input_dir = directory_append(arena, cw_dir, l2s("input"));
     
-    Path_List input_list = list_files_in_directory(arena, input_dir);
+    Path_List input_list = platform_list_files_in_directory(arena, input_dir);
     
     for_linked_list(input_node, input_list)
     {
@@ -96,13 +96,13 @@ s32 main()
             input_path.file_name
         };
             
-        file_copy(arena, input_path, out_path, true);
+        platform_file_copy(arena, input_path, out_path, true);
         
-        char *out_path_cstr = cstr_from_path(arena, out_path);
+        char *out_path_cstr = to_cstr(arena, out_path);
         char *command = cstrf(arena, "..\\build\\tt.exe -r -d \"%s\" > nul", out_path_cstr);
-        Pipe_Handle pipe = pipe_open_read(command);
+        Pipe_Handle pipe = platform_pipe_open_read(command);
         //String_List pipe_output = save_pipe_output(arena, &pipe); // TODO(f0): figure out why this didn't work
-        s32 close_code = pipe_close(&pipe);
+        s32 close_code = platform_pipe_close(&pipe);
         
         if (no_errors(&pipe))
         {
@@ -111,8 +111,8 @@ s32 main()
                 input_path.file_name
             };
             
-            File_Content ref_content = read_entire_file(arena, ref_path);
-            File_Content out_content = read_entire_file(arena, out_path);
+            File_Content ref_content = platform_read_entire_file(arena, ref_path);
+            File_Content out_content = platform_read_entire_file(arena, out_path);
             
             if (no_errors(&ref_content))
             {
@@ -164,7 +164,7 @@ s32 main()
     }
     
     
-    Time_Perfomance end = get_perfomance_time();
+    Time_Perfomance end = platform_get_perfomance_time();
     f32 seconds = get_seconds_elapsed(end, start);
     
     printf("[Perfomance time] %fs, %.3fms; ", seconds, 1000.f*seconds);

@@ -312,7 +312,7 @@ process_days_from_range(Program_State *state, u64 starting_index,
                             
                             if (should_print) {
                                 // NOTE: case: this needs to be printed _after_ we print "stop"
-                                *defered_time_deltas.push_get_item(arena) = record;
+                                *defered_time_deltas.push(arena) = record;
                             }
                         }
                         else if (record.type == Record_TimeStart ||

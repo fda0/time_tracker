@@ -63,7 +63,7 @@ session_set_error(Record_Session *session, char *message)
     session->no_errors = false;
                                                                
     Token command_token = session->current_command_token;
-    Find_Index find = index_of((char *)command_token.text.str, l2s("\0\n\r"));
+    Find_Index find = index_of_from_table((char *)command_token.text.str, l2s("\0\n\r"));
     String at_str = string(command_token.text.str, find.index);
     
     
@@ -120,7 +120,7 @@ archive_current_file(Program_State *state, b32 long_format = false)
                                string_expand(state->title), timestamp.str);
     
     Path archive_path = get_path(state->archive_dir, file_name);
-    file_copy(arena, state->input_path, archive_path, false);
+    platform_file_copy(arena, state->input_path, archive_path, false);
     
     if (long_format) {
         printf("File archived as: %.*s\n", string_expand(file_name));
@@ -136,7 +136,7 @@ save_to_file(Program_State *state)
     
     b32 success = false;
     
-    File_Handle file = file_open_write(arena, state->input_path);
+    File_Handle file = platform_file_open_write(arena, state->input_path);
     if (no_errors(&file))
     {
         Simple_String_Builder builder = {};
@@ -240,8 +240,8 @@ save_to_file(Program_State *state)
         
         
         String output_string = build_string(&state->arena, &builder);
-        file_write_string(&file, output_string);
-        file_close(&file);
+        platform_file_write_string(&file, output_string);
+        platform_file_close(&file);
         
         if (no_errors(&file)) {
             success = true;
@@ -251,7 +251,7 @@ save_to_file(Program_State *state)
     }
     else
     {
-        char *input_path_cstr = cstr_from_path(&state->arena, state->input_path);
+        char *input_path_cstr = to_cstr(&state->arena, state->input_path);
         printf("Failed to write to file: %s\n", input_path_cstr);
     }
     
@@ -565,7 +565,7 @@ process_input(Program_State *state, Record_Session *session)
                     if (reading_from_file) {
                         Error_Cmd_Exclusive;
                     } else {
-                        open_in_default_program(&state->arena, state->input_path);
+                        platform_open_in_default_program(&state->arena, state->input_path);
                     }
                 }
                 else if (token_equals(token, "dir"))
@@ -573,7 +573,7 @@ process_input(Program_State *state, Record_Session *session)
                     if (reading_from_file) {
                         Error_Cmd_Exclusive;
                     } else {
-                        open_in_default_program(&state->arena, state->exe_path.directory);
+                        platform_open_in_default_program(&state->arena, state->exe_path.directory);
                     }
                 }
                 else if (token_equals(token, "clear"))
@@ -700,7 +700,7 @@ load_file(Program_State *state)
          (load_tries < 5 && !load_successful);
          ++load_tries)
     {
-        File_Content file_content = read_entire_file_and_zero_terminate(&state->arena, state->input_path);
+        File_Content file_content = platform_read_entire_file_and_zero_terminate(&state->arena, state->input_path);
         
         if (no_errors(&file_content))
         {
@@ -731,7 +731,7 @@ load_file(Program_State *state)
     {
         state->load_file_error = true;
         arena_scope(&state->arena);
-        char *file_name = cstr_from_path(&state->arena, state->input_path);
+        char *file_name = to_cstr(&state->arena, state->input_path);
         printf("[Critial error] Failed to load from file: %s\n", file_name);
     }
     
@@ -861,7 +861,7 @@ s32 main(int argument_count, char **arguments)
     //~ initialize essential state
     initialize_timezone_offset();
     
-    state.exe_path = current_executable_path(arena);
+    state.exe_path = platform_get_current_executable_path(arena);
     state.title = trim_from_index_of_reverse(state.exe_path.file_name, '.');
     
     if (state.input_path.file_name.size == 0)
@@ -872,7 +872,7 @@ s32 main(int argument_count, char **arguments)
     
     
     state.archive_dir = directory_append(arena, state.exe_path.directory, l2s("archive"));
-    directory_create(arena, state.archive_dir);
+    platform_directory_create(arena, state.archive_dir);
     
     // NOTE: Save initial program state
     state.initial_scope = create_program_scope(&state.arena, &state.records);
@@ -887,12 +887,12 @@ s32 main(int argument_count, char **arguments)
     {
         arena_scope(arena);
         
-        char *input_path_cstr = cstr_from_path(arena, state.input_path);
-        if (!file_exists(input_path_cstr))
+        char *input_path_cstr = to_cstr(arena, state.input_path);
+        if (!platform_file_exists(input_path_cstr))
         {
             if (!reformat_mode)
             {
-                File_Handle file = file_open_write(input_path_cstr);
+                File_Handle file = platform_file_open_write(input_path_cstr);
                 if (no_errors(&file)) {
                     printf("Created new file: %s\n", input_path_cstr);
                 }
@@ -901,7 +901,7 @@ s32 main(int argument_count, char **arguments)
                     printf("Failed to create new file: %s\n", input_path_cstr);
                     exit_error();
                 }
-                file_close(&file);
+                platform_file_close(&file);
             }
             else
             {
@@ -947,7 +947,7 @@ s32 main(int argument_count, char **arguments)
     //~
     for (;;)
     {
-        Time32ms now = get_time32_ms();
+        Time32ms now = platform_get_time32_ms();
         
         if (thread_memory.new_data)
         {
