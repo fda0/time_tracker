@@ -1221,15 +1221,70 @@ length_trim_white_reverse(char *cstr)
 
 
 // ======================= @Basic_String ======================
-inline String
-advance_str(String input, u64 distance)
+
+function String
+string_prefix(String text, u64 size)
 {
-    distance = pick_smaller(distance, input.size);
+    size = pick_smaller(size, text.size);
+    text.size = size;
+    return text;
+}
+
+////////////////////////////////
+function String
+string_postfix(String text, u64 size)
+{
+    size = pick_smaller(text.size, size);
+    u64 distance = text.size - size;
+    
+    text.str = text.str + distance;
+    text.size = size;
+    
+    return text;
+};
+
+////////////////////////////////
+function String
+string_skip(String text, u64 distance)
+{
+    distance = pick_smaller(distance, text.size);
     String result = {};
-    result.str = input.str + distance;
-    result.size = input.size - distance;
+    result.str = text.str + distance;
+    result.size = text.size - distance;
     return result;
 }
+function String
+string_advance(String text, u64 distance)
+{
+    return string_skip(text, distance);
+}
+
+////////////////////////////////
+function String
+string_chop(String text, u64 distance_from_end)
+{
+    if (distance_from_end > text.size)
+    {
+        text.size = 0;
+    }
+    else
+    {
+        text.size = text.size - distance_from_end;
+    }
+    return text;
+}
+
+////////////////////////////////
+function String
+string_substr(String text, u64 distance, u64 length)
+{
+    String result = string_skip(text, distance);
+    result.size = pick_smaller(result.size, length);
+    return result;
+}
+
+
+
 
 
 
@@ -1407,7 +1462,7 @@ trim_white(String text)
         u8 u = result.str[i];
         if (!is_white(u))
         {
-            result = advance_str(result, i);
+            result = string_advance(result, i);
             break;
         }
     }
@@ -1502,7 +1557,7 @@ split_into_directory_and_file_name(String source)
     }
     
     String_Path_Split result = {};
-    result.file_name = advance_str(source, offset);
+    result.file_name = string_advance(source, offset);
     result.directory = source;
     result.directory.size = offset;
     return result;
@@ -1966,7 +2021,7 @@ square(f32 a)
 }
 
 inline f32
-lerp(f32 a, f32 t, f32 b)
+lerp(f32 a, f32 b, f32 t)
 {
     f32 result = (1.0f - t)*a + t*b;
     return result;
@@ -2201,7 +2256,7 @@ clamp_top(v2 *value, f32 bound)
 
 
 inline v2
-lerp(v2 a, f32 t, v2 b)
+lerp(v2 a, v2 b, f32 t)
 {
     v2 result = (1.0f - t)*a + t*b;
     return result;
@@ -2372,7 +2427,7 @@ operator-=(v3 &a, v3 b)
 }
 
 inline v3
-lerp(v3 a, f32 t, v3 b)
+lerp(v3 a, v3 b, f32 t)
 {
     v3 result = (1.0f - t)*a + t*b;
     return result;
@@ -2554,7 +2609,7 @@ operator-=(v4 &a, v4 b)
 }
 
 inline v4
-lerp(v4 a, f32 t, v4 b)
+lerp(v4 a, v4 b, f32 t)
 {
     v4 result = (1.0f - t)*a + t*b;
     return result;
@@ -3629,7 +3684,7 @@ directory_from_string(Arena *arena, String source)
         for_u64(name_index, result.name_count)
         {
             u64 start_p = current_p;
-            String element = advance_str(source, start_p);
+            String element = string_advance(source, start_p);
             
             for (;
                  current_p < source.size;

@@ -128,10 +128,10 @@ s32 main()
                         u64 half_range = 6;
                         u64 diff_index = pick_bigger(0, compare.column - half_range);
                         
-                        String ref_diff = advance_str(ref_content.content, diff_index);
+                        String ref_diff = string_advance(ref_content.content, diff_index);
                         ref_diff.size = pick_smaller(half_range*2, ref_diff.size);
                         
-                        String out_diff = advance_str(out_content.content, diff_index);
+                        String out_diff = string_advance(out_content.content, diff_index);
                         out_diff.size = pick_smaller(half_range*2, out_diff.size);
                         
                         
