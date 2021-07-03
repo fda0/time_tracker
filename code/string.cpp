@@ -138,7 +138,7 @@ get_sum_and_progress_bar_string(Arena *arena, time32 sum, b32 closed_range_endin
     String time = get_time_string(arena, sum);
     String bar = get_progress_bar_string(arena, sum, closed_range_ending);
     
-    char *minus = (sum < 0) ? "-" : "";
+    const char *minus = (sum < 0) ? "-" : "";
     
     String result = stringf(arena, "sum: %s%.*s       %.*s",
                             minus, string_expand(time), string_expand(bar));

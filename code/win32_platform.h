@@ -1,1 +1,0 @@
-typedef FILETIME File_Time;

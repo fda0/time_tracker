@@ -37,7 +37,7 @@ global Color_Pair color_pairs[Color_Count] = {
 };
 
 
-#include "win32_platform.cpp"
+#include "platform.cpp"
 #include "description_hash_table.cpp"
 #include "lexer.cpp"
 #include "string.cpp"
@@ -754,7 +754,7 @@ read_from_keyboard(Thread_Memory *thread_memory)
         }
         else
         {
-            printf(thread_memory->cursor);
+            printf("%s", thread_memory->cursor);
             fgets(thread_memory->input_buffer, sizeof(thread_memory->input_buffer), stdin);
             
             s64 len = strlen(thread_memory->input_buffer);
@@ -940,14 +940,14 @@ s32 main(int argument_count, char **arguments)
     //~
     Thread_Memory thread_memory = {};
     sprintf(thread_memory.cursor, "::>");
-    platform_create_thread(read_from_keyboard, &thread_memory);
+    platform_create_thread((New_Thread_Function *)read_from_keyboard, &thread_memory);
     
     
     
     //~
     for (;;)
     {
-        Time32ms now = platform_get_time32_ms();
+        date64 now = get_current_timestamp();
         
         if (thread_memory.new_data)
         {
@@ -979,11 +979,11 @@ s32 main(int argument_count, char **arguments)
         {
             state.last_input_time = now;
             load_file(&state);
-            printf(thread_memory.cursor);
+            printf("%s", thread_memory.cursor);
         }
         
         
-        s32 input_time_delta = (s32)now.t - (s32)state.last_input_time.t;
+        date64 input_time_delta = now - state.last_input_time;
         {
             u32 sleep_duration = (input_time_delta / 8192) + 1;
             sleep_duration = pick_smaller(sleep_duration, 100);

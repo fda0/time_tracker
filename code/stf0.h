@@ -54,28 +54,28 @@ Semi automatic switches (but can be specified manually):
 #pragma warning(push, 0)
 // =========================== Types ==========================
 #if Stf0_Level >= 10
-#    include <inttypes.h>
-#    include <stdint.h>
-#    include <limits.h>
-#    include <float.h>
-#    include <xmmintrin.h>
-#    include <emmintrin.h>
+#  include <inttypes.h>
+#  include <stdint.h>
+#  include <limits.h>
+#  include <float.h>
+#  include <xmmintrin.h>
+#  include <emmintrin.h>
 #endif
 
 // =========================== Basic ==========================
 #if Stf0_Level >= 20
 #if !defined(Def_Internal)
-#    define Def_Internal 0
+#  define Def_Internal 0
 #endif
 #if !defined(Def_Slow)
-#    define Def_Slow 0
+#  define Def_Slow 0
 #endif
 // ======== Detect platform =======
 #if !defined(Def_Windows)
-#    define Def_Windows 0
+#  define Def_Windows 0
 #endif
 #if !defined(Def_Linux)
-#    define Def_Linux 0
+#  define Def_Linux 0
 #endif
 // ====== Platform not found ======
 #if !Def_Windows && !Def_Linux
@@ -85,38 +85,38 @@ Semi automatic switches (but can be specified manually):
 #endif
 // ======== Detect compiler =======
 #if !defined(Def_Compiler_Msvc)
-#    define Def_Compiler_Msvc 0
+#  define Def_Compiler_Msvc 0
 #endif
 #if !defined(Def_Compiler_Llvm)
-#    define Def_Compiler_Llvm 0
+#  define Def_Compiler_Llvm 0
 #endif
 // ====== Compiler not found ======
 #if !Def_Compiler_Msvc && !Def_Compiler_Llvm
-#    if _MSC_VER
-#        undef Def_Compiler_Msvc
-#        define Def_Compiler_Msvc 1
-#    else
+#  if _MSC_VER
+#    undef Def_Compiler_Msvc
+#    define Def_Compiler_Msvc 1
+#else
 // TODO(f0): More compilers
-#        undef Def_Compiler_Llvm
-#        define Def_Compiler_Llvm 1
-#        endif
+#  undef Def_Compiler_Llvm
+#  define Def_Compiler_Llvm 1
+#  endif
 #endif
 //=============================
 #include <stdio.h>
 #include <stdlib.h>
 //=============================
-#    if Def_Compiler_Msvc
-#        include <intrin.h>
-#    elif Def_Compiler_Llvm
-#        include <x86intrin.h>
-#    else
-#        error "not impl; SSE/NEON optimizations?"
-#    endif
+#  if Def_Compiler_Msvc
+#    include <intrin.h>
+#  elif Def_Compiler_Llvm
+#    include <x86intrin.h>
+#  else
+#    error "not impl; SSE/NEON optimizations?"
+#  endif
 #endif
 
 // ========================== Memory ==========================
 #if Stf0_Level >= 30
-
+#  if Def_Windows
 #    define WIN32_LEAN_AND_MEAN
 #    include <Windows.h>
 #    include <timeapi.h>
@@ -124,22 +124,38 @@ Semi automatic switches (but can be specified manually):
 //#    include <debugapi.h>
 
 // Microsoft's wall of shame:
-#undef near
-#undef interface
-#undef RELATIVE
-#undef ABSOLUTE
-
+#    undef near
+#    undef interface
+#    undef RELATIVE
+#    undef ABSOLUTE
+#  endif
 #endif
 
 // =========================== Alloc ==========================
 #if Stf0_Level >= 40
-#    include <stdarg.h>
+#  include <stdarg.h>
 #endif
 
 // ========================= Platform =========================
 #if Stf0_Level >= 50
+#  if Def_Windows
 #    pragma comment(lib, "winmm.lib")
 #    pragma comment(lib, "shell32.lib")
+#  elif Def_Linux
+#    include <errno.h>
+#    include <fcntl.h>
+#    include <unistd.h>
+#    include <linux/fs.h>
+#    include <sys/stat.h>
+#    include <sys/ioctl.h>
+#    include <sys/time.h>
+#    include <sys/resource.h>
+#    include <time.h>
+#    include <sys/mman.h>
+#    include <signal.h>
+#    include <sys/types.h>
+#    include <dirent.h>
+#  endif
 #endif
 
 #pragma warning(pop)
@@ -167,25 +183,25 @@ typedef double f64;
 typedef __m128 m128;
 typedef __m128i m128i;
 //=============
-#define S8_Min _I8_MIN
-#define S8_Max _I8_MAX
-#define S16_Min _I16_MIN
-#define S16_Max _I16_MAX
-#define S32_Min _I32_MIN
-#define S32_Max _I32_MAX
-#define S64_Min _I64_MIN
-#define S64_Max _I64_MAX
+#define S8_Min (-0x80)
+#define S8_Max ( 0x7f)
+#define S16_Min (-0x8000)
+#define S16_Max ( 0x7fff)
+#define S32_Min (-0x80000000LL)
+#define S32_Max ( 0x7fffffffLL)
+#define S64_Min (-0x8000000000000000LL)
+#define S64_Max ( 0x7fffffffffffffffLL)
 //
-#define U8_Max _UI8_MAX
-#define U16_Max _UI16_MAX
-#define U32_Max _UI32_MAX
-#define U64_Max _UI64_MAX
+#define U8_Max (0xffU)
+#define U16_Max (0xffffU)
+#define U32_Max (0xffffffffULL)
+#define U64_Max (0xffffffffffffffffULL)
 //
-#define F32_Max FLT_MAX
-#define F64_Max DBL_MAX
+#define F32_Max (3.402823466e+38f)
+#define F64_Max (1.7976931348623158e+308)
 //
-#define Pi32  3.14159265359f
-#define Tau32 6.2831853071795864769f
+#define Pi32  (3.14159265359f)
+#define Tau32 (6.2831853071795864769f)
 //=============
 #define internal static
 #define function static
@@ -368,17 +384,11 @@ Stf0_Open_Namespace
 
 
 //=============================
-#if Def_Compiler_Msvc
-#    define This_Function __func__
-#    define This_Line_S32 __LINE__
-#    define This_File     __FILE__
-#    define Counter_Macro __COUNTER__
-#else
-#    error "not impl"
-#endif
-
-
-
+#define This_Function __func__
+#define This_Function_Sig __FUNCSIG__
+#define This_Line_S32 __LINE__
+#define This_File     __FILE__
+#define Counter_Macro __COUNTER__
 //=============================
 #define File_Line          This_File "(" stringify2(This_Line_S32) ")"
 #define File_Line_Function File_Line ": " This_Function
@@ -386,7 +396,7 @@ Stf0_Open_Namespace
 
 
 //=============================
-#define force_halt() do{ fflush(stdout); *((s32 *)0) = 1; }while(0)
+#define force_halt() do{ fflush(stdout); *((s32 volatile*)0) = 1; }while(0)
 
 #define assert_always(Expression) do{ if(!(Expression)) {\
 printf("\n" File_Line ": RUNTIME error: assert(%s) in function %s\n",\
@@ -399,21 +409,32 @@ debug_break(); force_halt(); exit(1);\
 
 //=============================
 #if Def_Slow
-// TODO(f0): other compilers
-#ifdef WIN32_LEAN_AND_MEAN
-#    define debug_break() do{if(IsDebuggerPresent()) {fflush(stdout); __debugbreak();}}while(0)
-#else
-#    define debug_break() do{fflush(stdout); __debugbreak();}while(0)
-#endif
-#    define assert(Expression) assert_always(Expression)
-#    define break_at(Expression) do{if((Expression)){debug_break();}}while(0)
+#  if Def_Windows
+
+#    ifdef WIN32_LEAN_AND_MEAN
+#      define debug_break() do{if(IsDebuggerPresent()) {fflush(stdout); __debugbreak();}}while(0)
+#    else
+#      define debug_break() do{fflush(stdout); __debugbreak();}while(0)
+#    endif
+
+#  elif Def_Linux
+#    define debug_break() do{fflush(stdout); __builtin_debugtrap();}while(0)
+#  endif
+
+
+
+#  define assert(Expression) assert_always(Expression)
+#  define break_at(Expression) do{if((Expression)){debug_break();}}while(0)
 
 #else
-#    define debug_break()
-#    define assert(Expression)
-#    define break_at(Expression)
+#  define debug_break()
+#  define assert(Expression)
+#  define break_at(Expression)
 #endif
 
+
+
+//-
 inline b32 static_expression_wrapper_(b32 a) { return a; }
 #define runtime_assert(ExpressionMakeNotStatic) assert(static_expression_wrapper_(ExpressionMakeNotStatic))
 
@@ -474,19 +495,25 @@ clear_flag(u32 *flag, u32 bits)
 
 // ======================= @Basic_Types =======================
 
-// Time
+//- Time
 struct Time32ms
 {
     u32 t;
 };
 
+#if Def_Windows
 struct Time_Perfomance
 {
-    s64 t_; // NOTE(f0): retrieve with get_*seconds_elapsed(a, b)
+    // NOTE(f0): retrieve with get_*seconds_elapsed(a, b)
+    s64 t_;
 };
+#elif Def_Linux
+typedef timespec Time_Perfomance;
+#endif
 
 
-// Strings
+
+//- Strings
 typedef const char* cstr_lit;
 
 struct String
@@ -592,7 +619,11 @@ find_most_significant_bit(u64 value)
 #if Def_Compiler_Msvc
     result.found = _BitScanReverse64((unsigned long *)&result.index, value);
 #else
-#error "not impl"
+    if (value)
+    {
+        result.found = true;
+        result.index = __builtin_clzll(value);
+    }
 #endif
     return result;
 }
@@ -607,7 +638,11 @@ find_most_significant_bit(u32 value)
 #if Def_Compiler_Msvc
     result.found = _BitScanReverse((unsigned long *)&result.index, value);
 #else
-#error "not impl"
+    if (value)
+    {
+        result.found = true;
+        result.index = __builtin_clz(value);
+    }
 #endif
     return result;
 }
@@ -624,14 +659,10 @@ find_least_significant_bit(u32 value)
     result.found = _BitScanForward((unsigned long *)&result.index, value);
     
 #else
-    for (u32 test = 0; test < 32; ++ test)
+    if (value)
     {
-        if (value & (1 << test))
-        {
-            result.index = test;
-            result.found = true;
-            break;
-        }
+        result.found = true;
+        result.index = __builtin_ctz(value);
     }
 #endif
     return result;
@@ -649,7 +680,11 @@ find_least_significant_bit(u64 value)
 #if Def_Compiler_Msvc
     result.found = _BitScanForward64((unsigned long *)&result.index, value);
 #else
-#error "not impl"
+    if (value)
+    {
+        result.found = true;
+        result.index = __builtin_ctzll(value);
+    }
 #endif
     return result;
 }
@@ -1729,10 +1764,419 @@ parse_string_to_s32(String text)
 //~ ======================= @Level_Math =======================
 #if Stf0_Level >= 21
 //~ ======================== @Level_21 ========================
+#define USE_SSE2 1
+#pragma warning( push )
+#pragma warning( disable : 4305 )
+/* SIMD (SSE1+MMX or SSE2) implementation of sin, cos, exp and log
+
+   Inspired by Intel Approximate Math library, and based on the
+   corresponding algorithms of the cephes math library
+
+   The default is to use the SSE1 version. If you define USE_SSE2 the
+   the SSE2 intrinsics will be used in place of the MMX intrinsics. Do
+   not expect any significant performance improvement with SSE2.
+*/
+
+/* Copyright (C) 2007  Julien Pommier
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+
+  (this is the zlib license)
+
+
+================================================================
+  NOTE(f0): This is a slightly modified version of this library.
+  Mostly cosmetic changes in formating + some functions got deleted
+================================================================
+*/
+
+
+
+#include <xmmintrin.h>
+
+/* yes I know, the top of this file is quite ugly */
+
+#ifdef _MSC_VER /* visual c++ */
+# define ALIGN16_BEG __declspec(align(16))
+# define ALIGN16_END 
+#else /* gcc or icc */
+# define ALIGN16_BEG
+# define ALIGN16_END __attribute__((aligned(16)))
+#endif
+
+/* __m128 is ugly to write */
+typedef __m128 v4sf;  // vector of 4 float (sse1)
+
+#ifdef USE_SSE2
+# include <emmintrin.h>
+typedef __m128i v4si; // vector of 4 int (sse2)
+#else
+typedef __m64 v2si;   // vector of 2 int (mmx)
+#endif
+
+/* declare some SSE constants -- why can't I figure a better way to do that? */
+#define _PS_CONST(Name, Val)                                            \
+static const ALIGN16_BEG float _ps_##Name[4] ALIGN16_END = { Val, Val, Val, Val }
+#define _PI32_CONST(Name, Val)                                            \
+static const ALIGN16_BEG int _pi32_##Name[4] ALIGN16_END = { Val, Val, Val, Val }
+#define _PS_CONST_TYPE(Name, Type, Val)                                 \
+static const ALIGN16_BEG Type _ps_##Name[4] ALIGN16_END = { Val, Val, Val, Val }
+
+_PS_CONST(1  , 1.0f);
+_PS_CONST(0p5, 0.5f);
+/* the smallest non denormalized float number */
+_PS_CONST_TYPE(min_norm_pos, int, 0x00800000);
+_PS_CONST_TYPE(mant_mask, int, 0x7f800000);
+_PS_CONST_TYPE(inv_mant_mask, int, ~0x7f800000);
+
+_PS_CONST_TYPE(sign_mask, int, (int)0x80000000);
+_PS_CONST_TYPE(inv_sign_mask, int, ~0x80000000);
+
+_PI32_CONST(1, 1);
+_PI32_CONST(inv1, ~1);
+_PI32_CONST(2, 2);
+_PI32_CONST(4, 4);
+_PI32_CONST(0x7f, 0x7f);
+
+_PS_CONST(cephes_SQRTHF, 0.707106781186547524);
+_PS_CONST(cephes_log_p0, 7.0376836292E-2);
+_PS_CONST(cephes_log_p1, - 1.1514610310E-1);
+_PS_CONST(cephes_log_p2, 1.1676998740E-1);
+_PS_CONST(cephes_log_p3, - 1.2420140846E-1);
+_PS_CONST(cephes_log_p4, + 1.4249322787E-1);
+_PS_CONST(cephes_log_p5, - 1.6668057665E-1);
+_PS_CONST(cephes_log_p6, + 2.0000714765E-1);
+_PS_CONST(cephes_log_p7, - 2.4999993993E-1);
+_PS_CONST(cephes_log_p8, + 3.3333331174E-1);
+_PS_CONST(cephes_log_q1, -2.12194440e-4);
+_PS_CONST(cephes_log_q2, 0.693359375);
+
+#ifndef USE_SSE2
+union xmm_mm_union
+{
+    __m128 xmm;
+    __m64 mm[2];
+};
+
+#define COPY_XMM_TO_MM(xmm_, mm0_, mm1_) {      \
+xmm_mm_union u; u.xmm = xmm_;                   \
+mm0_ = u.mm[0];                                 \
+mm1_ = u.mm[1];                                 \
+}
+
+#define COPY_MM_TO_XMM(mm0_, mm1_, xmm_) {                \
+xmm_mm_union u; u.mm[0]=mm0_; u.mm[1]=mm1_; xmm_ = u.xmm; \
+}
+
+#endif // USE_SSE2
+
+
+
+
+//~
+_PS_CONST(minus_cephes_DP1, -0.78515625);
+_PS_CONST(minus_cephes_DP2, -2.4187564849853515625e-4);
+_PS_CONST(minus_cephes_DP3, -3.77489497744594108e-8);
+_PS_CONST(sincof_p0, -1.9515295891E-4);
+_PS_CONST(sincof_p1,  8.3321608736E-3);
+_PS_CONST(sincof_p2, -1.6666654611E-1);
+_PS_CONST(coscof_p0,  2.443315711809948E-005);
+_PS_CONST(coscof_p1, -1.388731625493765E-003);
+_PS_CONST(coscof_p2,  4.166664568298827E-002);
+_PS_CONST(cephes_FOPI, 1.27323954473516); // 4 / M_PI
+
+
+/* evaluation of 4 sines at onces, using only SSE1+MMX intrinsics so
+   it runs also on old athlons XPs and the pentium III of your grand
+   mother.
+
+   The code is the exact rewriting of the cephes sinf function.
+   Precision is excellent as long as x < 8192 (I did not bother to
+   take into account the special handling they have for greater values
+   -- it does not return garbage for arguments over 8192, though, but
+   the extra precision is missing).
+
+   Note that it is such that sinf((float)M_PI) = 8.74e-8, which is the
+   surprising but correct result.
+
+   Performance is also surprisingly good, 1.33 times faster than the
+   macos vsinf SSE2 function, and 1.5 times faster than the
+   __vrs4_sinf of amd's ACML (which is only available in 64 bits). Not
+   too bad for an SSE1 function (with no special tuning) !
+   However the latter libraries probably have a much better handling of NaN,
+   Inf, denormalized and other special arguments..
+
+   On my core 1 duo, the execution of this function takes approximately 95 cycles.
+
+   From what I have observed on the experiments with Intel AMath lib, switching to an
+   SSE2 version would improve the perf by only 10%.
+
+   Since it is based on SSE intrinsics, it has to be compiled at -O2 to
+   deliver full speed.
+*/
+
+function v4sf
+sin_ps(v4sf x)
+{ // any x
+    v4sf xmm1, xmm2 = _mm_setzero_ps(), xmm3, sign_bit, y;
+    
+#ifdef USE_SSE2
+    v4si emm0, emm2;
+#else
+    v2si mm0, mm1, mm2, mm3;
+#endif
+    sign_bit = x;
+    /* take the absolute value */
+    x = _mm_and_ps(x, *(v4sf*)_ps_inv_sign_mask);
+    /* extract the sign bit (upper one) */
+    sign_bit = _mm_and_ps(sign_bit, *(v4sf*)_ps_sign_mask);
+    
+    /* scale by 4/Pi */
+    y = _mm_mul_ps(x, *(v4sf*)_ps_cephes_FOPI);
+    
+#ifdef USE_SSE2
+    /* store the integer part of y in mm0 */
+    emm2 = _mm_cvttps_epi32(y);
+    /* j=(j+1) & (~1) (see the cephes sources) */
+    emm2 = _mm_add_epi32(emm2, *(v4si*)_pi32_1);
+    emm2 = _mm_and_si128(emm2, *(v4si*)_pi32_inv1);
+    y = _mm_cvtepi32_ps(emm2);
+    
+    /* get the swap sign flag */
+    emm0 = _mm_and_si128(emm2, *(v4si*)_pi32_4);
+    emm0 = _mm_slli_epi32(emm0, 29);
+    /* get the polynom selection mask 
+       there is one polynom for 0 <= x <= Pi/4
+       and another one for Pi/4<x<=Pi/2
+  
+       Both branches will be computed.
+    */
+    emm2 = _mm_and_si128(emm2, *(v4si*)_pi32_2);
+    emm2 = _mm_cmpeq_epi32(emm2, _mm_setzero_si128());
+    
+    v4sf swap_sign_bit = _mm_castsi128_ps(emm0);
+    v4sf poly_mask = _mm_castsi128_ps(emm2);
+    sign_bit = _mm_xor_ps(sign_bit, swap_sign_bit);
+    
+#else
+    /* store the integer part of y in mm0:mm1 */
+    xmm2 = _mm_movehl_ps(xmm2, y);
+    mm2 = _mm_cvttps_pi32(y);
+    mm3 = _mm_cvttps_pi32(xmm2);
+    /* j=(j+1) & (~1) (see the cephes sources) */
+    mm2 = _mm_add_pi32(mm2, *(v2si*)_pi32_1);
+    mm3 = _mm_add_pi32(mm3, *(v2si*)_pi32_1);
+    mm2 = _mm_and_si64(mm2, *(v2si*)_pi32_inv1);
+    mm3 = _mm_and_si64(mm3, *(v2si*)_pi32_inv1);
+    y = _mm_cvtpi32x2_ps(mm2, mm3);
+    /* get the swap sign flag */
+    mm0 = _mm_and_si64(mm2, *(v2si*)_pi32_4);
+    mm1 = _mm_and_si64(mm3, *(v2si*)_pi32_4);
+    mm0 = _mm_slli_pi32(mm0, 29);
+    mm1 = _mm_slli_pi32(mm1, 29);
+    /* get the polynom selection mask */
+    mm2 = _mm_and_si64(mm2, *(v2si*)_pi32_2);
+    mm3 = _mm_and_si64(mm3, *(v2si*)_pi32_2);
+    mm2 = _mm_cmpeq_pi32(mm2, _mm_setzero_si64());
+    mm3 = _mm_cmpeq_pi32(mm3, _mm_setzero_si64());
+    v4sf swap_sign_bit, poly_mask;
+    COPY_MM_TO_XMM(mm0, mm1, swap_sign_bit);
+    COPY_MM_TO_XMM(mm2, mm3, poly_mask);
+    sign_bit = _mm_xor_ps(sign_bit, swap_sign_bit);
+    _mm_empty(); /* good-bye mmx */
+#endif
+    
+    /* The magic pass: "Extended precision modular arithmetic" 
+       x = ((x - y * DP1) - y * DP2) - y * DP3; */
+    xmm1 = *(v4sf*)_ps_minus_cephes_DP1;
+    xmm2 = *(v4sf*)_ps_minus_cephes_DP2;
+    xmm3 = *(v4sf*)_ps_minus_cephes_DP3;
+    xmm1 = _mm_mul_ps(y, xmm1);
+    xmm2 = _mm_mul_ps(y, xmm2);
+    xmm3 = _mm_mul_ps(y, xmm3);
+    x = _mm_add_ps(x, xmm1);
+    x = _mm_add_ps(x, xmm2);
+    x = _mm_add_ps(x, xmm3);
+    
+    /* Evaluate the first polynom  (0 <= x <= Pi/4) */
+    y = *(v4sf*)_ps_coscof_p0;
+    v4sf z = _mm_mul_ps(x,x);
+    
+    y = _mm_mul_ps(y, z);
+    y = _mm_add_ps(y, *(v4sf*)_ps_coscof_p1);
+    y = _mm_mul_ps(y, z);
+    y = _mm_add_ps(y, *(v4sf*)_ps_coscof_p2);
+    y = _mm_mul_ps(y, z);
+    y = _mm_mul_ps(y, z);
+    v4sf tmp = _mm_mul_ps(z, *(v4sf*)_ps_0p5);
+    y = _mm_sub_ps(y, tmp);
+    y = _mm_add_ps(y, *(v4sf*)_ps_1);
+    
+    /* Evaluate the second polynom  (Pi/4 <= x <= 0) */
+    
+    v4sf y2 = *(v4sf*)_ps_sincof_p0;
+    y2 = _mm_mul_ps(y2, z);
+    y2 = _mm_add_ps(y2, *(v4sf*)_ps_sincof_p1);
+    y2 = _mm_mul_ps(y2, z);
+    y2 = _mm_add_ps(y2, *(v4sf*)_ps_sincof_p2);
+    y2 = _mm_mul_ps(y2, z);
+    y2 = _mm_mul_ps(y2, x);
+    y2 = _mm_add_ps(y2, x);
+    
+    /* select the correct result from the two polynoms */  
+    xmm3 = poly_mask;
+    y2 = _mm_and_ps(xmm3, y2); //, xmm3);
+    y = _mm_andnot_ps(xmm3, y);
+    y = _mm_add_ps(y,y2);
+    /* update the sign */
+    y = _mm_xor_ps(y, sign_bit);
+    return y;
+}
+
+
+
+
+
+//~
+/* almost the same as sin_ps */
+function v4sf
+cos_ps(v4sf x)
+{ // any x
+    v4sf xmm1, xmm2 = _mm_setzero_ps(), xmm3, y;
+#ifdef USE_SSE2
+    v4si emm0, emm2;
+#else
+    v2si mm0, mm1, mm2, mm3;
+#endif
+    /* take the absolute value */
+    x = _mm_and_ps(x, *(v4sf*)_ps_inv_sign_mask);
+    
+    /* scale by 4/Pi */
+    y = _mm_mul_ps(x, *(v4sf*)_ps_cephes_FOPI);
+    
+#ifdef USE_SSE2
+    /* store the integer part of y in mm0 */
+    emm2 = _mm_cvttps_epi32(y);
+    /* j=(j+1) & (~1) (see the cephes sources) */
+    emm2 = _mm_add_epi32(emm2, *(v4si*)_pi32_1);
+    emm2 = _mm_and_si128(emm2, *(v4si*)_pi32_inv1);
+    y = _mm_cvtepi32_ps(emm2);
+    
+    emm2 = _mm_sub_epi32(emm2, *(v4si*)_pi32_2);
+    
+    /* get the swap sign flag */
+    emm0 = _mm_andnot_si128(emm2, *(v4si*)_pi32_4);
+    emm0 = _mm_slli_epi32(emm0, 29);
+    /* get the polynom selection mask */
+    emm2 = _mm_and_si128(emm2, *(v4si*)_pi32_2);
+    emm2 = _mm_cmpeq_epi32(emm2, _mm_setzero_si128());
+    
+    v4sf sign_bit = _mm_castsi128_ps(emm0);
+    v4sf poly_mask = _mm_castsi128_ps(emm2);
+#else
+    /* store the integer part of y in mm0:mm1 */
+    xmm2 = _mm_movehl_ps(xmm2, y);
+    mm2 = _mm_cvttps_pi32(y);
+    mm3 = _mm_cvttps_pi32(xmm2);
+    
+    /* j=(j+1) & (~1) (see the cephes sources) */
+    mm2 = _mm_add_pi32(mm2, *(v2si*)_pi32_1);
+    mm3 = _mm_add_pi32(mm3, *(v2si*)_pi32_1);
+    mm2 = _mm_and_si64(mm2, *(v2si*)_pi32_inv1);
+    mm3 = _mm_and_si64(mm3, *(v2si*)_pi32_inv1);
+    
+    y = _mm_cvtpi32x2_ps(mm2, mm3);
+    
+    
+    mm2 = _mm_sub_pi32(mm2, *(v2si*)_pi32_2);
+    mm3 = _mm_sub_pi32(mm3, *(v2si*)_pi32_2);
+    
+    /* get the swap sign flag in mm0:mm1 and the 
+       polynom selection mask in mm2:mm3 */
+    
+    mm0 = _mm_andnot_si64(mm2, *(v2si*)_pi32_4);
+    mm1 = _mm_andnot_si64(mm3, *(v2si*)_pi32_4);
+    mm0 = _mm_slli_pi32(mm0, 29);
+    mm1 = _mm_slli_pi32(mm1, 29);
+    
+    mm2 = _mm_and_si64(mm2, *(v2si*)_pi32_2);
+    mm3 = _mm_and_si64(mm3, *(v2si*)_pi32_2);
+    
+    mm2 = _mm_cmpeq_pi32(mm2, _mm_setzero_si64());
+    mm3 = _mm_cmpeq_pi32(mm3, _mm_setzero_si64());
+    
+    v4sf sign_bit, poly_mask;
+    COPY_MM_TO_XMM(mm0, mm1, sign_bit);
+    COPY_MM_TO_XMM(mm2, mm3, poly_mask);
+    _mm_empty(); /* good-bye mmx */
+#endif
+    /* The magic pass: "Extended precision modular arithmetic" 
+       x = ((x - y * DP1) - y * DP2) - y * DP3; */
+    xmm1 = *(v4sf*)_ps_minus_cephes_DP1;
+    xmm2 = *(v4sf*)_ps_minus_cephes_DP2;
+    xmm3 = *(v4sf*)_ps_minus_cephes_DP3;
+    xmm1 = _mm_mul_ps(y, xmm1);
+    xmm2 = _mm_mul_ps(y, xmm2);
+    xmm3 = _mm_mul_ps(y, xmm3);
+    x = _mm_add_ps(x, xmm1);
+    x = _mm_add_ps(x, xmm2);
+    x = _mm_add_ps(x, xmm3);
+    
+    /* Evaluate the first polynom  (0 <= x <= Pi/4) */
+    y = *(v4sf*)_ps_coscof_p0;
+    v4sf z = _mm_mul_ps(x,x);
+    
+    y = _mm_mul_ps(y, z);
+    y = _mm_add_ps(y, *(v4sf*)_ps_coscof_p1);
+    y = _mm_mul_ps(y, z);
+    y = _mm_add_ps(y, *(v4sf*)_ps_coscof_p2);
+    y = _mm_mul_ps(y, z);
+    y = _mm_mul_ps(y, z);
+    v4sf tmp = _mm_mul_ps(z, *(v4sf*)_ps_0p5);
+    y = _mm_sub_ps(y, tmp);
+    y = _mm_add_ps(y, *(v4sf*)_ps_1);
+    
+    /* Evaluate the second polynom  (Pi/4 <= x <= 0) */
+    
+    v4sf y2 = *(v4sf*)_ps_sincof_p0;
+    y2 = _mm_mul_ps(y2, z);
+    y2 = _mm_add_ps(y2, *(v4sf*)_ps_sincof_p1);
+    y2 = _mm_mul_ps(y2, z);
+    y2 = _mm_add_ps(y2, *(v4sf*)_ps_sincof_p2);
+    y2 = _mm_mul_ps(y2, z);
+    y2 = _mm_mul_ps(y2, x);
+    y2 = _mm_add_ps(y2, x);
+    
+    /* select the correct result from the two polynoms */  
+    xmm3 = poly_mask;
+    y2 = _mm_and_ps(xmm3, y2); //, xmm3);
+    y = _mm_andnot_ps(xmm3, y);
+    y = _mm_add_ps(y,y2);
+    /* update the sign */
+    y = _mm_xor_ps(y, sign_bit);
+    
+    return y;
+}
+
+//~ =================== End of sse_mathfun.h ==================
+
+#pragma warning( pop )
 
 //~ ===================== @Math_Intrinics =====================
-// TODO(f0): Remove math.h in some beautiful future?
-#include <math.h>
 
 inline s32
 sign_of(s32 value)
@@ -1749,17 +2193,21 @@ sign_of(f32 value)
 }
 
 inline f32
-square_root(f32 real32)
+square_root(f32 value)
 {
-    f32 result = sqrtf(real32);
+    f32 result = _mm_cvtss_f32(_mm_sqrt_ss(_mm_set_ss(value)));
     return result;
 }
 
 inline f32
-absolute_value(f32 real32)
+absolute_value(f32 value)
 {
-    f32 result = (f32)fabs(real32);
-    return result;
+    // TODO(f0): set zero on sign bit for branchless? would that work?
+    if (value < 0.f)
+    {
+        value = -value;
+    }
+    return value;
 }
 
 inline u32
@@ -1768,9 +2216,7 @@ rotate_left(u32 value, s32 amount)
 #if Def_Compiler_Msvc
     u32 result = _rotl(value, amount);
 #else
-#error this is slow
-    amount &= 31;
-    result = (value << amount) | (value >> (32 - amount));
+    u32 result = __builtin_rotateleft32(value, amount);
 #endif
     
     return result;
@@ -1782,84 +2228,113 @@ rotate_right(u32 value, s32 amount)
 #if Def_Compiler_Msvc
     u32 result = _rotr(value, amount);
 #else
-#error this is slow
-    amount &= 31;
-    u32 result = (value >> amount)  | (value << (32 - amount));
+    u32 result = __builtin_rotateright32(value, amount);
 #endif
     
     return result;
 }
 
-inline f32
+
+//-
+function f32
 floor(f32 value)
 {
-    f32 result = floorf(value);
+    f32 result = _mm_cvtss_f32(_mm_floor_ss(_mm_setzero_ps(), _mm_set_ss(value)));
     return result;
 }
 
-inline f32
-ceil(f32 value)
-{
-    f32 result = ceilf(value);
-    return result;
-}
-
-
-inline s32
-round_f32_to_s32(f32 value)
-{
-    s32 result = (s32)roundf(value);
-    return result;
-}
-
-inline u32
-round_f32_to_u32(f32 value)
-{
-    u32 result = (u32)roundf(value);
-    return result;
-}
-
-inline s32
+function s32
 floor_f32_to_s32(f32 value)
 {
-    s32 result = (s32)floor(value);
+    s32 result = _mm_cvtss_si32(_mm_floor_ss(_mm_setzero_ps(), _mm_set_ss(value)));
     return result;
 }
 
-inline s32
+//-
+function f32
+ceil(f32 value)
+{
+    f32 result = _mm_cvtss_f32(_mm_ceil_ss(_mm_setzero_ps(), _mm_set_ss(value)));
+    return result;
+}
+
+function s32
 ceil_f32_to_s32(f32 value)
 {
-    s32 result = (s32)ceil(value);
+    s32 result = _mm_cvtss_si32(_mm_ceil_ss(_mm_setzero_ps(), _mm_set_ss(value)));
     return result;
 }
 
-inline s32
+//-
+function f32
+round(f32 value)
+{
+    f32 result = _mm_cvtss_f32(_mm_set_ss(value));;
+    return result;
+};
+
+function s32
+round_f32_to_s32(f32 value)
+{
+    s32 result = _mm_cvtss_si32(_mm_set_ss(value));
+    return result;
+}
+
+function u32
+round_f32_to_u32(f32 value)
+{
+    u32 result = (u32)_mm_cvtss_si32(_mm_set_ss(value));
+    return result;
+}
+
+//-
+function s32
 truncate_f32_to_s32(f32 value)
 {
     s32 result = (s32)value;
     return result;
 }
 
-inline f32
+
+//~
+function f32
 sin(f32 angle)
 {
-    f32 result = sinf(angle);
+    f32 result = _mm_cvtss_f32(sin_ps(_mm_set_ss(angle)));
     return result;
 }
 
-inline f32
+function m128
+sin(m128 angle)
+{
+    m128 result = sin_ps(angle);
+    return result;
+}
+
+//-
+function f32
 cos(f32 angle)
 {
-    f32 result = cosf(angle);
+    f32 result = _mm_cvtss_f32(cos_ps(_mm_set_ss(angle)));
     return result;
 }
 
-inline f32
+function m128
+cos(m128 angle)
+{
+    m128 result = cos_ps(angle);
+    return result;
+}
+
+//-
+#if 0
+function f32
 atan2(f32 y, f32 x)
 {
     f32 result = atan2f(y, x);
     return result;
 }
+#endif
 
 
 
@@ -3226,7 +3701,7 @@ struct Automatic_Arena_Scope
 
 
 // =================== @Memory_Virtual_Arena ==================
-inline u64
+function u64
 get_aligment_offset(Arena *arena, u64 aligment)
 {
     u64 aligment_offset = 0;
@@ -3242,14 +3717,14 @@ get_aligment_offset(Arena *arena, u64 aligment)
 }
 
 
-inline u64
+function u64
 round_up_to_page_size(Arena *arena, u64 value)
 {
     u64 result = align_bin_to(value, (u64)arena->page_size);
     return result;
 }
 
-inline void
+function void
 commit_virtual_memory_(Arena *arena, u64 position_required_to_fit)
 {
     assert(position_required_to_fit <= arena->reserved_capacity);
@@ -3260,8 +3735,17 @@ commit_virtual_memory_(Arena *arena, u64 position_required_to_fit)
     u64 commit_size = commit_end_position - arena->capacity;
     u8 *commit_address = (u8 *)arena->base + arena->capacity;
     
+    //-
+#if Def_Windows
     void *commit_result = VirtualAlloc(commit_address, commit_size, MEM_COMMIT, PAGE_READWRITE);
     assert(commit_result);
+    
+#elif Def_Linux
+    int protect_res = mprotect(commit_address, commit_size, PROT_READ|PROT_WRITE);
+    assert(protect_res != -1);
+#endif
+    
+    //-
     arena->capacity = commit_end_position;
 }
 
@@ -3304,7 +3788,6 @@ push_bytes_virtual_commit_unaligned_(Arena *arena, u64 alloc_size)
 
 
 
-
 // ================ @Memory_Arena_Constructors ================
 
 function Arena
@@ -3312,32 +3795,58 @@ create_virtual_arena(u64 target_reserved_capacity = gigabytes(16))
 {
     Arena arena = {};
     
+#if Def_Windows
     SYSTEM_INFO system_info;
     GetSystemInfo(&system_info);
     
     arena.page_size = system_info.dwPageSize;
     arena.reserved_capacity = round_up_to_page_size(&arena, target_reserved_capacity);
     arena.base = VirtualAlloc(nullptr, arena.reserved_capacity, MEM_RESERVE, PAGE_READWRITE);
-    
     assert(arena.base);
+    
+#elif Def_Linux
+    arena.page_size = getpagesize();
+    arena.reserved_capacity = round_up_to_page_size(&arena, target_reserved_capacity);
+    arena.base = mmap(nullptr, arena.reserved_capacity,
+                      PROT_NONE,
+                      MAP_PRIVATE|MAP_ANONYMOUS,
+                      -1, 0);
+    
+    if (!arena.base || arena.base == (void*)-1)
+    {
+        int error = errno;
+        assert(0);
+    }
+#endif
+    
     return arena;
 }
+
+
+
+
 
 function void
 free_virtual_arena(Arena *arena)
 {
+#if Def_Windows
     b32 result = VirtualFree(arena->base, 0, MEM_RELEASE);
     assert(result);
+    
+#elif Def_Linux
+    int free_res = munmap(arena->base, arena->reserved_capacity);
+    assert(free_res != -1);
+#endif
 }
 
-inline void *
+function void *
 push_bytes_(Arena *arena, u64 alloc_size, u64 alignment)
 {
     void *result = push_bytes_virtual_commit_(arena, alloc_size, alignment);
     return result;
 }
 
-inline void *
+function void *
 push_bytes_clear_(Arena *arena, u64 alloc_size, u64 alignment)
 {
     void *result = push_bytes_virtual_commit_(arena, alloc_size, alignment);
@@ -3345,7 +3854,7 @@ push_bytes_clear_(Arena *arena, u64 alloc_size, u64 alignment)
     return result;
 }
 
-inline void *
+function void *
 push_bytes_and_copy_(Arena *arena, void *source, u64 alloc_size, u64 alignment)
 {
     void *mem = push_bytes_(arena, alloc_size, alignment);
@@ -3527,12 +4036,6 @@ struct Linked_List
 
 
 
-
-
-
-
-
-
 //~ ======================= @Level_Alloc ======================
 #if Stf0_Level >= 40
 //~ ======================== @Level_40 =========================
@@ -3542,7 +4045,19 @@ struct Linked_List
 struct Directory
 {
     String *names;
-    u64 name_count;
+    u64 name_count; // TODO(f0): rename to count?
+    // TODO(f0): or segment count?
+    // TODO(f0): or nah?
+    
+    inline String last()
+    {
+        String result = {};
+        if (name_count > 0)
+        {
+            result = names[name_count-1];
+        }
+        return result;
+    }
 };
 
 struct Path
@@ -3792,71 +4307,24 @@ equals(Path a, Path b)
 
 
 
+
+
 //~ Big functions
 
 //- Directory
-// TODO(f0): convert to fill_buffer
-function String
-to_string(Arena *arena, Directory directory,
-          b32 use_windows_slash = (Native_Slash_Char == '\\'))
+function u64
+fill_buffer_from_directory(void *output, u64 output_size,
+                           Directory directory,
+                           b32 use_windows_slash = Def_Windows)
 {
     u8 slash = (u8)(use_windows_slash ? '\\' : '/');
-    
-    u64 result_index = 0;
-    String result = allocate_string(arena, get_directory_string_length(directory)+1);
-    result.size -= 1; // TODO(f0): Convert it to fill function
-    // TODO(f0): Make it so string version doesn't overallocate 1 byte
-    result.str[result.size] = 0;
+    u64 out_index = 0;
+    b32 full_fill = false;
+    u8 *out = (u8*)output;
     
     for_u64(name_index, directory.name_count)
     {
         String *dir_name = directory.names + name_index;
-        for_u64(char_index, dir_name->size)
-        {
-            result.str[result_index++] = dir_name->str[char_index];
-        }
-        result.str[result_index++] = slash;
-    }
-    
-    result.str[result.size] = 0;
-    assert(result.size == result_index);
-    return result;
-}
-
-inline char *
-to_cstr(Arena *arena, Directory directory,
-        b32 use_windows_slash = (Native_Slash_Char == '\\'))
-{
-    String string = to_string(arena, directory, use_windows_slash);
-    char *result = (char *)string.str;
-    return result;
-}
-
-
-//- Path
-inline u64
-get_path_string_length(Path path)
-{
-    u64 result = get_directory_names_length_sum(path.directory);
-    result += path.directory.name_count;
-    result += path.file_name.size;
-    return result;
-}
-
-
-function u64
-fill_buffer_from_path(void *output, u64 output_size,
-                      Path path, b32 use_windows_slash = (Native_Slash_Char == '\\'))
-{
-    u8 slash = (u8)(use_windows_slash ? '\\' : '/');
-    u64 out_index = 0;
-    
-    u8 *out = (u8 *)output;
-    b32 full_fill = false;
-    
-    for_u64(name_index, path.directory.name_count)
-    {
-        String *dir_name = path.directory.names + name_index;
         for_u64(char_index, dir_name->size)
         {
             if (out_index >= output_size) {
@@ -3874,6 +4342,61 @@ fill_buffer_from_path(void *output, u64 output_size,
         out[out_index++] = slash;
     }
     
+    full_fill = true;
+    early_exit_label:
+    
+    assert(full_fill);
+    return out_index;
+}
+
+function String
+to_string(Arena *arena, Directory directory,
+          b32 use_windows_slash = Def_Windows)
+{
+    u64 pre_len = get_directory_string_length(directory);
+    String result = allocate_string(arena, pre_len);
+    
+    u64 post_len = fill_buffer_from_directory(result.str, result.size, directory, use_windows_slash);
+    assert(pre_len == post_len);
+    
+    return result;
+}
+
+function char *
+to_cstr(Arena *arena, Directory directory,
+        b32 use_windows_slash = (Native_Slash_Char == '\\'))
+{
+    u64 pre_len = get_directory_string_length(directory);
+    char *result = push_array(arena, char, pre_len + 1);
+    
+    u64 post_len = fill_buffer_from_directory(result, pre_len, directory, use_windows_slash);
+    assert(pre_len == post_len);
+    
+    result[pre_len] = 0;
+    return result;
+}
+
+
+//- Path
+inline u64
+get_path_string_length(Path path)
+{
+    u64 result = get_directory_names_length_sum(path.directory);
+    result += path.directory.name_count;
+    result += path.file_name.size;
+    return result;
+}
+
+
+function u64
+fill_buffer_from_path(void *output, u64 output_size,
+                      Path path,
+                      b32 use_windows_slash = Def_Windows)
+{
+    u64 out_index = fill_buffer_from_directory(output, output_size, path.directory, use_windows_slash);
+    b32 full_fill = false;
+    u8 *out = (u8*)output;
+    
     for_u64(char_index, path.file_name.size)
     {
         if (out_index >= output_size) {
@@ -3884,7 +4407,6 @@ fill_buffer_from_path(void *output, u64 output_size,
     }
     
     full_fill = true;
-    
     early_exit_label:
     
     assert(full_fill);
@@ -4234,23 +4756,26 @@ to_string(Arena *a, s32 value)
 struct File_Handle
 {
     HANDLE handle_;
-    // TODO(f0): @maybe keep 1 byte for error check and few bytes for file_name error reporting?
     b32 no_error;
-    u32 _padding;
 };
 
+#elif Def_Linux
+struct File_Handle
+{
+    int handle_;
+    b32 no_error;
+};
+#endif
+
+//-
 struct Pipe_Handle
 {
     FILE *handle_;
     b32 no_error;
-    u32 _padding;
 };
 
-#elif Def_Linux
-#    error "not impl"
-#endif
-//=============================================================
 
+//=============================================================
 // ===================== @Platform_Global =====================
 
 struct Stf0_Global_State
@@ -4264,35 +4789,40 @@ function void
 stf0_initialize()
 {
 #if Def_Windows
-    //=========
     LARGE_INTEGER large_perfomance_freq;
     b32 return_code_test = QueryPerformanceFrequency(&large_perfomance_freq);
     assert(return_code_test);
     assert(large_perfomance_freq.QuadPart);
     _stf0_global.inv_query_perfomance_freq = 1.f / (f32)large_perfomance_freq.QuadPart;
-    //=========
-#else
-#error "not impl"
+    
+#elif Def_Linux
+    
 #endif
 };
 
 
 
 // ====================== @Platform_Time ======================
+#if Def_Windows
 inline Time32ms
 platform_get_time32_ms()
 {
-#if Def_Windows
     Time32ms result = {timeGetTime()};
-    
-#else
-#error "not impl"
-    
-#endif
     return result;
+    
+#if 0
+    // TODO(f0): linux version? maybe we don't need this function??
+    timeval now;
+    gettimeofday(&now, NULL);
+    Time32ms result = {(s32)now.tv_usec/1000};
+#endif
 }
+#endif
 
-inline Time_Perfomance
+
+
+//~
+function Time_Perfomance
 platform_get_perfomance_time()
 {
     // NOTE(f0): Use get_time_elapsed to get delta between 2 measurements
@@ -4301,55 +4831,119 @@ platform_get_perfomance_time()
     LARGE_INTEGER large;
     QueryPerformanceCounter(&large);
     Time_Perfomance result = {large.QuadPart};
-#else
-#error "not impl"
+    
+#elif Def_Linux
+    Time_Perfomance result = {};
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &result);
 #endif
+    
     return result;
 }
 
-inline f32
+
+//-
+function Time_Perfomance
+get_time_perfomance_diff_(Time_Perfomance recent, Time_Perfomance old)
+{
+#if Def_Windows
+    Time_Perfomance result = {recent.t_ - old.t_};
+    
+#elif Def_Linux
+    Time_Perfomance result = {};
+	if ((recent.tv_nsec - old.tv_nsec) < 0)
+    {
+		result.tv_sec = recent.tv_sec - old.tv_sec - 1;
+		result.tv_nsec = 1'000'000'000 + recent.tv_nsec - old.tv_nsec;
+	}
+    else
+    {
+		result.tv_sec = recent.tv_sec - old.tv_sec;
+		result.tv_nsec = recent.tv_nsec - old.tv_nsec;
+	}
+#endif
+    
+	return result;
+}
+
+
+//-
+function f32
 get_seconds_elapsed(Time_Perfomance recent, Time_Perfomance old)
 {
+    Time_Perfomance delta = get_time_perfomance_diff_(recent, old);
+    
+#if Def_Windows
     // NOTE(f0): Run stf0_initialize() first!
-    f32 result = (f32)(recent.t_ - old.t_) * _stf0_global.inv_query_perfomance_freq;
-    return result;
+    f32 result = (f32)delta.t_ * _stf0_global.inv_query_perfomance_freq;
+    
+#elif Def_Linux
+    f32 result = ((f32)delta.tv_sec +
+                  ((f32)delta.tv_nsec / 1'000'000'000.f));
+#endif
+                   
+                   return result;
 }
 
-inline f32
+
+function f32
 get_milliseconds_elapsed(Time_Perfomance recent, Time_Perfomance old)
 {
+    Time_Perfomance delta = get_time_perfomance_diff_(recent, old);
+    
+#if Def_Windows
     // NOTE(f0): Run stf0_initialize() first!
-    f32 result = (f32)((recent.t_ - old.t_) * 1000) * _stf0_global.inv_query_perfomance_freq;
+    f32 result = ((f32)delta.t_*1000.f) * _stf0_global.inv_query_perfomance_freq;
+    
+#elif Def_Linux
+    f32 result = (((f32)delta.tv_sec * 1000.f) +
+                  ((f32)delta.tv_nsec / 1'000'000.f));
+#endif
+    
     return result;
 }
 
 
-inline f32
+function f32
 get_microseconds_elapsed(Time_Perfomance recent, Time_Perfomance old)
 {
+    Time_Perfomance delta = get_time_perfomance_diff_(recent, old);
+    
+#if Def_Windows
     // NOTE(f0): Run stf0_initialize() first!
-    f32 result = (f32)((recent.t_ - old.t_) * 1000000) * _stf0_global.inv_query_perfomance_freq;
+    f32 result = ((f32)delta.t_*1'000'000.f) * _stf0_global.inv_query_perfomance_freq;
+    
+#elif Def_Linux
+    f32 result = (((f32)delta.tv_sec * 1'000'000.f) +
+                  ((f32)delta.tv_nsec / 1000.f));
+#endif
+    
     return result;
 }
-
 
 
 // ===================== @Platform_File_IO ====================
-inline b32
+function b32
 is_valid_handle(File_Handle *file)
 {
 #if Def_Windows
     b32 result = (file->handle_ != INVALID_HANDLE_VALUE);
-#if Def_Slow
+#  if Def_Slow
     if (!result) {
         DWORD error_code = GetLastError();
         debug_break();
     }
+#  endif
+    
+#elif Def_Linux
+    b32 result = (file->handle_ >= 0);
+#  if Def_Slow
+    if (!result) {
+        int error_code = errno;
+        debug_break();
+    }
+#  endif
 #endif
     
-#else
-#error "not implt"
-#endif
     return result;
 }
 
@@ -4378,9 +4972,11 @@ platform_file_open_read(char *path)
     File_Handle file = {};
 #if Def_Windows
     file.handle_ = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-#else
-    file.handle_ = fopen(path, "rb");
+    
+#elif Def_Linux
+    file.handle_ = open(path, O_RDONLY);
 #endif
+    
     file.no_error = is_valid_handle(&file);
     return file;
 }
@@ -4396,7 +4992,7 @@ platform_file_open_read(Arena *temp_arena, Path path)
 
 
 
-
+#define Linux_Relaxed_File_Permissions (S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)
 
 //=============
 // NOTE(f0): Creates _new_ file (deletes previous content)
@@ -4406,12 +5002,15 @@ platform_file_open_write(char *path)
     File_Handle file = {};
 #if Def_Windows
     file.handle_ = CreateFileA(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
-#else
-    file.handle_ = fopen(path, "wb");
+    
+#elif Def_Linux
+    file.handle_ = open(path, O_WRONLY|O_TRUNC|O_CREAT, Linux_Relaxed_File_Permissions);
 #endif
+    
     file.no_error = is_valid_handle(&file);
     return file;
 }
+
 
 function File_Handle
 platform_file_open_write(Arena *temp_arena, Path path)
@@ -4434,9 +5033,11 @@ platform_file_open_append(char *path)
     File_Handle file = {};
 #if Def_Windows
     file.handle_ = CreateFileA(path, FILE_APPEND_DATA, 0, nullptr, OPEN_ALWAYS, 0, nullptr);
-#else
-    file.handle_ = fopen(path, "ab");
+    
+#elif Def_Linux
+    file.handle_ = open(path, O_WRONLY|O_APPEND);
 #endif
+    
     file.no_error = is_valid_handle(&file);
     return file;
 }
@@ -4461,8 +5062,10 @@ platform_file_close(File_Handle *file)
 {
 #if Def_Windows
     CloseHandle(file->handle_);
-#else
-    fclose(file.handle_);
+    
+#elif Def_Linux
+    int res_code = close(file->handle_);
+    assert(res_code == 0);
 #endif
 }
 
@@ -4478,9 +5081,22 @@ platform_file_copy(char *source, char *destination, b32 overwrite)
 #if Def_Windows
     b32 fail_if_exists = !overwrite;
     b32 result = CopyFileA(source, destination, fail_if_exists);
+    
+#elif Def_Linux && defined(FICLONE)
+    assert(overwrite); // TODO(f0): it always overwrites I think? check for existing file first?
+    // TODO(f0): no idea if that works -> needs testing
+    int fd_dest = open(destination, O_CREAT | O_WRONLY);
+    int fd_src = open(source, O_RDONLY);
+    
+    b32 result = ioctl(fd_dest, FICLONE, fd_src);
+    
+    close(fd_dest);
+    close(fd_src);
+    
 #else
-#error "not impl"
+#error "FICLONE unsupported?"
 #endif
+    
     return result;
 }
 
@@ -4505,9 +5121,11 @@ platform_file_hard_link(char *source_path, char *link_path)
 {
 #if Def_Windows
     b32 result = CreateHardLinkA(link_path, source_path, nullptr);
-#else
-#error "not impl"
+    
+#elif Def_Linux
+    b32 result = (link(source_path, link_path) == 0);
 #endif
+    
     return result;
 }
 
@@ -4532,9 +5150,11 @@ platform_file_delete(char *path)
 {
 #if Def_Windows
     b32 result = DeleteFileA(path);
-#else
-#error "not impl"
+    
+#elif Def_Linux
+    b32 result = (unlink(path) != -1); 
 #endif
+    
     return result;
 }
 
@@ -4559,9 +5179,11 @@ platform_file_exists(char *path)
     DWORD attributes = GetFileAttributesA(path);
     b32 result = ((attributes != INVALID_FILE_ATTRIBUTES) &&
                   ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0));
-#else
-#error "not impl"
+    
+#elif Def_Linux
+    b32 result = (access(path, F_OK) == 0);
 #endif
+    
     return result;
 }
 
@@ -4581,9 +5203,13 @@ platform_directory_exists(char *dir_cstr)
     DWORD attributes = GetFileAttributesA(dir_cstr);
     b32 result = ((attributes != INVALID_FILE_ATTRIBUTES) &&
                   ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0));
-#else
-#error "not impl"
+    
+#elif Def_Linux
+    struct stat stat_data;
+    b32 result = (stat(dir_cstr, &stat_data) == 0);
+    result = result && S_ISDIR(stat_data.st_mode);
 #endif
+    
     return result;
 }
 
@@ -4612,15 +5238,29 @@ platform_file_read(File_Handle *file, void *buffer, u64 buffer_size)
 #if Def_Windows
         DWORD bytes_read = 0;
         b32 success = ReadFile(file->handle_, buffer, safe_truncate_to_u32(buffer_size), &bytes_read, nullptr);
-        if (!success) {
+        
+        if (!success)
+        {
             set_error(file, "Failed read");
             result = 0;
-        } else {
+        }
+        else
+        {
             result = bytes_read;
         }
         
-#else
-#error "not impl"
+#elif Def_Linux
+        
+        s64 bytes_read = read(file->handle_, buffer, buffer_size);
+        if (bytes_read < 0)
+        {
+            set_error(file, "Failed read");
+            result = 0;
+        }
+        else
+        {
+            result = bytes_read;
+        }
 #endif
     }
     
@@ -4650,8 +5290,13 @@ platform_file_write_bytes(File_Handle *file, void *source, u64 size)
         if (!result || (bytes_written != size)) {
             set_error(file, "Couldn't write");
         }
-#else
-#error "not impl"
+        
+#elif Def_Linux
+        s64 result = write(file->handle_, source, size);
+        if (result < 0)
+        {
+            set_error(file, "Couldn't write");
+        }
 #endif
     }
 }
@@ -4665,24 +5310,33 @@ inline void platform_file_write_string(File_Handle *file, String string) {
 
 //=============
 function void
-platform_file_set_ending_to_current_distance(File_Handle *file)
+platform_set_file_size_to_file_pointer(File_Handle *file)
 {
     if (no_errors(file))
     {
 #if Def_Windows
         b32 success = SetEndOfFile(file->handle_);
-        if (!success) {
+        
+#elif Def_Linux
+        b32 success = false;
+        s64 distance = lseek(file->handle_, 0, SEEK_CUR);
+        
+        if (distance > 0)
+        {
+            success = (ftruncate(file->handle_, distance) != -1);
+        }
+#endif
+        
+        if (!success)
+        {
             set_error(file, "Couldn't set file ending");
         }
-#else
-#error "not impl"
-#endif
     }
 }
 
 
 function void
-platform_file_set_distance_from_start(File_Handle *file, s64 distance)
+platform_set_file_pointer_from_start(File_Handle *file, s64 distance)
 {
     if (no_errors(file))
     {
@@ -4690,17 +5344,20 @@ platform_file_set_distance_from_start(File_Handle *file, s64 distance)
         LARGE_INTEGER offset;
         offset.QuadPart = distance;
         b32 success = SetFilePointerEx(file->handle_, offset, nullptr, FILE_BEGIN);
-        if (!success) {
+        
+#elif Def_Linux
+        b32 success = (lseek(file->handle_, distance, SEEK_SET) != -1);
+#endif
+        
+        if (!success)
+        {
             set_error(file, "Couldn't set file distance pointer from start");
         }
-#else
-#error "not impl"
-#endif
     }
 }
 
 function void
-platform_file_set_distance_from_current(File_Handle *file, s64 distance)
+platform_set_file_pointer_from_current(File_Handle *file, s64 distance)
 {
     if (no_errors(file))
     {
@@ -4708,30 +5365,36 @@ platform_file_set_distance_from_current(File_Handle *file, s64 distance)
         LARGE_INTEGER offset;
         offset.QuadPart = distance;
         b32 success = SetFilePointerEx(file->handle_, offset, nullptr, FILE_CURRENT);
-        if (!success) {
+        
+#elif Def_Linux
+        b32 success = (lseek(file->handle_, distance, SEEK_CUR) != -1);
+#endif
+        
+        if (!success)
+        {
             set_error(file, "Couldn't set file distance pointer from start");
         }
-#else
-#error "not impl"
-#endif
     }
 }
 
 function void
-platform_file_set_distance_from_end(File_Handle *file, s64 distance)
+platform_set_file_pointer_from_end(File_Handle *file, s64 distance)
 {
     if (no_errors(file))
     {
 #if Def_Windows
         LARGE_INTEGER offset;
         offset.QuadPart = distance;
-        b32 result = SetFilePointerEx(file->handle_, offset, nullptr, FILE_END);
-        if (!result) {
+        b32 success = SetFilePointerEx(file->handle_, offset, nullptr, FILE_END);
+        
+#elif Def_Linux
+        b32 success = (lseek(file->handle_, distance, SEEK_END) != -1);
+#endif
+        
+        if (!success)
+        {
             set_error(file, "Couldn't set file distance pointer from start");
         }
-#else
-#error "not impl"
-#endif
     }
 }
 
@@ -4745,11 +5408,10 @@ struct Distance_Result
 {
     s64 value;
     b32 success;
-    u32 _padding;
 };
 
 function Distance_Result
-platform_file_get_distance(File_Handle *file)
+platform_get_file_pointer(File_Handle *file)
 {
     Distance_Result result = {};
     if (no_errors(file))
@@ -4757,13 +5419,17 @@ platform_file_get_distance(File_Handle *file)
 #if Def_Windows
         LARGE_INTEGER distance;
         result.success = SetFilePointerEx(file->handle_, {}, &distance, FILE_CURRENT);
-        if (!result.success) {
+        result.value = distance.QuadPart;
+        
+#elif Def_Linux
+        result.value = lseek(file->handle_, 0, SEEK_CUR);
+        result.success = (result.value != -1);
+#endif
+        
+        if (!result.success)
+        {
             set_error(file, "Couldn't get file distance");
         }
-        result.value = distance.QuadPart;
-#else
-#error "not impl"
-#endif
     }
     return result;
 }
@@ -4796,12 +5462,12 @@ platform_directory_create(char *directory_path)
         result = (error == ERROR_ALREADY_EXISTS);
     }
     
-#else
-    s32 code = mkdir(path);
+#elif Def_Linux
+    u32 flags = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
+    s32 code = mkdir(directory_path, flags);
     b32 result = (code == 0);
-    if (!result)
-    {
-        result = (errno == EEXIST); // this errno check won't compile?
+    if (!result) {
+        result = (errno == EEXIST);
     }
 #endif
     
@@ -4820,23 +5486,24 @@ platform_directory_create(Arena *temp_arena, Directory directory)
 
 
 function b32
-platform_directory_set_current(char *path)
+platform_set_current_directory(char *path)
 {
 #if Def_Windows
     b32 result = SetCurrentDirectory(path) != 0;
-#else
-#error "not impl"
+    
+#elif Def_Linux
+    b32 result = (chdir(path) != -1);
 #endif
     
     return result;
 }
 
 function b32
-platform_directory_set_current(Arena *temp_arena, Directory directory)
+platform_set_current_directory(Arena *temp_arena, Directory directory)
 {
     arena_scope(temp_arena);
     char *path_cstr = to_cstr(temp_arena, directory);
-    b32 result = platform_directory_set_current(path_cstr);
+    b32 result = platform_set_current_directory(path_cstr);
     return result;
 }
 
@@ -4855,23 +5522,26 @@ platform_file_get_size(File_Handle *file)
     if (no_errors(file))
     {
 #if Def_Windows
-        LARGE_INTEGER size = {};
-        b32 success = GetFileSizeEx(file->handle_, &size);
-        if (success) {
-            result = safe_truncate_to_u64((s64)size.QuadPart);
-        } else {
+        LARGE_INTEGER size;
+        if (GetFileSizeEx(file->handle_, &size))
+        {
+            result = size.QuadPart;
+        }
+        else
+        {
             set_error(file, "Couldn't get file size");
         }
-#else
-        /* NOTE(f0): seeking size example
-          
-          fseek(file, 0, SEEK_END);
-          s64 len = ftell(file);
-          rewind(file);
-          result = push_array(arena, char, len+1);
-          fread(result, len, 1, file);
-        */
-#error "not impl"
+        
+#elif Def_Linux
+        struct stat stat_data;
+        if (fstat(file->handle_, &stat_data) == 0)
+        {
+            result = stat_data.st_size;
+        }
+        else
+        {
+            set_error(file, "Couldn't get file size (stat)");
+        }
 #endif
     }
     
@@ -4896,11 +5566,20 @@ platform_file_get_size(File_Handle *file)
 
 //~
 
-inline void
+function void
 platform_open_in_default_program(char *path_cstr)
 {
+#if Def_Windows
     ShellExecuteA(NULL, "open", path_cstr, NULL, NULL, SW_SHOWNORMAL);
+    
+#else
+    //#error "not impl"
+    // TODO(f0): can be potentially done with xdg-open but it is kind of hacky hack.
+    //assert(0);
+    printf("\n[OPEN IN DEFAULT PROGRAM NOT SUPPORTED YET]\n");
+#endif
 }
+
 
 inline void
 platform_open_in_default_program(Arena *temp_arena, Path path)
@@ -4928,9 +5607,13 @@ platform_open_in_default_program(Arena *temp_arena, Directory directory)
 function Path_List
 platform_list_files_in_directory(Arena *arena, Directory directory)
 {
-#if Def_Windows
     Path_List result = {};
     
+    if (directory.name_count <= 0) {
+        return result;
+    }
+    
+#if Def_Windows
     Path wildcard_path = get_path(directory, lit2str("*"));
     
     u64 wildcard_len = get_path_string_length(wildcard_path);
@@ -4947,15 +5630,30 @@ platform_list_files_in_directory(Arena *arena, Directory directory)
         {
             if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
             {
-                String file_name_string = copy(arena, string(data.cFileName));
-                *result.push(arena) = get_path(directory, file_name_string);
+                String file_name = copy(arena, string(data.cFileName));
+                *result.push(arena) = get_path(directory, file_name);
             }
         } while (FindNextFileA(find_handle, &data) != 0);
         FindClose(find_handle);
     }
     
-#else
-#error "not impl"
+#elif Def_Linux
+    s64 directory_len = get_directory_string_length(directory);
+    char *directory_cstr = push_stack_array(char, directory_len + 1);
+    fill_buffer_from_directory(directory_cstr, directory_len, directory);
+    directory_cstr[directory_len] = 0;
+    
+    DIR *dir = opendir(directory_cstr);
+    if (dir)
+    {
+        struct dirent *data;
+        while ((data = readdir(dir)) != nullptr)
+        {
+            String file_name = copy(arena, string(data->d_name));
+            *result.push(arena) = get_path(directory, file_name);
+        }
+        closedir(dir);
+    }
 #endif
     return result;
 }
@@ -4987,7 +5685,11 @@ platform_files_delete_matching(Arena *temp_arena, Path wildcard_file_name_path)
     }
     
 #else
-#error "not impl"
+    // TODO(f0): Do not provide such functionality in base layer?
+    // TODO(f0): Make base layer easy to port first
+    // TODO(f0): PLEASE
+    //#error "not impl"
+    assert(0);
 #endif
 }
 
@@ -5016,37 +5718,24 @@ platform_get_current_working_directory(Arena *arena)
     u32 length = GetCurrentDirectory(buffer_size, buffer);
     Directory result = directory_from_string(arena, string(buffer, length));
     
-#else
-    char buffer[kilobytes(4)]; // this is lame af. Define max linux path
-    char *cwd = getcwd(buffer, array_count(buffer));
-    if (cwd == buffer)
+#elif Def_Linux
+    Directory result = {};
+    char *temp_malloced_cwd = get_current_dir_name();
+    // TODO(f0): better way?
+    
+    if (temp_malloced_cwd)
     {
-        s64 length = cstr_length(buffer);
-        if (length > 0)
-        {
-            result = push_array(arena, char, length + 2);
-            copy_array(result, buffer, char, length);
-            result[length] = Native_Slash_Char;
-            result[length + 1] = 0;
-        }
+        String dir_str = copy(arena, string(temp_malloced_cwd));
+        free(temp_malloced_cwd);
+        
+        result = directory_from_string(arena, dir_str);
+    }
+    else
+    {
+        assert(0);
     }
 #endif
-    return result;
-}
-
-function Directory
-platform_get_current_executable_directory(Arena *arena)
-{
-#if Def_Windows
-    char buffer[kilobytes(4)];
-    DWORD len = GetModuleFileNameA(nullptr, buffer, sizeof(buffer));
-    String path = copy(arena, string(buffer, len));
     
-    String path_no_file_name = trim_file_name_from_path(path);
-    Directory result = directory_from_string(arena, path_no_file_name);
-#else
-#error "not impl"
-#endif
     return result;
 }
 
@@ -5056,22 +5745,50 @@ platform_get_current_executable_path(Arena *arena)
 #if Def_Windows
     char buffer[kilobytes(4)];
     DWORD len = GetModuleFileNameA(nullptr, buffer, sizeof(buffer));
-    String path = copy(arena, string(buffer, len));
+    String path_str = copy(arena, string(buffer, len));
+    Path result = path_from_string(arena, path_str);
     
-    String path_no_file_name = trim_file_name_from_path(path);
-    Directory dir = directory_from_string(arena, path_no_file_name);
+#elif Def_Linux
+#define Self_Exe_Path "/proc/self/exe"
+    Path result = {};
     
-    String file_name = file_name_from_path(path);
-    Path result = get_path(dir, file_name);
+    struct stat stat_data;
+    if (lstat(Self_Exe_Path, &stat_data) != -1)
+    {
+        if (stat_data.st_size > 0)
+        {
+            String path_str = allocate_string(arena, stat_data.st_size);
+            s64 read_len = readlink(Self_Exe_Path, (char*)path_str.str, path_str.size);
+            assert(path_str.size == read_len);
+            
+            result = path_from_string(arena, path_str);
+        }
+        else
+        {
+            assert(0);
+        }
+    }
+    else
+    {
+        assert(0);
+    }
     
-#else
-#error "not impl"
+#undef Self_Exe_Path
 #endif
+    
     return result;
 }
 
 
 
+
+function Directory
+platform_get_current_executable_directory(Arena *arena)
+{
+    Path path = platform_get_current_executable_path(arena);
+    Directory result = path.directory;
+    return result;
+}
 
 
 
@@ -5113,7 +5830,7 @@ platform_pipe_open_read(char *command)
 #if Def_Windows
     Pipe_Handle result = {_popen(command, "rb")};
 #else
-    Pipe_Handle result = popen(command, "rb");
+    Pipe_Handle result = {popen(command, "rb")};
 #endif
     result.no_error = is_valid_handle(&result);
     return result;
@@ -5127,7 +5844,7 @@ platform_pipe_close(Pipe_Handle *pipe)
 #if Def_Windows
     s32 return_code = _pclose(pipe->handle_);
 #else
-    s32 return_code = pclose(pipe);
+    s32 return_code = pclose(pipe->handle_);
 #endif
     return return_code;
 }

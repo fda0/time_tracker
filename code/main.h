@@ -1,6 +1,6 @@
 #include "stf0.h"
 #include "lexer.h"
-#include "win32_platform.h"
+#include "platform.h"
 #include "print.h"
 #include "description_hash_table.h"
 
@@ -150,7 +150,7 @@ struct Program_State
     b32 load_file_error;
     Program_Scope initial_scope;
     
-    Time32ms last_input_time;
+    date64 last_input_time;
 };
 
 
