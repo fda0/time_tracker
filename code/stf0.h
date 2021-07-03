@@ -4637,14 +4637,21 @@ build_cstr(Arena *arena, Simple_String_Builder *builder)
 function String
 stringf(Arena *arena, char *format, ...)
 {
-    va_list args;
-    va_start(args, format);
-    s32 len = vsnprintf(0, 0, format, args);
+    va_list args1;
+    va_list args2;
+    va_start(args1, format);
+    va_copy(args2, args1);
+    
+    s32 len = vsnprintf(0, 0, format, args1);
+    va_end(args1);
     assert(len >= 0);
-    String result = allocate_string(arena, (u64)(len+1));
-    vsnprintf((char *)result.str, result.size, format, args);
+    
+    len += 1;
+    String result = allocate_string(arena, (u64)len);
+    vsnprintf((char *)result.str, result.size, format, args2);
     --result.size;
-    va_end(args);
+    va_end(args2);
+    
     return result;
 }
 
@@ -4652,14 +4659,21 @@ stringf(Arena *arena, char *format, ...)
 function char *
 cstrf(Arena *arena, char *format, ...)
 {
-    va_list args;
-    va_start(args, format);
-    s32 size = vsnprintf(0, 0, format, args) + 1;
-    assert(size >= 0);
-    char *result = push_array(arena, char, size);
-    vsnprintf(result, (u64)size, format, args);
-    result[size-1] = 0;
-    va_end(args);
+    va_list args1;
+    va_list args2;
+    va_start(args1, format);
+    va_copy(args2, args1);
+    
+    s32 len = vsnprintf(0, 0, format, args1);
+    va_end(args1);
+    assert(len >= 0);
+    
+    len += 1;
+    char *result = push_array(arena, char, (u64)len);
+    vsnprintf(result, len, format, args2);
+    result[len-1] = 0;
+    va_end(args2);
+    
     return result;
 }
 
@@ -5076,6 +5090,66 @@ platform_file_close(File_Handle *file)
 
 //=============
 function b32
+platform_file_exists(char *path)
+{
+#if Def_Windows
+    DWORD attributes = GetFileAttributesA(path);
+    b32 result = ((attributes != INVALID_FILE_ATTRIBUTES) &&
+                  ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0));
+    
+#elif Def_Linux
+    b32 result = (access(path, F_OK) == 0);
+#endif
+    
+    return result;
+}
+
+function b32
+platform_file_exists(Arena *temp_arena, Path path)
+{
+    arena_scope(temp_arena);
+    char *path_cstr = to_cstr(temp_arena, path);
+    b32 result = platform_file_exists(path_cstr);
+    return result;
+}
+
+function b32
+platform_directory_exists(char *dir_cstr)
+{
+#if Def_Windows
+    DWORD attributes = GetFileAttributesA(dir_cstr);
+    b32 result = ((attributes != INVALID_FILE_ATTRIBUTES) &&
+                  ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0));
+    
+#elif Def_Linux
+    struct stat stat_data;
+    b32 result = (stat(dir_cstr, &stat_data) == 0);
+    result = result && S_ISDIR(stat_data.st_mode);
+#endif
+    
+    return result;
+}
+
+function b32
+platform_directory_exists(Arena *temp_arena, Directory dir)
+{
+    arena_scope(temp_arena);
+    char *dir_cstr = to_cstr(temp_arena, dir);
+    b32 result = platform_directory_exists(dir_cstr);
+    return result;
+}
+
+
+
+
+
+
+
+
+
+
+//=============
+function b32
 platform_file_copy(char *source, char *destination, b32 overwrite)
 {
 #if Def_Windows
@@ -5083,15 +5157,19 @@ platform_file_copy(char *source, char *destination, b32 overwrite)
     b32 result = CopyFileA(source, destination, fail_if_exists);
     
 #elif Def_Linux && defined(FICLONE)
-    assert(overwrite); // TODO(f0): it always overwrites I think? check for existing file first?
-    // TODO(f0): no idea if that works -> needs testing
-    int fd_dest = open(destination, O_CREAT | O_WRONLY);
-    int fd_src = open(source, O_RDONLY);
     
-    b32 result = ioctl(fd_dest, FICLONE, fd_src);
-    
-    close(fd_dest);
-    close(fd_src);
+    b32 result = false;
+    if (overwrite || !platform_file_exists(destination))
+    {
+        // TODO(f0): no idea if that works -> needs testing
+        int fd_dest = open(destination, O_CREAT | O_WRONLY);
+        int fd_src = open(source, O_RDONLY);
+        
+        result = ioctl(fd_dest, FICLONE, fd_src);
+        
+        close(fd_dest);
+        close(fd_src);
+    }
     
 #else
 #error "FICLONE unsupported?"
@@ -5166,62 +5244,6 @@ platform_file_delete(Arena *temp_arena, Path path)
     b32 result = platform_file_delete(path_cstr);
     return result;
 }
-
-
-
-
-
-//=============
-function b32
-platform_file_exists(char *path)
-{
-#if Def_Windows
-    DWORD attributes = GetFileAttributesA(path);
-    b32 result = ((attributes != INVALID_FILE_ATTRIBUTES) &&
-                  ((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0));
-    
-#elif Def_Linux
-    b32 result = (access(path, F_OK) == 0);
-#endif
-    
-    return result;
-}
-
-function b32
-platform_file_exists(Arena *temp_arena, Path path)
-{
-    arena_scope(temp_arena);
-    char *path_cstr = to_cstr(temp_arena, path);
-    b32 result = platform_file_exists(path_cstr);
-    return result;
-}
-
-function b32
-platform_directory_exists(char *dir_cstr)
-{
-#if Def_Windows
-    DWORD attributes = GetFileAttributesA(dir_cstr);
-    b32 result = ((attributes != INVALID_FILE_ATTRIBUTES) &&
-                  ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0));
-    
-#elif Def_Linux
-    struct stat stat_data;
-    b32 result = (stat(dir_cstr, &stat_data) == 0);
-    result = result && S_ISDIR(stat_data.st_mode);
-#endif
-    
-    return result;
-}
-
-function b32
-platform_directory_exists(Arena *temp_arena, Directory dir)
-{
-    arena_scope(temp_arena);
-    char *dir_cstr = to_cstr(temp_arena, dir);
-    b32 result = platform_directory_exists(dir_cstr);
-    return result;
-}
-
 
 
 
@@ -5752,21 +5774,21 @@ platform_get_current_executable_path(Arena *arena)
 #define Self_Exe_Path "/proc/self/exe"
     Path result = {};
     
-    struct stat stat_data;
-    if (lstat(Self_Exe_Path, &stat_data) != -1)
+    s64 len = -1;
     {
-        if (stat_data.st_size > 0)
-        {
-            String path_str = allocate_string(arena, stat_data.st_size);
-            s64 read_len = readlink(Self_Exe_Path, (char*)path_str.str, path_str.size);
-            assert(path_str.size == read_len);
-            
-            result = path_from_string(arena, path_str);
-        }
-        else
-        {
-            assert(0);
-        }
+        arena_scope(arena);
+        s64 max_len = getpagesize();
+        String temp = allocate_string(arena, max_len);
+        len = readlink(Self_Exe_Path, (char*)temp.str, temp.size);
+    }
+    
+    if (len > 0)
+    {
+        String path_str = allocate_string(arena, len);
+        s64 read_len = readlink(Self_Exe_Path, (char*)path_str.str, path_str.size);
+        assert(path_str.size == read_len);
+        
+        result = path_from_string(arena, path_str);
     }
     else
     {
