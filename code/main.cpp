@@ -1,4 +1,6 @@
 /* TODO:
+  [ ] BUG: (Linux) when saving file - sum comment doesn't count [last] open time range. (maybe it is a bug on Windows also but I missed it?)
+
   [ ] Unify help messages for incorrect inputs & help command
   [?] ??Group commands, its function pointers, help items all in one array? Could be used for "help summary / help all"
   -> [ ] Could be used to identify errors in previous command (bad parameter order?)

@@ -561,6 +561,14 @@ safe_truncate_to_u32(s64 value)
 	return result;
 }
 
+inline u32 
+safe_truncate_to_u32(s32 value)
+{
+    assert(value >= 0);
+    u32 result = (u32)value;
+	return result;
+}
+
 ////
 inline u16
 safe_truncate_to_u16(u32 value)
@@ -612,6 +620,25 @@ struct Bit_Scan_Result
     b32 found;
 };
 
+//-
+function b32
+equals(Bit_Scan_Result a, Bit_Scan_Result b)
+{
+    b32 result = ((a.found == b.found) &&
+                  (a.index == b.index));
+    return result;
+}
+
+function b32
+operator==(Bit_Scan_Result a, Bit_Scan_Result b)
+{
+    b32 result = equals(a, b);
+    return result;
+}
+
+
+//~
+
 inline Bit_Scan_Result
 find_most_significant_bit(u64 value)
 {
@@ -622,7 +649,7 @@ find_most_significant_bit(u64 value)
     if (value)
     {
         result.found = true;
-        result.index = __builtin_clzll(value);
+        result.index = 63 - __builtin_clzll(value);
     }
 #endif
     return result;
@@ -641,7 +668,7 @@ find_most_significant_bit(u32 value)
     if (value)
     {
         result.found = true;
-        result.index = __builtin_clz(value);
+        result.index = 31 - __builtin_clz(value);
     }
 #endif
     return result;
@@ -2269,21 +2296,23 @@ ceil_f32_to_s32(f32 value)
 function f32
 round(f32 value)
 {
-    f32 result = _mm_cvtss_f32(_mm_set_ss(value));;
+    const int mode = _MM_FROUND_TO_NEAREST_INT|_MM_FROUND_NO_EXC;
+    f32 result = _mm_cvtss_f32(_mm_round_ss(_mm_setzero_ps(), _mm_set_ss(value), mode));
     return result;
 };
 
 function s32
 round_f32_to_s32(f32 value)
 {
-    s32 result = _mm_cvtss_si32(_mm_set_ss(value));
+    const int mode = _MM_FROUND_TO_NEAREST_INT|_MM_FROUND_NO_EXC;
+    s32 result = _mm_cvtss_si32(_mm_round_ss(_mm_setzero_ps(), _mm_set_ss(value), mode));
     return result;
 }
 
 function u32
 round_f32_to_u32(f32 value)
 {
-    u32 result = (u32)_mm_cvtss_si32(_mm_set_ss(value));
+    u32 result = safe_truncate_to_u32(round_f32_to_s32(value));
     return result;
 }
 
@@ -2298,31 +2327,31 @@ truncate_f32_to_s32(f32 value)
 
 //~
 function f32
-sin(f32 angle)
+sin(f32 rad)
 {
-    f32 result = _mm_cvtss_f32(sin_ps(_mm_set_ss(angle)));
+    f32 result = _mm_cvtss_f32(sin_ps(_mm_set_ss(rad)));
     return result;
 }
 
 function m128
-sin(m128 angle)
+sin(m128 rad)
 {
-    m128 result = sin_ps(angle);
+    m128 result = sin_ps(rad);
     return result;
 }
 
 //-
 function f32
-cos(f32 angle)
+cos(f32 rad)
 {
-    f32 result = _mm_cvtss_f32(cos_ps(_mm_set_ss(angle)));
+    f32 result = _mm_cvtss_f32(cos_ps(_mm_set_ss(rad)));
     return result;
 }
 
 function m128
-cos(m128 angle)
+cos(m128 rad)
 {
-    m128 result = cos_ps(angle);
+    m128 result = cos_ps(rad);
     return result;
 }
 
@@ -4755,7 +4784,8 @@ to_string(Arena *a, s32 value)
     return result;
 }
 
-
+//~
+#define to_print(Arena, Value) printf("%.*s", string_expand(to_string(Arena, Value)))
 
 
 
@@ -5780,6 +5810,8 @@ platform_get_current_executable_path(Arena *arena)
         s64 max_len = getpagesize();
         String temp = allocate_string(arena, max_len);
         len = readlink(Self_Exe_Path, (char*)temp.str, temp.size);
+        // TODO(f0): instead of reading twice
+        // just reset arena pointer by max_len - len difference!
     }
     
     if (len > 0)
