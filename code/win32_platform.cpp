@@ -31,7 +31,7 @@ platform_compare_file_time(File_Time first, File_Time second)
 }
 
 function void
-platform_create_thread(New_Thread_Function *start_func, Thread_Memory *data)
+platform_create_thread(New_Thread_Function start_func, Thread_Memory *data)
 {
     CreateThread(NULL, 0, start_func, data, 0, NULL);
 }

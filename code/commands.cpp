@@ -82,6 +82,31 @@ process_command_add_sub(Program_State *state, Record_Session *session, b32 is_ad
 
 
 
+function String_List
+assume_range_if_needed(Record_Session *session, Date_Range_Result *range, String filter)
+{
+    String_List message = {};
+    
+    if (range->status == Status_NoMatchigTokens)
+    {
+        if (filter.size)
+        {
+            *range = get_max_date_range(true);
+        }
+        else
+        {
+            *range = get_recent_days_range(session->records);
+            *message.push(frame_arena) = l2s("Short range assumed (from ");
+            *message.push(frame_arena) = get_date_string(frame_arena, range->first);
+            *message.push(frame_arena) = l2s(" to ");
+            *message.push(frame_arena) = get_date_string(frame_arena, range->last);
+            *message.push(frame_arena) = l2s("); Use \"all\" to process all records.\n");
+        }
+    }
+    
+    return message;
+}
+
 
 internal void
 process_command_show(Program_State *state, Record_Session *session)
@@ -97,26 +122,14 @@ process_command_show(Program_State *state, Record_Session *session)
             filter = token.text;
         }
         
-        char *message = nullptr;
-        if (range.status == Status_NoMatchigTokens)
-        {
-            if (filter.size)
-            {
-                range = get_max_date_range(true);
-            }
-            else
-            {
-                range = get_recent_days_range(session->records);
-                message = "Range assumed from xxxx-xx-xx to xxxx-xx-xx; "
-                    "To use all records specify filter or use \"show all\"\n";
-            }
-        }
+        String_List message = assume_range_if_needed(session, &range, filter);
         
         process_days_from_range(state, 0, range.first, range.last, filter, ProcessDays_Print);
         
-        if (message) {
+        if (message.count)
+        {
             print_color(Color_Dimmed);
-            printf("%s", message);
+            to_print(frame_arena, message);
             print_color(Color_Reset);
         }
     }
@@ -251,26 +264,14 @@ process_command_top(Program_State *state, Record_Session *session)
             filter = token.text;
         }
         
-        char *message = nullptr;
-        if (range.status == Status_NoMatchigTokens)
-        {
-            if (filter.size)
-            {
-                range = get_max_date_range(true);
-            }
-            else
-            {
-                range = get_recent_days_range(session->records);
-                message = "Range assumed from xxxx-xx-xx to xxxx-xx-xx; "
-                    "To use all records specify filter or use \"show all\"\n";
-            }
-        }
+        String_List message = assume_range_if_needed(session, &range, filter);
         
         print_top(state, range.first, range.last, filter);
         
-        if (message) {
+        if (message.count)
+        {
             print_color(Color_Dimmed);
-            printf("%s", message);
+            to_print(frame_arena, message);
             print_color(Color_Reset);
         }
     }
@@ -279,4 +280,3 @@ process_command_top(Program_State *state, Record_Session *session)
         session_set_error(session, "Incorect command usage... TODO full message :<\n");
     }
 }
-    

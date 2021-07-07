@@ -30,36 +30,54 @@ create_desc_table(Arena *arena, u64 minimal_size)
 
 
 internal void
-add_desc_data(Description_Table *table, String text, s32 time)
+add_desc_data(Description_Table *table, String full_text, s32 time)
 {
+    String short_text = full_text;
+    Find_Index find_space = index_of(short_text, ' ');
+    if (find_space.found) {
+        short_text.size = find_space.index;
+    }
+    
     u64 mask = table->mask;
-    u64 hash = get_string_hash(text);
+    u64 hash = get_string_hash(short_text);
     u64 key = hash & mask;
     
     Description_Entry *entry = table->entries + key;
     
     for (;;)
     {
+        b32 entry_slot_found = false;
+        
         if (entry->hash == 0)
         {
             entry->hash = hash;
-            entry->text = text.str;
-            entry->text_size = safe_truncate_to_u32(text.size);
-            entry->time_sum = time;
-            entry->count = 1;
+            entry->text = short_text.str;
+            entry->text_size = safe_truncate_to_u32(short_text.size);
+            entry->time_sum = 0;
+            entry->count = 0;
             
             table->unique_count += 1;
-            break;
+            entry_slot_found = true;
         }
         else if (entry->hash == hash)
         {
+            String table_str = string(entry->text, entry->text_size);
+            if (equals(table_str, short_text))
+            {
+                entry_slot_found = true;
+            }
+            else
+            {
+                debug_break(); // NOTE(f0): Hash collision
+            }
+        }
+        
+        if (entry_slot_found)
+        {
+            entry->text_was_truncated = (entry->text_was_truncated ||
+                                         (full_text.size != short_text.size));
             entry->time_sum += time;
             entry->count += 1;
-            
-#if Def_Slow
-            String table_str = string(entry->text, entry->text_size);
-            assert(equals(table_str, text));
-#endif
             break;
         }
         

@@ -8,7 +8,7 @@ struct Description_Entry
     s32 time_sum;
     
     u32 count;
-    u32 padding_;
+    b32 text_was_truncated;
 };
 
 struct Description_Table

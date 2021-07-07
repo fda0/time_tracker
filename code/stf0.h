@@ -18,7 +18,7 @@ Semi automatic switches (but can be specified manually):
 
 /* TODO:
   [ ] Compile with unicode switch to find all cases where Windows ASCII API is not used
-  [ ] Base string builders on fill versions build_to_buffer(buffer, buffer_size)
+  [ ] Delete string builders? Keep using to_string(Arena, String_List, String separator={}); ?
 */
 
 #define f0_start_template(...)
@@ -3785,12 +3785,12 @@ push_bytes_virtual_commit_(Arena *arena, u64 alloc_size, u64 alignment)
     assert(alloc_size > 0);
     u64 alignment_offset = get_aligment_offset(arena, alignment);
     u64 future_position = arena->position + alignment_offset + alloc_size;
-    
+
     if (future_position > arena->capacity)
     {
         commit_virtual_memory_(arena, future_position);
     }
-    
+
     void *result = (u8 *)arena->base + arena->position + alignment_offset;
     arena->position = future_position;
     
@@ -3802,7 +3802,7 @@ push_bytes_virtual_commit_unaligned_(Arena *arena, u64 alloc_size)
 {
     assert(arena->base);
     u64 future_position = arena->position + alloc_size;
-    
+
     if (future_position > arena->capacity)
     {
         commit_virtual_memory_(arena, future_position);
@@ -3832,7 +3832,7 @@ create_virtual_arena(u64 target_reserved_capacity = gigabytes(16))
     arena.reserved_capacity = round_up_to_page_size(&arena, target_reserved_capacity);
     arena.base = VirtualAlloc(nullptr, arena.reserved_capacity, MEM_RESERVE, PAGE_READWRITE);
     assert(arena.base);
-    
+
 #elif Def_Linux
     arena.page_size = getpagesize();
     arena.reserved_capacity = round_up_to_page_size(&arena, target_reserved_capacity);
@@ -3861,7 +3861,7 @@ free_virtual_arena(Arena *arena)
 #if Def_Windows
     b32 result = VirtualFree(arena->base, 0, MEM_RELEASE);
     assert(result);
-    
+
 #elif Def_Linux
     int free_res = munmap(arena->base, arena->reserved_capacity);
     assert(free_res != -1);
@@ -4741,6 +4741,36 @@ create_new_file_name_extension(Arena *arena, String file_name, String new_extens
 
 // ======================== @to_string ========================
 function String
+to_string(Arena *a, u32 value)
+{
+    String result = stringf(a, "%u", value);
+    return result;
+}
+
+function String
+to_string(Arena *a, u64 value)
+{
+    String result = stringf(a, "%llu", value);
+    return result;
+}
+
+//-
+function String
+to_string(Arena *a, s32 value)
+{
+    String result = stringf(a, "%d", value);
+    return result;
+}
+
+function String
+to_string(Arena *a, s64 value)
+{
+    String result = stringf(a, "%lld", value);
+    return result;
+}
+
+//-
+function String
 to_string(Arena *a, f32 value)
 {
     String result = stringf(a, "%.2f", value);
@@ -4756,36 +4786,59 @@ to_string(Arena *a, Rect2 value)
     return result;
 }
 
+//-
 function String
-to_string(Arena *a, s64 value)
+to_string(Arena *a, String_List list, String separator={})
 {
-    String result = stringf(a, "%lld", value);
+    u64 len = 0;
+    u64 count = 0;
+    for_linked_list(node, list)
+    {
+        count += 1;
+        len += node->item.size;
+    }
+    
+    if (count > 1)
+    {
+        len += (count - 1)*separator.size;
+    }
+    
+    String result = allocate_string(a, len);
+    u64 write_index = 0;
+    
+    for_linked_list(node, list)
+    {
+        for_u64(i, node->item.size)
+        {
+            result.str[write_index++] = node->item.str[i];
+        }
+        
+        if (count > 1)
+        {
+            count -= 1;
+            for_u64(i, separator.size)
+            {
+                result.str[write_index++] = separator.str[i];
+            }
+        }
+    }
+    
     return result;
 }
 
-function String
-to_string(Arena *a, u64 value)
-{
-    String result = stringf(a, "%llu", value);
-    return result;
-}
 
-function String
-to_string(Arena *a, u32 value)
-{
-    String result = stringf(a, "%u", value);
-    return result;
-}
-
-function String
-to_string(Arena *a, s32 value)
-{
-    String result = stringf(a, "%d", value);
-    return result;
-}
 
 //~
-#define to_print(Arena, Value) printf("%.*s", string_expand(to_string(Arena, Value)))
+
+function void to_print(Arena *a, u32 value) { printf("%.*s", string_expand(to_string(a, value))); }
+function void to_print(Arena *a, u64 value) { printf("%.*s", string_expand(to_string(a, value))); }
+function void to_print(Arena *a, s32 value) { printf("%.*s", string_expand(to_string(a, value))); }
+function void to_print(Arena *a, s64 value) { printf("%.*s", string_expand(to_string(a, value))); }
+function void to_print(Arena *a, f32 value) { printf("%.*s", string_expand(to_string(a, value))); }
+function void to_print(Arena *a, Rect2 value) { printf("%.*s", string_expand(to_string(a, value))); }
+function void to_print(Arena *a, String_List value) { printf("%.*s", string_expand(to_string(a, value))); }
+
+
 
 
 
@@ -5016,7 +5069,7 @@ platform_file_open_read(char *path)
     File_Handle file = {};
 #if Def_Windows
     file.handle_ = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
-    
+
 #elif Def_Linux
     file.handle_ = open(path, O_RDONLY);
 #endif
@@ -5229,7 +5282,7 @@ platform_file_hard_link(char *source_path, char *link_path)
 {
 #if Def_Windows
     b32 result = CreateHardLinkA(link_path, source_path, nullptr);
-    
+
 #elif Def_Linux
     b32 result = (link(source_path, link_path) == 0);
 #endif
@@ -5258,7 +5311,7 @@ platform_file_delete(char *path)
 {
 #if Def_Windows
     b32 result = DeleteFileA(path);
-    
+
 #elif Def_Linux
     b32 result = (unlink(path) != -1); 
 #endif
@@ -5342,7 +5395,7 @@ platform_file_write_bytes(File_Handle *file, void *source, u64 size)
         if (!result || (bytes_written != size)) {
             set_error(file, "Couldn't write");
         }
-        
+
 #elif Def_Linux
         s64 result = write(file->handle_, source, size);
         if (result < 0)

@@ -49,6 +49,12 @@ global Color_Pair color_pairs[Color_Count] = {
 #include "records.cpp"
 #include "process_helpers.cpp"
 
+//~
+// TODO(f0): add some system for scratch arenas
+global Arena global_frame_arena;
+global Arena *frame_arena = &global_frame_arena;
+
+
 //
 //~ Session
 //
@@ -790,7 +796,7 @@ s32 main(int argument_count, char **arguments)
     Program_State state = {};
     state.arena = create_virtual_arena();
     state.records = create_virtual_array<Record>();
-    //clear_memory(&state);
+    *frame_arena = create_virtual_arena();
     Arena *arena = &state.arena;
     
     
@@ -942,7 +948,7 @@ s32 main(int argument_count, char **arguments)
     //~
     Thread_Memory thread_memory = {};
     sprintf(thread_memory.cursor, "::>");
-    platform_create_thread((New_Thread_Function *)read_from_keyboard, &thread_memory);
+    platform_create_thread((New_Thread_Function)read_from_keyboard, &thread_memory);
     
     
     
@@ -986,11 +992,8 @@ s32 main(int argument_count, char **arguments)
         
         
         date64 input_time_delta = now - state.last_input_time;
-        {
-            u32 sleep_duration = (input_time_delta / 8192) + 1;
-            sleep_duration = pick_smaller(sleep_duration, 100);
-            platform_sleep(sleep_duration);
-        }
+        u32 sleep_duration = (u32)pick_smaller(((input_time_delta / 8192) + 1), 100);
+        platform_sleep(sleep_duration);
     }
 }
 

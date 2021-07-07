@@ -1,6 +1,6 @@
 #if Def_Windows
 typedef FILETIME File_Time;
-typedef *LPTHREAD_START_ROUTINE New_Thread_Function;
+typedef LPTHREAD_START_ROUTINE New_Thread_Function;
 
 #elif Def_Linux
 typedef time_t File_Time;

@@ -734,6 +734,12 @@ print_top(Program_State *state,
             print_color(Color_Description);
             printf("\"%.*s\"", desc->text_size, desc->text);
             
+            if (desc->text_was_truncated)
+            {
+                print_color(Color_Dimmed);
+                printf("...");
+            }
+            
             printf("\n");
         }
         
