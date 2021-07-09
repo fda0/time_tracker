@@ -50,7 +50,7 @@ global Color_Pair color_pairs[Color_Count] = {
 #include "process_helpers.cpp"
 
 //~
-// TODO(f0): add some system for scratch arenas
+// TODO(f0): add some system for scratch arenas in stf0.h
 global Arena global_frame_arena;
 global Arena *frame_arena = &global_frame_arena;
 

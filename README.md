@@ -1,26 +1,20 @@
 # Time Tracker
 
-Simple time tracking command line program. 
-Currently available only on 64-bit Windows.
+Console application designed to work with simple text file format that is easy to edit manually.  
+App reads the file, validates it and reformats it with added comments.  
+Data can be queried and presented in multiple ways (daily/weekly/monthly/yearly summaries + top ranking based on description topic).
 
-Time Tracker was designed to work with text files that are readable and easy to edit manually.
-It reads the file, validates it and reformats it with added comments.
+Changes are saved and archived automatically.  
+You can edit the file in external editor and state of the program should get automatically refreshed.  
+Using text editor with hot file reloading is recommended.  
 
-Changes are saved and archived automatically. 
-You can edit the file in external editor and state of the program should get automatically refreshed.
-Using text editor with hot file reloading is recommended.
-
-Feedback is welcomed but keep in mind I'm trying to minimize complexity of this tool.
 
 Icon based on this image: https://www.freepik.com/free-vector/hand-drawn-retro-pocket-watch_2783059.htm
 
 
 ### TODOs
-- [ ] Filtering by matching text in description
-- [ ] Even more filtering options
-- [ ] Count command for integer quantities (parallel to time tracking)
-- [ ] Linux version
-- [x] Filtering based on data ranges
+- [.] Filtering by matching text in description
+- [.] Linux version
 
 
 ### In action
